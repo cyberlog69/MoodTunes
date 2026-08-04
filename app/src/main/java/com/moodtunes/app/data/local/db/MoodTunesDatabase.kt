@@ -9,7 +9,7 @@ import com.moodtunes.app.data.local.db.entity.SongEntity
 
 @Database(
     entities = [SongEntity::class, MoodHistoryEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class MoodTunesDatabase : RoomDatabase() {

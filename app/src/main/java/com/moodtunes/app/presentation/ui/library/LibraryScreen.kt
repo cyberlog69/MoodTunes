@@ -4,6 +4,7 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
@@ -129,14 +130,16 @@ fun LibraryScreen(
                 contentColor = White,
                 indicator = { tabPositions ->
                     val index = LibraryTab.entries.indexOf(uiState.selectedTab)
-                    Box(
-                        Modifier
-                            .tabIndicatorOffset(tabPositions[index])
-                            .fillMaxWidth()
-                            .height(3.dp)
-                            .clip(RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp))
-                            .background(EuphoricAccent)
-                    )
+                    if (index in tabPositions.indices) {
+                        Box(
+                            Modifier
+                                .tabIndicatorOffset(tabPositions[index])
+                                .fillMaxWidth()
+                                .height(3.dp)
+                                .clip(RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp))
+                                .background(EuphoricAccent)
+                        )
+                    }
                 },
                 modifier = Modifier.padding(horizontal = 8.dp)
             ) {
@@ -192,7 +195,7 @@ fun LibraryScreen(
                     contentPadding = PaddingValues(vertical = 8.dp, horizontal = 0.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    items(displayedSongs, key = { it.id }) { song ->
+                    itemsIndexed(displayedSongs, key = { index, song -> "${song.id}_$index" }) { _, song ->
                         SongItem(
                             song = song,
                             isPlaying = uiState.currentSongId == song.id && uiState.isPlaying,

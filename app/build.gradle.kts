@@ -97,6 +97,9 @@ dependencies {
     // Coil (image loading for album art)
     implementation(libs.coil.compose)
 
+    // Networking
+    implementation(libs.okhttp)
+
     // Lottie (animations)
     implementation(libs.lottie.compose)
 

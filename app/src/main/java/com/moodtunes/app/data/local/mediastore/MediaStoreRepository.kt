@@ -5,6 +5,7 @@ import android.content.Context
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
+import com.moodtunes.app.data.remote.OnlineStreamRepository
 import com.moodtunes.app.domain.model.AudioFormat
 import com.moodtunes.app.domain.model.MoodType
 import com.moodtunes.app.domain.model.Song
@@ -16,12 +17,12 @@ import javax.inject.Singleton
 
 /**
  * Queries the device's MediaStore to retrieve local FLAC, ALAC, WAV, AAC, and MP3 audio files.
- * Performs keyword-based mood matching using song title, artist, and genre metadata.
- * Also provides high-resolution streaming streams for online listening.
+ * Integrates OnlineStreamRepository to fetch live, ISP-unrestricted Audius and YouTube streaming tracks.
  */
 @Singleton
 class MediaStoreRepository @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val onlineStreamRepository: OnlineStreamRepository
 ) {
     /** High-Quality Lossless & HQ Audio Online Demo Streams */
     private val sampleStreamingTracks = listOf(
@@ -165,18 +166,36 @@ class MediaStoreRepository @Inject constructor(
 
     /**
      * Filters songs from MediaStore/Streams that match the given mood's keywords.
-     * Matching is done on title + artist + album + genre metadata.
+     * Also fetches live Audius + YouTube online streams for that mood with ISP failover support.
      */
     suspend fun getSongsByMood(mood: MoodType): List<Song> = withContext(Dispatchers.IO) {
-        val allSongs = getAllSongs()
+        val allSongs = getAllSongs().toMutableList()
         val keywords = mood.keywords
 
-        val matched = allSongs.filter { song ->
+        val localMatched = allSongs.filter { song ->
             val combined = "${song.title} ${song.artist} ${song.album} ${song.genre ?: ""}".lowercase()
             keywords.any { keyword -> combined.contains(keyword.lowercase()) } ||
                     song.moodTags.contains(mood)
         }
 
-        if (matched.isEmpty()) allSongs else matched
+        val resultList = localMatched.toMutableList()
+
+        // Fetch live Audius online tracks for this mood
+        try {
+            val audiusTracks = onlineStreamRepository.getAudiusTracksByMood(mood, limit = 8)
+            resultList.addAll(audiusTracks)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        // Fetch live YouTube online tracks for this mood via Piped/Invidious proxy pool
+        try {
+            val ytTracks = onlineStreamRepository.getYouTubeAudioTracksByMood(mood, limit = 6)
+            resultList.addAll(ytTracks)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        if (resultList.isEmpty()) allSongs else resultList
     }
 }

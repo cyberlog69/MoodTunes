@@ -3,8 +3,10 @@ package com.moodtunes.app.presentation.ui.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.moodtunes.app.data.local.preferences.AppUserSettings
+import com.moodtunes.app.data.local.preferences.AudioSourceMode
 import com.moodtunes.app.data.local.preferences.DarkModeOption
 import com.moodtunes.app.data.local.preferences.StreamQuality
+import com.moodtunes.app.data.local.preferences.StreamingProvider
 import com.moodtunes.app.data.local.preferences.UserPreferencesRepository
 import com.moodtunes.app.data.remote.UpdateCheckResult
 import com.moodtunes.app.data.remote.UpdateChecker
@@ -67,6 +69,14 @@ class SettingsViewModel @Inject constructor(
 
     fun onMobileDataHighQualityChanged(enabled: Boolean) {
         preferencesRepository.updateMobileDataHighQuality(enabled)
+    }
+
+    fun onAudioSourceModeChanged(mode: AudioSourceMode) {
+        preferencesRepository.updateAudioSourceMode(mode)
+    }
+
+    fun onStreamingProviderChanged(provider: StreamingProvider) {
+        preferencesRepository.updateStreamingProvider(provider)
     }
 
     fun checkForUpdates() {

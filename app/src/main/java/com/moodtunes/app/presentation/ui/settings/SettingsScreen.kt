@@ -23,8 +23,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.moodtunes.app.data.local.preferences.AudioSourceMode
 import com.moodtunes.app.data.local.preferences.DarkModeOption
 import com.moodtunes.app.data.local.preferences.StreamQuality
+import com.moodtunes.app.data.local.preferences.StreamingProvider
 import com.moodtunes.app.presentation.ui.theme.*
 
 @Composable
@@ -102,7 +104,7 @@ fun SettingsScreen(
                 ) {
                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         Text(
-                            text = "Dark Mode Mode",
+                            text = "Dark Mode",
                             style = MaterialTheme.typography.titleMedium,
                             color = White
                         )
@@ -148,7 +150,86 @@ fun SettingsScreen(
                     }
                 }
 
-                // ─── SECTION 2: Audio & Stream Quality ──────────────────────────
+                // ─── SECTION 2: Audio Source & Streaming Providers ────────────
+                SettingsSectionHeader(title = "Audio Source & Streaming Providers", icon = Icons.Rounded.Tune)
+
+                Card(
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = SurfaceVariant),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Text(
+                            text = "Audio Source Mode",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = White
+                        )
+                        Text(
+                            text = "Switch between local storage audio files, online streams, or both combined.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = OnSurfaceVariant
+                        )
+
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            AudioSourceMode.entries.forEach { mode ->
+                                val isSelected = settings.audioSourceMode == mode
+                                FilterChip(
+                                    selected = isSelected,
+                                    onClick = { viewModel.onAudioSourceModeChanged(mode) },
+                                    label = { Text(mode.displayName, style = MaterialTheme.typography.labelMedium) },
+                                    leadingIcon = if (isSelected) {
+                                        { Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                                    } else null,
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = EuphoricAccent,
+                                        selectedLabelColor = White,
+                                        containerColor = SurfaceVariant,
+                                        labelColor = OnSurfaceVariant
+                                    ),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
+
+                        if (settings.audioSourceMode != AudioSourceMode.LOCAL_ONLY) {
+                            HorizontalDivider(color = DividerColor)
+
+                            Text(
+                                text = "Online Streaming Provider",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = White
+                            )
+                            Text(
+                                text = "Select whether to fetch music from Audius, YouTube, or both simultaneously.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = OnSurfaceVariant
+                            )
+
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                StreamingProvider.entries.forEach { provider ->
+                                    val isSelected = settings.streamingProvider == provider
+                                    FilterChip(
+                                        selected = isSelected,
+                                        onClick = { viewModel.onStreamingProviderChanged(provider) },
+                                        label = { Text(provider.displayName, style = MaterialTheme.typography.labelMedium) },
+                                        leadingIcon = if (isSelected) {
+                                            { Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                                        } else null,
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = CalmAccent,
+                                            selectedLabelColor = White,
+                                            containerColor = SurfaceVariant,
+                                            labelColor = OnSurfaceVariant
+                                        ),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // ─── SECTION 3: Audio & Stream Quality ──────────────────────────
                 SettingsSectionHeader(title = "Audio & Stream Quality", icon = Icons.Rounded.GraphicEq)
 
                 Card(
@@ -195,7 +276,7 @@ fun SettingsScreen(
                     }
                 }
 
-                // ─── SECTION 3: Network & Downloads ──────────────────────────────
+                // ─── SECTION 4: Network & Downloads ──────────────────────────────
                 SettingsSectionHeader(title = "Network & Downloads", icon = Icons.Rounded.Wifi)
 
                 Card(
@@ -258,7 +339,7 @@ fun SettingsScreen(
                     }
                 }
 
-                // ─── SECTION 4: In-App Update & App Version ─────────────────────
+                // ─── SECTION 5: In-App Update & App Version ─────────────────────
                 SettingsSectionHeader(title = "App Updates & About", icon = Icons.Rounded.SystemUpdate)
 
                 Card(

@@ -22,13 +22,27 @@ enum class StreamQuality(val displayName: String, val badgeText: String) {
     STANDARD("Standard (128 kbps)", "128 kbps")
 }
 
+enum class AudioSourceMode(val displayName: String) {
+    BOTH("Both Local & Online"),
+    LOCAL_ONLY("Local Device Only"),
+    STREAM_ONLY("Online Stream Only")
+}
+
+enum class StreamingProvider(val displayName: String) {
+    BOTH("Both (Audius + YouTube)"),
+    AUDIUS_ONLY("Audius Only"),
+    YOUTUBE_ONLY("YouTube Only")
+}
+
 data class AppUserSettings(
     val darkModeOption: DarkModeOption = DarkModeOption.DARK,
     val useDynamicColors: Boolean = true,
     val streamQuality: StreamQuality = StreamQuality.LOSSLESS,
     val wifiOnlyStreaming: Boolean = false,
     val wifiOnlyDownloads: Boolean = true,
-    val mobileDataHighQuality: Boolean = true
+    val mobileDataHighQuality: Boolean = true,
+    val audioSourceMode: AudioSourceMode = AudioSourceMode.BOTH,
+    val streamingProvider: StreamingProvider = StreamingProvider.BOTH
 )
 
 @Singleton
@@ -44,6 +58,8 @@ class UserPreferencesRepository @Inject constructor(
     private fun loadSettings(): AppUserSettings {
         val modeStr = prefs.getString("dark_mode", DarkModeOption.DARK.name) ?: DarkModeOption.DARK.name
         val qualityStr = prefs.getString("stream_quality", StreamQuality.LOSSLESS.name) ?: StreamQuality.LOSSLESS.name
+        val sourceStr = prefs.getString("audio_source_mode", AudioSourceMode.BOTH.name) ?: AudioSourceMode.BOTH.name
+        val providerStr = prefs.getString("streaming_provider", StreamingProvider.BOTH.name) ?: StreamingProvider.BOTH.name
 
         return AppUserSettings(
             darkModeOption = runCatching { DarkModeOption.valueOf(modeStr) }.getOrDefault(DarkModeOption.DARK),
@@ -51,7 +67,9 @@ class UserPreferencesRepository @Inject constructor(
             streamQuality = runCatching { StreamQuality.valueOf(qualityStr) }.getOrDefault(StreamQuality.LOSSLESS),
             wifiOnlyStreaming = prefs.getBoolean("wifi_only_streaming", false),
             wifiOnlyDownloads = prefs.getBoolean("wifi_only_downloads", true),
-            mobileDataHighQuality = prefs.getBoolean("mobile_data_hq", true)
+            mobileDataHighQuality = prefs.getBoolean("mobile_data_hq", true),
+            audioSourceMode = runCatching { AudioSourceMode.valueOf(sourceStr) }.getOrDefault(AudioSourceMode.BOTH),
+            streamingProvider = runCatching { StreamingProvider.valueOf(providerStr) }.getOrDefault(StreamingProvider.BOTH)
         )
     }
 
@@ -83,5 +101,15 @@ class UserPreferencesRepository @Inject constructor(
     fun updateMobileDataHighQuality(enabled: Boolean) {
         prefs.edit().putBoolean("mobile_data_hq", enabled).apply()
         _settings.value = _settings.value.copy(mobileDataHighQuality = enabled)
+    }
+
+    fun updateAudioSourceMode(mode: AudioSourceMode) {
+        prefs.edit().putString("audio_source_mode", mode.name).apply()
+        _settings.value = _settings.value.copy(audioSourceMode = mode)
+    }
+
+    fun updateStreamingProvider(provider: StreamingProvider) {
+        prefs.edit().putString("streaming_provider", provider.name).apply()
+        _settings.value = _settings.value.copy(streamingProvider = provider)
     }
 }

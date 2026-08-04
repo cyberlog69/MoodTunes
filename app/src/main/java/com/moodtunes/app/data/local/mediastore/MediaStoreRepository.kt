@@ -5,6 +5,9 @@ import android.content.Context
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
+import com.moodtunes.app.data.local.preferences.AudioSourceMode
+import com.moodtunes.app.data.local.preferences.StreamingProvider
+import com.moodtunes.app.data.local.preferences.UserPreferencesRepository
 import com.moodtunes.app.data.remote.OnlineStreamRepository
 import com.moodtunes.app.domain.model.AudioFormat
 import com.moodtunes.app.domain.model.MoodType
@@ -18,11 +21,13 @@ import javax.inject.Singleton
 /**
  * Queries the device's MediaStore to retrieve local FLAC, ALAC, WAV, AAC, and MP3 audio files.
  * Integrates OnlineStreamRepository to fetch live, ISP-unrestricted Audius and YouTube streaming tracks.
+ * Respects user settings for Local vs Stream audio modes & Audius vs YouTube streaming providers.
  */
 @Singleton
 class MediaStoreRepository @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val onlineStreamRepository: OnlineStreamRepository
+    private val onlineStreamRepository: OnlineStreamRepository,
+    private val userPreferencesRepository: UserPreferencesRepository
 ) {
     /** High-Quality Lossless & HQ Audio Online Demo Streams */
     private val sampleStreamingTracks = listOf(
@@ -67,8 +72,25 @@ class MediaStoreRepository @Inject constructor(
         )
     )
 
-    /** Fetches all audio files (FLAC, ALAC, WAV, AAC, MP3) from the device plus streams. */
+    /** Fetches audio files according to user's selected AudioSourceMode */
     suspend fun getAllSongs(): List<Song> = withContext(Dispatchers.IO) {
+        val settings = userPreferencesRepository.settings.value
+
+        val localSongs = if (settings.audioSourceMode != AudioSourceMode.STREAM_ONLY) {
+            fetchLocalMediaSongs()
+        } else {
+            emptyList()
+        }
+
+        if (settings.audioSourceMode == AudioSourceMode.LOCAL_ONLY) {
+            return@withContext localSongs
+        }
+
+        // Include streaming tracks if AudioSourceMode is STREAM_ONLY or BOTH
+        localSongs + sampleStreamingTracks
+    }
+
+    private fun fetchLocalMediaSongs(): List<Song> {
         val songs = mutableListOf<Song>()
 
         val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -144,10 +166,7 @@ class MediaStoreRepository @Inject constructor(
         } catch (e: Exception) {
             e.printStackTrace()
         }
-
-        // Combine local files with high quality online streaming tracks
-        songs.addAll(sampleStreamingTracks)
-        songs
+        return songs
     }
 
     /** Detects FLAC, ALAC, WAV, AAC, and MP3 format from MIME type or file extension */
@@ -165,37 +184,50 @@ class MediaStoreRepository @Inject constructor(
     }
 
     /**
-     * Filters songs from MediaStore/Streams that match the given mood's keywords.
-     * Also fetches live Audius + YouTube online streams for that mood with ISP failover support.
+     * Filters songs matching mood. Respects AudioSourceMode and StreamingProvider preferences.
      */
     suspend fun getSongsByMood(mood: MoodType): List<Song> = withContext(Dispatchers.IO) {
-        val allSongs = getAllSongs().toMutableList()
-        val keywords = mood.keywords
+        val settings = userPreferencesRepository.settings.value
+        val resultList = mutableListOf<Song>()
 
-        val localMatched = allSongs.filter { song ->
-            val combined = "${song.title} ${song.artist} ${song.album} ${song.genre ?: ""}".lowercase()
-            keywords.any { keyword -> combined.contains(keyword.lowercase()) } ||
-                    song.moodTags.contains(mood)
+        // 1. Local files if allowed
+        if (settings.audioSourceMode != AudioSourceMode.STREAM_ONLY) {
+            val allLocal = fetchLocalMediaSongs()
+            val keywords = mood.keywords
+            val localMatched = allLocal.filter { song ->
+                val combined = "${song.title} ${song.artist} ${song.album} ${song.genre ?: ""}".lowercase()
+                keywords.any { keyword -> combined.contains(keyword.lowercase()) } ||
+                        song.moodTags.contains(mood)
+            }
+            resultList.addAll(if (localMatched.isNotEmpty()) localMatched else allLocal.take(10))
         }
 
-        val resultList = localMatched.toMutableList()
-
-        // Fetch live Audius online tracks for this mood
-        try {
-            val audiusTracks = onlineStreamRepository.getAudiusTracksByMood(mood, limit = 8)
-            resultList.addAll(audiusTracks)
-        } catch (e: Exception) {
-            e.printStackTrace()
+        // If local only, return immediately
+        if (settings.audioSourceMode == AudioSourceMode.LOCAL_ONLY) {
+            return@withContext resultList
         }
 
-        // Fetch live YouTube online tracks for this mood via Piped/Invidious proxy pool
-        try {
-            val ytTracks = onlineStreamRepository.getYouTubeAudioTracksByMood(mood, limit = 6)
-            resultList.addAll(ytTracks)
-        } catch (e: Exception) {
-            e.printStackTrace()
+        // 2. Online streams according to StreamingProvider setting
+        val provider = settings.streamingProvider
+
+        if (provider == StreamingProvider.AUDIUS_ONLY || provider == StreamingProvider.BOTH) {
+            try {
+                val audiusTracks = onlineStreamRepository.getAudiusTracksByMood(mood, limit = 8)
+                resultList.addAll(audiusTracks)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
 
-        if (resultList.isEmpty()) allSongs else resultList
+        if (provider == StreamingProvider.YOUTUBE_ONLY || provider == StreamingProvider.BOTH) {
+            try {
+                val ytTracks = onlineStreamRepository.getYouTubeAudioTracksByMood(mood, limit = 6)
+                resultList.addAll(ytTracks)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
+        resultList
     }
 }

@@ -15,6 +15,7 @@ import com.moodtunes.app.presentation.ui.home.HomeScreen
 import com.moodtunes.app.presentation.ui.library.LibraryScreen
 import com.moodtunes.app.presentation.ui.permission.PermissionScreen
 import com.moodtunes.app.presentation.ui.player.PlayerScreen
+import com.moodtunes.app.presentation.ui.settings.SettingsScreen
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
@@ -51,7 +52,8 @@ fun MoodTunesNavGraph(
             HomeScreen(
                 onNavigateToPlayer = { navController.navigate(Routes.PLAYER) },
                 onNavigateToLibrary = { navController.navigate(Routes.LIBRARY) },
-                onNavigateToHistory = { navController.navigate(Routes.HISTORY) }
+                onNavigateToHistory = { navController.navigate(Routes.HISTORY) },
+                onNavigateToSettings = { navController.navigate(Routes.SETTINGS) }
             )
         }
 
@@ -70,6 +72,12 @@ fun MoodTunesNavGraph(
 
         composable(Routes.HISTORY) {
             HistoryScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.SETTINGS) {
+            SettingsScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
         }

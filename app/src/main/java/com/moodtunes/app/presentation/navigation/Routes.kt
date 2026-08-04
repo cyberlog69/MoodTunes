@@ -7,4 +7,5 @@ object Routes {
     const val LIBRARY = "library"
     const val HISTORY = "history"
     const val PERMISSION = "permission"
+    const val SETTINGS = "settings"
 }

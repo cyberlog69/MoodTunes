@@ -34,7 +34,8 @@ fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel(),
     onNavigateToPlayer: () -> Unit,
     onNavigateToLibrary: () -> Unit,
-    onNavigateToHistory: () -> Unit
+    onNavigateToHistory: () -> Unit,
+    onNavigateToSettings: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -100,6 +101,13 @@ fun HomeScreen(
                         Icon(
                             Icons.Rounded.LibraryMusic,
                             contentDescription = "Library",
+                            tint = OnSurfaceVariant
+                        )
+                    }
+                    IconButton(onClick = onNavigateToSettings) {
+                        Icon(
+                            Icons.Rounded.Settings,
+                            contentDescription = "Settings",
                             tint = OnSurfaceVariant
                         )
                     }

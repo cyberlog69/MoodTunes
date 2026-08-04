@@ -43,7 +43,17 @@ class PlayerViewModel @Inject constructor(
         playbackManager.currentMood,
         playbackManager.isShuffleEnabled,
         playbackManager.repeatMode
-    ) { playlist, song, isPlaying, pos, dur, mood, shuffle, repeatModeInt ->
+    ) { args ->
+        @Suppress("UNCHECKED_CAST")
+        val playlist = args[0] as List<Song>
+        val song = args[1] as? Song
+        val isPlaying = args[2] as Boolean
+        val pos = args[3] as Long
+        val dur = args[4] as Long
+        val mood = args[5] as? MoodType
+        val shuffle = args[6] as Boolean
+        val repeatModeInt = args[7] as Int
+
         val index = playlist.indexOfFirst { it.id == song?.id }.coerceAtLeast(0)
         val repeatMode = when (repeatModeInt) {
             Player.REPEAT_MODE_ONE -> RepeatMode.ONE

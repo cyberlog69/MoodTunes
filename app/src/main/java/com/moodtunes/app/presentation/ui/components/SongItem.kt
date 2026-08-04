@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -19,7 +20,7 @@ import com.moodtunes.app.domain.model.Song
 import com.moodtunes.app.presentation.ui.theme.*
 
 /**
- * A single song list item used in LibraryScreen.
+ * A single song list item with FLAC/ALAC Lossless audio quality badge support.
  */
 @Composable
 fun SongItem(
@@ -71,13 +72,30 @@ fun SongItem(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            Text(
-                text = "${song.artist} • ${song.formattedDuration}",
-                style = MaterialTheme.typography.bodySmall,
-                color = OnSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            Spacer(Modifier.height(2.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = "${song.artist} • ${song.formattedDuration}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = OnSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Surface(
+                    shape = RoundedCornerShape(4.dp),
+                    color = Color(song.audioFormat.badgeColorHex).copy(alpha = 0.2f)
+                ) {
+                    Text(
+                        text = song.audioFormat.displayName,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color(song.audioFormat.badgeColorHex),
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                    )
+                }
+            }
         }
 
         // Favorite button

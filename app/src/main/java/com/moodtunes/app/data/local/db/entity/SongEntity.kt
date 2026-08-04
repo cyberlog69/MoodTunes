@@ -14,5 +14,7 @@ data class SongEntity(
     val albumArtUriString: String?,
     val genre: String?,
     val isFavorite: Boolean = false,
-    val moodTagsJson: String = "[]"  // JSON array of MoodType names
+    val moodTagsJson: String = "[]",
+    val audioFormatName: String = "MP3",
+    val isStream: Boolean = false
 )

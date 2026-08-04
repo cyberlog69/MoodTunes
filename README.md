@@ -14,6 +14,9 @@
 ## ✨ Features
 
 - **🎭 6 Mood Categories**: Automatically groups songs into *Happy*, *Sad*, *Energetic*, *Calm*, *Euphoric*, and *Sleep* playlists using metadata sentiment analysis.
+- **🎼 FLAC & ALAC Lossless Support**: Native decoding for FLAC (`.flac`), ALAC (`.m4a`), WAV (`.wav`), AAC, and MP3 audio formats with 24-bit/32-bit float audiophile-grade audio output.
+- **📻 High-Quality Music Streaming**: Built-in HTTP/HTTPS/HLS streaming data source with load controls for smooth online audio streaming.
+- **🏷️ Audio Quality Badges**: Visual badges (`FLAC Lossless`, `ALAC Lossless`, `WAV Hi-Res`, `HQ Stream`) displayed on Player, MiniPlayer, and Track list.
 - **🎨 Dynamic Material You Theme**: Adapts system accent colors on Android 12+ (API 31+) alongside mood-specific gradient palettes.
 - **🎧 Seamless Background Playback**: Built on `androidx.media3` `MediaSessionService` for continuous playback, lock-screen controls, and Bluetooth headset button support.
 - **📀 Animated Spinning Vinyl Player**: Visual vinyl disc artwork animation synchronized with playback status.

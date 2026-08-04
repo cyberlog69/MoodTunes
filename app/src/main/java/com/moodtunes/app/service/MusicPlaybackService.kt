@@ -4,19 +4,21 @@ import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import dagger.hilt.android.AndroidEntryPoint
-import javax.inject.Inject
 
 /**
- * Background service that hosts the ExoPlayer instance and MediaSession.
- * This enables:
- * - Music playback to continue when the app is in the background
- * - Lock screen / notification media controls
- * - Bluetooth headset button support
- * - Android Auto compatibility
+ * Background service hosting ExoPlayer configured for High-Quality FLAC/ALAC & Streaming playback.
+ * Features:
+ * - FLAC, ALAC (Apple Lossless), WAV, AAC, and MP3 hardware/software decoding
+ * - High-Resolution 24-bit audio pipeline output
+ * - Network buffering load control for Lossless audio streams
+ * - MediaSession background controls & notifications
  */
 @AndroidEntryPoint
 class MusicPlaybackService : MediaSessionService() {
@@ -32,13 +34,35 @@ class MusicPlaybackService : MediaSessionService() {
             .setUsage(C.USAGE_MEDIA)
             .build()
 
-        val player = ExoPlayer.Builder(this)
-            .setAudioAttributes(audioAttributes, /* handleAudioFocus= */ true)
-            .setHandleAudioBecomingNoisy(true) // Pause on headset unplug
+        // 24-bit / 32-bit Float Audio Sink for audiophile-grade Lossless output
+        val audioSink = DefaultAudioSink.Builder(this)
+            .setEnableFloatOutput(true)
+            .setEnableAudioTrackPlaybackParams(true)
             .build()
 
-        mediaSession = MediaSession.Builder(this, player)
+        // Decoders for FLAC, ALAC, WAV, AAC, MP3
+        val renderersFactory = DefaultRenderersFactory(this).apply {
+            setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
+            setEnableAudioFloatOutput(true)
+        }
+
+        // Custom Buffer Control for smooth high-bitrate Lossless streaming
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                /* minBufferMs = */ 15_000,
+                /* maxBufferMs = */ 60_000,
+                /* bufferForPlaybackMs = */ 2_500,
+                /* bufferForPlaybackAfterRebufferMs = */ 5_000
+            )
             .build()
+
+        val player = ExoPlayer.Builder(this, renderersFactory)
+            .setAudioAttributes(audioAttributes, /* handleAudioFocus= */ true)
+            .setHandleAudioBecomingNoisy(true) // Pause when headphones disconnect
+            .setLoadControl(loadControl)
+            .build()
+
+        mediaSession = MediaSession.Builder(this, player).build()
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? =

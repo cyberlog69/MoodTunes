@@ -207,13 +207,32 @@ fun PlayerScreen(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Text(
-                        text = song?.artist ?: "",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = White.copy(alpha = 0.7f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Spacer(Modifier.height(4.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = song?.artist ?: "",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = White.copy(alpha = 0.7f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        song?.audioFormat?.let { format ->
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = Color(format.badgeColorHex).copy(alpha = 0.25f)
+                            ) {
+                                Text(
+                                    text = format.displayName,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color(format.badgeColorHex),
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
                 }
                 IconButton(onClick = viewModel::toggleFavorite) {
                     Icon(

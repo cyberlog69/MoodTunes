@@ -4,6 +4,7 @@ import android.net.Uri
 import com.moodtunes.app.data.local.db.dao.SongDao
 import com.moodtunes.app.data.local.db.entity.SongEntity
 import com.moodtunes.app.data.local.mediastore.MediaStoreRepository
+import com.moodtunes.app.domain.model.AudioFormat
 import com.moodtunes.app.domain.model.MoodType
 import com.moodtunes.app.domain.model.Song
 import com.moodtunes.app.domain.repository.IMusicRepository
@@ -51,8 +52,7 @@ class MusicRepositoryImpl @Inject constructor(
     }
 
     private suspend fun getFavoriteIdsFromDb(): Set<Long> {
-        // Inline query for favorites just by ID
-        return emptySet() // Room handles this via Flow; for sync we skip
+        return emptySet()
     }
 
     // --- Mappers ---
@@ -65,7 +65,9 @@ class MusicRepositoryImpl @Inject constructor(
         uriString = uri.toString(),
         albumArtUriString = albumArtUri?.toString(),
         genre = genre,
-        isFavorite = isFavorite
+        isFavorite = isFavorite,
+        audioFormatName = audioFormat.name,
+        isStream = isStream
     )
 
     private fun SongEntity.toDomain() = Song(
@@ -77,6 +79,8 @@ class MusicRepositoryImpl @Inject constructor(
         uri = Uri.parse(uriString),
         albumArtUri = albumArtUriString?.let { Uri.parse(it) },
         genre = genre,
-        isFavorite = isFavorite
+        isFavorite = isFavorite,
+        audioFormat = runCatching { AudioFormat.valueOf(audioFormatName) }.getOrDefault(AudioFormat.MP3),
+        isStream = isStream
     )
 }

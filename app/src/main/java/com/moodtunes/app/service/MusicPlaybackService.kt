@@ -13,11 +13,11 @@ import androidx.media3.session.MediaSessionService
 import dagger.hilt.android.AndroidEntryPoint
 
 /**
- * Background service hosting ExoPlayer configured for High-Quality FLAC/ALAC & Streaming playback.
+ * Background service hosting ExoPlayer configured for Ultra-Low Latency High-Quality playback.
  * Features:
+ * - 250ms Instant Start LoadControl buffer tuning
  * - FLAC, ALAC (Apple Lossless), WAV, AAC, and MP3 hardware/software decoding
  * - High-Resolution 24-bit audio pipeline output
- * - Network buffering load control for Lossless audio streams
  * - MediaSession background controls & notifications
  */
 @AndroidEntryPoint
@@ -46,14 +46,15 @@ class MusicPlaybackService : MediaSessionService() {
             setEnableAudioFloatOutput(true)
         }
 
-        // Custom Buffer Control for smooth high-bitrate Lossless streaming
+        // Ultra-Fast LoadControl: start playing within 250ms of receiving initial network bytes!
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                /* minBufferMs = */ 15_000,
-                /* maxBufferMs = */ 60_000,
-                /* bufferForPlaybackMs = */ 2_500,
-                /* bufferForPlaybackAfterRebufferMs = */ 5_000
+                /* minBufferMs = */ 10_000,
+                /* maxBufferMs = */ 30_000,
+                /* bufferForPlaybackMs = */ 250,        // Start playback after 250ms buffer!
+                /* bufferForPlaybackAfterRebufferMs = */ 500 // Rebuffer after 500ms!
             )
+            .setPrioritizeTimeOverSizeThresholds(true)
             .build()
 
         val player = ExoPlayer.Builder(this, renderersFactory)

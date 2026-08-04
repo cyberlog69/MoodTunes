@@ -2,12 +2,14 @@ package com.moodtunes.app.service
 
 import android.content.ComponentName
 import android.content.Context
+import android.net.Uri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.MoreExecutors
+import com.moodtunes.app.data.remote.OnlineStreamRepository
 import com.moodtunes.app.domain.model.MoodType
 import com.moodtunes.app.domain.model.Song
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -20,7 +22,8 @@ import javax.inject.Singleton
 
 @Singleton
 class PlaybackManager @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val onlineStreamRepository: OnlineStreamRepository
 ) {
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
@@ -76,11 +79,25 @@ class PlaybackManager @Inject constructor(
         _currentMood.value = mood
         _currentSong.value = songs.getOrNull(startIndex)
 
-        val controller = mediaController
-        if (controller != null) {
-            val mediaItems = songs.map { song ->
+        scope.launch {
+            val controller = mediaController ?: run {
+                delay(300)
+                mediaController
+            } ?: return@launch
+
+            // Pre-resolve stream URLs asynchronously for instant low-latency playback
+            val targetSong = songs.getOrNull(startIndex)
+            val resolvedUri = if (targetSong != null && targetSong.isStream && targetSong.uri.toString().contains("/streams/")) {
+                val direct = onlineStreamRepository.resolveDirectStreamUrl(targetSong.uri.toString())
+                Uri.parse(direct)
+            } else {
+                targetSong?.uri
+            }
+
+            val mediaItems = songs.mapIndexed { index, song ->
+                val itemUri = if (index == startIndex && resolvedUri != null) resolvedUri else song.uri
                 MediaItem.Builder()
-                    .setUri(song.uri)
+                    .setUri(itemUri)
                     .setMediaId(song.id.toString())
                     .setMediaMetadata(
                         MediaMetadata.Builder()
@@ -96,30 +113,6 @@ class PlaybackManager @Inject constructor(
             controller.setMediaItems(mediaItems, startIndex, 0L)
             controller.prepare()
             controller.play()
-        } else {
-            // Controller connecting asynchronously; retry after a short delay
-            scope.launch {
-                delay(300)
-                mediaController?.let { ctrl ->
-                    val mediaItems = songs.map { song ->
-                        MediaItem.Builder()
-                            .setUri(song.uri)
-                            .setMediaId(song.id.toString())
-                            .setMediaMetadata(
-                                MediaMetadata.Builder()
-                                    .setTitle(song.title)
-                                    .setArtist(song.artist)
-                                    .setAlbumTitle(song.album)
-                                    .setArtworkUri(song.albumArtUri)
-                                    .build()
-                            )
-                            .build()
-                    }
-                    ctrl.setMediaItems(mediaItems, startIndex, 0L)
-                    ctrl.prepare()
-                    ctrl.play()
-                }
-            }
         }
     }
 

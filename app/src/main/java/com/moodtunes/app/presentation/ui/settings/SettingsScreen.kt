@@ -10,6 +10,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -333,7 +334,7 @@ fun SettingsScreen(
                                             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(result.downloadUrl))
                                             context.startActivity(intent)
                                         }) {
-                                            Icon(Icons.Rounded.OpenInNew, contentDescription = "Download", tint = Color(0xFF4CAF50))
+                                            Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = "Download", tint = Color(0xFF4CAF50))
                                         }
                                     }
                                 }

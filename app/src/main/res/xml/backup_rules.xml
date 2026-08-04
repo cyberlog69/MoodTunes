@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <full-backup-content>
+    <!-- SECURITY FIX (S5/S6): Exclude database and user settings from backups
+         to prevent sensitive user preferences from leaking via ADB or cloud backup. -->
     <exclude domain="database" path="moodtunes_database" />
+    <exclude domain="sharedpref" path="moodtunes_settings.xml" />
 </full-backup-content>

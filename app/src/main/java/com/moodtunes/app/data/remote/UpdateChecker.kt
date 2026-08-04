@@ -1,5 +1,7 @@
 package com.moodtunes.app.data.remote
 
+import android.util.Log
+import com.moodtunes.app.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -29,7 +31,7 @@ class UpdateChecker @Inject constructor() {
         try {
             val request = Request.Builder()
                 .url("https://api.github.com/repos/cyberlog69/MoodTunes/releases/latest")
-                .header("User-Agent", "MoodTunes-Android-App")
+                .header("User-Agent", "MoodTunes/1.0 (Android; Music Player App)")
                 .build()
 
             client.newCall(request).execute().use { response ->
@@ -39,21 +41,34 @@ class UpdateChecker @Inject constructor() {
                         val json = JSONObject(body)
                         val tagName = json.optString("tag_name", "v1.0.0").replace("v", "")
                         val bodyText = json.optString("body", "Bug fixes and performance improvements.")
-                        val htmlUrl = json.optString("html_url", "https://github.com/cyberlog69/MoodTunes/releases")
+                            .take(500) // Limit release notes length
+                        val htmlUrl = json.optString("html_url", "")
 
-                        val isNewer = isVersionNewer(currentVersion, tagName)
+                        // SECURITY FIX (S3): Validate download URL must be a GitHub URL — no MITM redirect
+                        val safeDownloadUrl = if (htmlUrl.startsWith("https://github.com/cyberlog69/MoodTunes")) {
+                            htmlUrl
+                        } else {
+                            "https://github.com/cyberlog69/MoodTunes/releases"
+                        }
+
+                        // Sanitize version string: only allow digits and dots
+                        val sanitizedVersion = tagName.filter { it.isDigit() || it == '.' }
+                            .ifEmpty { "1.0.0" }
+
+                        val isNewer = isVersionNewer(currentVersion, sanitizedVersion)
                         return@withContext UpdateCheckResult(
                             isUpdateAvailable = isNewer,
-                            latestVersion = "v$tagName",
+                            latestVersion = "v$sanitizedVersion",
                             currentVersion = "v$currentVersion",
                             releaseNotes = bodyText,
-                            downloadUrl = htmlUrl
+                            downloadUrl = safeDownloadUrl
                         )
                     }
                 }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            // SECURITY FIX (S9): No printStackTrace in production — debug-only logging
+            if (BuildConfig.DEBUG) Log.w(TAG, "Update check failed", e)
         }
 
         UpdateCheckResult(
@@ -75,5 +90,9 @@ class UpdateChecker @Inject constructor() {
             if (c > l) return false
         }
         return false
+    }
+
+    companion object {
+        private const val TAG = "UpdateChecker"
     }
 }

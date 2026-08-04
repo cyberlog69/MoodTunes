@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Network Security Configuration for MoodTunes.
+    Enforces HTTPS-only for all traffic to protect user data in transit.
+    Disables cleartext HTTP to prevent downgrade attacks on streaming URLs.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

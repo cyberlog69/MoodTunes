@@ -29,48 +29,11 @@ class MediaStoreRepository @Inject constructor(
     private val onlineStreamRepository: OnlineStreamRepository,
     private val userPreferencesRepository: UserPreferencesRepository
 ) {
-    /** High-Quality Lossless & HQ Audio Online Demo Streams */
-    private val sampleStreamingTracks = listOf(
-        Song(
-            id = 999001,
-            title = "Chill Lofi Beats (Lossless FLAC Stream)",
-            artist = "Lofi Girl Radio",
-            album = "HQ Chill Streams",
-            duration = 0,
-            uri = Uri.parse("https://stream.zeno.fm/f3wvbbqmdg8uv"),
-            albumArtUri = null,
-            genre = "Chill",
-            audioFormat = AudioFormat.FLAC,
-            isStream = true,
-            moodTags = listOf(MoodType.CALM, MoodType.SLEEP)
-        ),
-        Song(
-            id = 999002,
-            title = "Electro Euphoria Raves (Hi-Res Streaming)",
-            artist = "EDM Live HQ",
-            album = "Festival Lossless",
-            duration = 0,
-            uri = Uri.parse("https://stream.zeno.fm/87vcfd89z18uv"),
-            albumArtUri = null,
-            genre = "EDM",
-            audioFormat = AudioFormat.ALAC,
-            isStream = true,
-            moodTags = listOf(MoodType.EUPHORIC, MoodType.ENERGETIC, MoodType.HAPPY)
-        ),
-        Song(
-            id = 999003,
-            title = "Deep Focus Piano (Lossless FLAC Audio)",
-            artist = "Ambient Sounds HQ",
-            album = "Piano Dreams",
-            duration = 0,
-            uri = Uri.parse("https://stream.zeno.fm/0r0xa792kwzuv"),
-            albumArtUri = null,
-            genre = "Classical",
-            audioFormat = AudioFormat.FLAC,
-            isStream = true,
-            moodTags = listOf(MoodType.CALM, MoodType.SAD, MoodType.SLEEP)
-        )
-    )
+    // COPYRIGHT FIX (C1): Removed hardcoded Zeno.fm commercial radio URLs.
+    // Zeno.fm hosts copyrighted broadcast radio that the app is not licensed to relay.
+    // All online tracks are now sourced exclusively from:
+    //   - Audius: decentralised protocol with CC-licensed, royalty-free artist uploads
+    //   - YouTube via Piped: user-initiated streaming (same as browser playback)
 
     /** Fetches audio files according to user's selected AudioSourceMode */
     suspend fun getAllSongs(): List<Song> = withContext(Dispatchers.IO) {
@@ -86,8 +49,8 @@ class MediaStoreRepository @Inject constructor(
             return@withContext localSongs
         }
 
-        // Include streaming tracks if AudioSourceMode is STREAM_ONLY or BOTH
-        localSongs + sampleStreamingTracks
+        // Online tracks are fetched on-demand via getSongsByMood() — no hardcoded stream list
+        localSongs
     }
 
     private fun fetchLocalMediaSongs(): List<Song> {

@@ -1,9 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <data-extraction-rules>
+    <!-- SECURITY FIX (S5/S6): Exclude database and user settings from cloud backup
+         and device-to-device transfer to prevent sensitive preferences from leaking. -->
     <cloud-backup>
         <exclude domain="database" path="moodtunes_database" />
+        <exclude domain="sharedpref" path="moodtunes_settings.xml" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="database" path="moodtunes_database" />
+        <exclude domain="sharedpref" path="moodtunes_settings.xml" />
     </device-transfer>
 </data-extraction-rules>

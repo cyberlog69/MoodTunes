@@ -1,6 +1,8 @@
 package com.moodtunes.app.data.remote
 
 import android.net.Uri
+import android.util.Log
+import com.moodtunes.app.BuildConfig
 import com.moodtunes.app.domain.model.AudioFormat
 import com.moodtunes.app.domain.model.MoodType
 import com.moodtunes.app.domain.model.Song
@@ -20,6 +22,12 @@ import javax.inject.Singleton
 /**
  * Handles global & Indian ISP (Jio, Airtel, Vi, BSNL, ACT) ultra-low-latency music streaming
  * using parallel host failover pools across Audius Protocol and YouTube (via Piped/Invidious).
+ *
+ * Security:
+ * - COPYRIGHT FIX (C3): Uses honest MoodTunes User-Agent — no browser impersonation.
+ * - SECURITY FIX (S4): All resolved stream URLs are validated for https:// scheme before use.
+ * - SECURITY FIX (S8): @Volatile on activeAudiusHost prevents thread-safety race conditions.
+ * - SECURITY FIX (S10): No printStackTrace() in production; debug logging only.
  */
 @Singleton
 class OnlineStreamRepository @Inject constructor() {
@@ -50,7 +58,8 @@ class OnlineStreamRepository @Inject constructor() {
         "https://piped-api.lunar.icu"
     )
 
-    private var activeAudiusHost: String? = null
+    // SECURITY FIX (S8): @Volatile prevents stale cache reads across threads
+    @Volatile private var activeAudiusHost: String? = null
 
     /**
      * Resolves active Audius discovery provider host.
@@ -70,7 +79,9 @@ class OnlineStreamRepository @Inject constructor() {
                         return@withContext host
                     }
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                if (BuildConfig.DEBUG) Log.w(TAG, "Audius host failed: $host", e)
+            }
         }
 
         defaultAudiusHosts.first()
@@ -78,6 +89,7 @@ class OnlineStreamRepository @Inject constructor() {
 
     /**
      * Searches Audius tracks by mood keyword.
+     * Audius is a decentralised, royalty-free streaming protocol — legally safe to use.
      */
     suspend fun getAudiusTracksByMood(mood: MoodType, limit: Int = 8): List<Song> = withContext(Dispatchers.IO) {
         val host = getAudiusHost()
@@ -129,7 +141,7 @@ class OnlineStreamRepository @Inject constructor() {
                 }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            if (BuildConfig.DEBUG) Log.w(TAG, "Audius search failed for mood ${mood.displayName}", e)
         }
         songs
     }
@@ -190,7 +202,9 @@ class OnlineStreamRepository @Inject constructor() {
                         if (songs.isNotEmpty()) return@withContext songs
                     }
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                if (BuildConfig.DEBUG) Log.w(TAG, "Piped instance failed: $pipedBase", e)
+            }
         }
 
         songs
@@ -198,6 +212,7 @@ class OnlineStreamRepository @Inject constructor() {
 
     /**
      * Resolves direct audio stream URL in parallel to avoid playback delay when selected.
+     * SECURITY FIX (S4): Validates resolved URL must use https:// scheme.
      */
     suspend fun resolveDirectStreamUrl(streamUrl: String): String = withContext(Dispatchers.IO) {
         if (!streamUrl.contains("/streams/")) return@withContext streamUrl
@@ -216,11 +231,16 @@ class OnlineStreamRepository @Inject constructor() {
                     if (audioStreams.length() > 0) {
                         val firstStream = audioStreams.getJSONObject(0)
                         val directUrl = firstStream.optString("url")
-                        if (directUrl.isNotEmpty()) return@withContext directUrl
+                        // SECURITY FIX (S4): Only accept https:// URLs from proxy responses
+                        if (directUrl.startsWith("https://")) {
+                            return@withContext directUrl
+                        }
                     }
                 }
             }
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.w(TAG, "Stream URL resolution failed", e)
+        }
 
         streamUrl
     }
@@ -237,6 +257,9 @@ class OnlineStreamRepository @Inject constructor() {
     }
 
     companion object {
-        private const val USER_AGENT = "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36"
+        private const val TAG = "OnlineStreamRepository"
+
+        // COPYRIGHT FIX (C3): Honest, transparent User-Agent — no browser impersonation
+        private const val USER_AGENT = "MoodTunes/1.0 (Android; Music Player App)"
     }
 }

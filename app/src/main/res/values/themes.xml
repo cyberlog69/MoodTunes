@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        XML-based launch / splash theme used before Compose draws its first frame.
+        Must extend Theme.AppCompat (or MaterialComponents) for full compat
+        with AppCompatActivity and the Material You style system.
+        windowBackground is dark to prevent a white flash on startup.
+    -->
+    <style name="Theme.MoodTunes" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:windowBackground">#0A0A0F</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

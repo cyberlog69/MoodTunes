@@ -1,0 +1,17 @@
+# Build & Generated Directories
+build/
+app/build/
+**/build/
+.gradle/
+.kotlin/
+/.idea/
+
+# Android Studio & IDE
+*.iml
+.DS_Store
+/local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aar

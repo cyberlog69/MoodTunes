@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MoodTunes</string>
+    <string name="mood_happy">Happy</string>
+    <string name="mood_sad">Sad</string>
+    <string name="mood_energetic">Energetic</string>
+    <string name="mood_calm">Calm</string>
+    <string name="mood_euphoric">Euphoric</string>
+    <string name="mood_sleep">Sleep</string>
+    <string name="permission_rationale">MoodTunes needs access to your audio files to build mood-based playlists.</string>
+    <string name="grant_permission">Grant Permission</string>
+    <string name="no_songs_found">No songs found for this mood.\nTry adding more music to your device.</string>
+    <string name="notification_channel_name">MoodTunes Playback</string>
+    <string name="notification_channel_description">Controls music playback</string>
+    <string name="unknown_artist">Unknown Artist</string>
+    <string name="unknown_album">Unknown Album</string>
+    <string name="now_playing">Now Playing</string>
+    <string name="how_are_you_feeling">How are you feeling today?</string>
+    <string name="pick_your_mood">Pick your mood</string>
+    <string name="songs">Songs</string>
+    <string name="library">Library</string>
+    <string name="history">Mood History</string>
+    <string name="home">Home</string>
+    <string name="favorites">Favorites</string>
+    <string name="all_songs">All Songs</string>
+    <string name="playlists">Playlists</string>
+    <string name="your_vibe_stats">Your Vibe Stats</string>
+    <string name="total_listening_time">Total Listening Time</string>
+    <string name="top_mood">Top Mood</string>
+    <string name="mood_history">Mood History</string>
+    <string name="search_songs">Search songs, artists…</string>
+    <string name="shuffle">Shuffle</string>
+    <string name="repeat">Repeat</string>
+    <string name="queue">Queue</string>
+    <string name="add_to_favorites">Add to Favorites</string>
+    <string name="remove_from_favorites">Remove from Favorites</string>
+</resources>

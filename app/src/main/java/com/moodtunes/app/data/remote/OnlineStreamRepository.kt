@@ -21,7 +21,11 @@ import javax.inject.Singleton
 
 /**
  * Handles global & Indian ISP (Jio, Airtel, Vi, BSNL, ACT) ultra-low-latency music streaming
- * using parallel host failover pools across Audius Protocol and YouTube (via Piped/Invidious).
+ * using parallel host failover pools across:
+ *   - Audius Protocol (decentralized royalty-free music)
+ *   - Jamendo (Creative Commons 320kbps MP3s)
+ *   - Internet Archive (millions of free/open-license audio files)
+ *   - Radio Browser (35,000+ live global internet radio stations)
  *
  * Security:
  * - COPYRIGHT FIX (C3): Uses honest MoodTunes User-Agent — no browser impersonation.
@@ -33,29 +37,34 @@ import javax.inject.Singleton
 class OnlineStreamRepository @Inject constructor() {
 
     private val client = OkHttpClient.Builder()
-        .connectTimeout(3, TimeUnit.SECONDS)
-        .readTimeout(4, TimeUnit.SECONDS)
+        .connectTimeout(5, TimeUnit.SECONDS)
+        .readTimeout(8, TimeUnit.SECONDS)
         .connectionPool(ConnectionPool(10, 5, TimeUnit.MINUTES))
         .followRedirects(true)
         .followSslRedirects(true)
         .build()
 
-    // ─── Audius Host Discovery Pool (with Indian & Asia ISP mirrors) ─────────
+    // ─── Audius Host Discovery Pool (Updated 2026) ─────────────────────────────
     private val defaultAudiusHosts = listOf(
         "https://discoveryprovider.audius.co",
         "https://audius-dp.trendigo.com",
-        "https://audius-discovery-1.cultur3lt.com",
-        "https://discovery-provider.audius.co",
-        "https://dn2.audius.co"
+        "https://dn1.audius.co",
+        "https://dn2.audius.co",
+        "https://dn3.audius.co",
+        "https://discovery-provider.audius.co"
     )
 
-    // ─── Piped (YouTube) API Fast Proxy Instances Pool ────────────────────────
+    // ─── Piped (YouTube) API Fast Proxy Instances Pool (Updated) ──────────────
+    // Note: Piped instances are community-run and change frequently.
+    // We use a larger pool with longer timeouts for better reliability.
     private val pipedInstances = listOf(
         "https://pipedapi.kavin.rocks",
-        "https://api.piped.privacydev.net",
         "https://pipedapi.tokhmi.xyz",
-        "https://pipedapi.garudalinux.org",
-        "https://piped-api.lunar.icu"
+        "https://api.piped.privacydev.net",
+        "https://pipedapi.moomoo.me",
+        "https://pipedapi.adminforge.de",
+        "https://piped-api.lunar.icu",
+        "https://pipedapi.reallyaweso.me"
     )
 
     // SECURITY FIX (S8): @Volatile prevents stale cache reads across threads
@@ -154,6 +163,7 @@ class OnlineStreamRepository @Inject constructor() {
 
     /**
      * Searches YouTube audio tracks via Piped instances pool with fast stream resolution.
+     * Uses an expanded pool of instances for better reliability.
      */
     suspend fun getYouTubeAudioTracksByMood(
         mood: MoodType,
@@ -170,6 +180,7 @@ class OnlineStreamRepository @Inject constructor() {
                 val request = Request.Builder()
                     .url(url)
                     .header("User-Agent", USER_AGENT)
+                    .header("Accept", "application/json")
                     .build()
 
                 client.newCall(request).execute().use { response ->
@@ -256,22 +267,25 @@ class OnlineStreamRepository @Inject constructor() {
         streamUrl
     }
 
-    /** Parallel fetching of both Audius and YouTube online tracks for a mood and language */
+    /** Parallel fetching of Audius, Internet Archive, and YouTube online tracks for a mood and language */
     suspend fun fetchAllOnlineTracksForMood(
         mood: MoodType,
         language: com.moodtunes.app.data.local.preferences.MusicLanguage = com.moodtunes.app.data.local.preferences.MusicLanguage.ALL
     ): List<Song> = coroutineScope {
         val audiusDeferred = async { runCatching { getAudiusTracksByMood(mood, language) }.getOrDefault(emptyList()) }
+        val archiveDeferred = async { runCatching { getInternetArchiveTracksByMood(mood, language) }.getOrDefault(emptyList()) }
         val ytDeferred = async { runCatching { getYouTubeAudioTracksByMood(mood, language) }.getOrDefault(emptyList()) }
 
         val audiusResult = audiusDeferred.await()
+        val archiveResult = archiveDeferred.await()
         val ytResult = ytDeferred.await()
 
-        audiusResult + ytResult
+        (audiusResult + archiveResult + ytResult).distinctBy { it.id }
     }
 
     /**
      * Searches Jamendo Music API for 320 kbps MP3 tracks.
+     * FIXED: Now uses `tags` + `fuzzytags` parameters for better results.
      * 100% legal, royalty-free Creative Commons independent music.
      */
     suspend fun getJamendoTracks(
@@ -281,52 +295,222 @@ class OnlineStreamRepository @Inject constructor() {
     ): List<Song> = withContext(Dispatchers.IO) {
         val songs = mutableListOf<Song>()
         val selectedLangs = languages.filter { it != com.moodtunes.app.data.local.preferences.MusicLanguage.ALL }
-        val langPrefix = if (selectedLangs.isNotEmpty()) selectedLangs.first().searchQueryPrefix else ""
-        val query = "$langPrefix $categoryQuery".trim()
+
+        // Build multiple search strategies for better results
+        val searchStrategies = mutableListOf<String>()
+
+        // Strategy 1: tag-based (most reliable on Jamendo)
+        val cleanCategory = categoryQuery.replace(" ", "+").lowercase()
+        searchStrategies.add(
+            "https://api.jamendo.com/v3.0/tracks/?client_id=56d30c95&format=json&hasimage=true" +
+            "&limit=$limit&audioformat=mp32&order=popularity_total" +
+            "&tags=${Uri.encode(cleanCategory)}"
+        )
+
+        // Strategy 2: fuzzytags (fuzzy match on tags)
+        searchStrategies.add(
+            "https://api.jamendo.com/v3.0/tracks/?client_id=56d30c95&format=json&hasimage=true" +
+            "&limit=$limit&audioformat=mp32&order=popularity_week" +
+            "&fuzzytags=${Uri.encode(cleanCategory)}"
+        )
+
+        // Strategy 3: search (broadest but least precise)
+        val langPrefix = if (selectedLangs.isNotEmpty()) selectedLangs.first().searchQueryPrefix + " " else ""
+        val nameQuery = "$langPrefix$categoryQuery".trim()
+        searchStrategies.add(
+            "https://api.jamendo.com/v3.0/tracks/?client_id=56d30c95&format=json&hasimage=true" +
+            "&limit=$limit&audioformat=mp32&order=popularity_total" +
+            "&search=${Uri.encode(nameQuery)}"
+        )
+
+        // Strategy 4: trending fallback — no filter, just top tracks
+        searchStrategies.add(
+            "https://api.jamendo.com/v3.0/tracks/?client_id=56d30c95&format=json&hasimage=true" +
+            "&limit=$limit&audioformat=mp32&order=popularity_week"
+        )
+
+        for (strategyUrl in searchStrategies) {
+            if (songs.size >= limit) break
+            try {
+                val request = Request.Builder().url(strategyUrl).header("User-Agent", USER_AGENT).build()
+                client.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        val body = response.body?.string()
+                        if (body != null) {
+                            val json = JSONObject(body)
+                            val results = json.optJSONArray("results") ?: JSONArray()
+                            for (i in 0 until results.length()) {
+                                val track = results.getJSONObject(i)
+                                val id = track.optString("id", "")
+                                val name = track.optString("name", "Jamendo Track")
+                                val artist = track.optString("artist_name", "Jamendo Artist")
+                                val album = track.optString("album_name", "Jamendo Indie")
+                                val audioUrl = track.optString("audio", "")
+                                val image = track.optString("image", "")
+                                val duration = track.optLong("duration", 180) * 1000L
+
+                                if (audioUrl.startsWith("https://")) {
+                                    songs.add(
+                                        Song(
+                                            id = id.hashCode().toLong() and 0x7FFFFFFF,
+                                            title = name,
+                                            artist = artist,
+                                            album = album,
+                                            duration = duration,
+                                            uri = Uri.parse(audioUrl),
+                                            albumArtUri = if (image.isNotEmpty()) Uri.parse(image) else null,
+                                            genre = categoryQuery,
+                                            audioFormat = AudioFormat.STREAM,
+                                            isStream = true
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                if (songs.size >= 3) break
+            } catch (e: Exception) {
+                if (BuildConfig.DEBUG) Log.w(TAG, "Jamendo strategy failed: $strategyUrl", e)
+            }
+        }
+
+        songs.distinctBy { it.id }
+    }
+
+    /**
+     * NEW: Searches the Internet Archive (archive.org) for free/open-license audio.
+     * Contains millions of songs: folk, classical, jazz, indie, world music.
+     * Completely free with no API key required.
+     */
+    suspend fun getInternetArchiveTracksByMood(
+        mood: MoodType,
+        language: com.moodtunes.app.data.local.preferences.MusicLanguage = com.moodtunes.app.data.local.preferences.MusicLanguage.ALL,
+        limit: Int = 8
+    ): List<Song> = withContext(Dispatchers.IO) {
+        val songs = mutableListOf<Song>()
+        val langPrefix = if (language != com.moodtunes.app.data.local.preferences.MusicLanguage.ALL) "${language.searchQueryPrefix} " else ""
+        val keyword = mood.keywords.firstOrNull() ?: mood.displayName
+        val query = "$langPrefix$keyword music"
 
         try {
-            val url = "https://api.jamendo.com/v3.0/tracks/?client_id=56d30c95&format=json&hasimage=true&limit=$limit&order=popularity_week&namesearch=${Uri.encode(query)}"
-            val request = Request.Builder().url(url).header("User-Agent", USER_AGENT).build()
+            val encodedQuery = Uri.encode("$query AND mediatype:audio AND format:MP3")
+            val url = "https://archive.org/advancedsearch.php" +
+                "?q=$encodedQuery" +
+                "&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator&fl%5B%5D=description" +
+                "&rows=$limit&page=1&output=json&sort%5B%5D=downloads+desc"
+
+            val request = Request.Builder()
+                .url(url)
+                .header("User-Agent", USER_AGENT)
+                .build()
+
             client.newCall(request).execute().use { response ->
                 if (response.isSuccessful) {
-                    val body = response.body?.string()
-                    if (body != null) {
-                        val json = JSONObject(body)
-                        val results = json.optJSONArray("results") ?: JSONArray()
-                        for (i in 0 until results.length()) {
-                            val track = results.getJSONObject(i)
-                            val id = track.optString("id", "")
-                            val name = track.optString("name", "Jamendo Track")
-                            val artist = track.optString("artist_name", "Jamendo Artist")
-                            val album = track.optString("album_name", "Jamendo Indie")
-                            val audioUrl = track.optString("audio", "")
-                            val image = track.optString("image", "")
-                            val duration = track.optLong("duration", 180) * 1000L
+                    val body = response.body?.string() ?: return@withContext emptyList()
+                    val json = JSONObject(body)
+                    val responseObj = json.optJSONObject("response") ?: return@withContext emptyList()
+                    val docs = responseObj.optJSONArray("docs") ?: JSONArray()
 
-                            if (audioUrl.startsWith("https://")) {
-                                songs.add(
-                                    Song(
-                                        id = id.hashCode().toLong() and 0x7FFFFFFF,
-                                        title = name,
-                                        artist = artist,
-                                        album = album,
-                                        duration = duration,
-                                        uri = Uri.parse(audioUrl),
-                                        albumArtUri = if (image.isNotEmpty()) Uri.parse(image) else null,
-                                        genre = categoryQuery,
-                                        audioFormat = AudioFormat.STREAM,
-                                        isStream = true
-                                    )
+                    for (i in 0 until docs.length()) {
+                        val doc = docs.getJSONObject(i)
+                        val identifier = doc.optString("identifier", "")
+                        val title = doc.optString("title", "Archive Audio")
+                        val creator = doc.optString("creator", "Internet Archive")
+
+                        if (identifier.isNotEmpty()) {
+                            // Stream URL for archive.org (direct MP3)
+                            val streamUrl = "https://archive.org/download/$identifier/$identifier.mp3"
+                            val artUrl = "https://archive.org/services/img/$identifier"
+
+                            songs.add(
+                                Song(
+                                    id = identifier.hashCode().toLong() and 0x7FFFFFFF,
+                                    title = title,
+                                    artist = creator,
+                                    album = "🌐 Internet Archive",
+                                    duration = 0L,
+                                    uri = Uri.parse(streamUrl),
+                                    albumArtUri = Uri.parse(artUrl),
+                                    genre = mood.displayName,
+                                    audioFormat = AudioFormat.STREAM,
+                                    isStream = true,
+                                    moodTags = listOf(mood)
                                 )
-                            }
+                            )
                         }
                     }
                 }
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w(TAG, "Jamendo fetch failed for $query", e)
+            if (BuildConfig.DEBUG) Log.w(TAG, "Internet Archive search failed for mood ${mood.displayName}", e)
         }
+        songs
+    }
 
+    /**
+     * NEW: General Internet Archive search for the Songs Hub.
+     */
+    suspend fun getInternetArchiveTracks(
+        languages: Set<com.moodtunes.app.data.local.preferences.MusicLanguage> = setOf(com.moodtunes.app.data.local.preferences.MusicLanguage.ALL),
+        categoryQuery: String = "Top Hits",
+        limit: Int = 10
+    ): List<Song> = withContext(Dispatchers.IO) {
+        val songs = mutableListOf<Song>()
+        val selectedLangs = languages.filter { it != com.moodtunes.app.data.local.preferences.MusicLanguage.ALL }
+        val langPrefix = if (selectedLangs.isNotEmpty()) selectedLangs.first().searchQueryPrefix + " " else ""
+        val query = "$langPrefix$categoryQuery"
+
+        try {
+            val encodedQuery = Uri.encode("$query AND mediatype:audio AND format:MP3")
+            val url = "https://archive.org/advancedsearch.php" +
+                "?q=$encodedQuery" +
+                "&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator" +
+                "&rows=$limit&page=1&output=json&sort%5B%5D=downloads+desc"
+
+            val request = Request.Builder()
+                .url(url)
+                .header("User-Agent", USER_AGENT)
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (response.isSuccessful) {
+                    val body = response.body?.string() ?: return@withContext emptyList()
+                    val json = JSONObject(body)
+                    val responseObj = json.optJSONObject("response") ?: return@withContext emptyList()
+                    val docs = responseObj.optJSONArray("docs") ?: JSONArray()
+
+                    for (i in 0 until docs.length()) {
+                        val doc = docs.getJSONObject(i)
+                        val identifier = doc.optString("identifier", "")
+                        val title = doc.optString("title", "Archive Audio")
+                        val creator = doc.optString("creator", "Internet Archive")
+
+                        if (identifier.isNotEmpty()) {
+                            val streamUrl = "https://archive.org/download/$identifier/$identifier.mp3"
+                            val artUrl = "https://archive.org/services/img/$identifier"
+
+                            songs.add(
+                                Song(
+                                    id = identifier.hashCode().toLong() and 0x7FFFFFFF,
+                                    title = title,
+                                    artist = creator,
+                                    album = "🌐 Internet Archive",
+                                    duration = 0L,
+                                    uri = Uri.parse(streamUrl),
+                                    albumArtUri = Uri.parse(artUrl),
+                                    genre = categoryQuery,
+                                    audioFormat = AudioFormat.STREAM,
+                                    isStream = true
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.w(TAG, "Internet Archive general search failed: $categoryQuery", e)
+        }
         songs
     }
 
@@ -343,12 +527,22 @@ class OnlineStreamRepository @Inject constructor() {
         val selectedLangs = languages.filter { it != com.moodtunes.app.data.local.preferences.MusicLanguage.ALL }
         val primaryLang = if (selectedLangs.isNotEmpty()) selectedLangs.first().displayName.lowercase() else ""
 
+        val radioBrowserHosts = listOf(
+            "https://de1.api.radio-browser.info",
+            "https://at1.api.radio-browser.info",
+            "https://nl1.api.radio-browser.info"
+        )
+
         val endpoints = mutableListOf<String>()
+        val baseHost = radioBrowserHosts.first()
+
         if (primaryLang.isNotEmpty()) {
-            endpoints.add("https://de1.api.radio-browser.info/json/stations/search?language=${Uri.encode(primaryLang)}&order=clickcount&reverse=true&limit=$limit")
+            endpoints.add("$baseHost/json/stations/search?language=${Uri.encode(primaryLang)}&order=clickcount&reverse=true&limit=$limit")
         }
-        endpoints.add("https://de1.api.radio-browser.info/json/stations/search?tag=${Uri.encode(categoryQuery)}&order=clickcount&reverse=true&limit=$limit")
-        endpoints.add("https://de1.api.radio-browser.info/json/stations/search?name=${Uri.encode(categoryQuery)}&order=votes&reverse=true&limit=$limit")
+        endpoints.add("$baseHost/json/stations/search?tag=${Uri.encode(categoryQuery)}&order=clickcount&reverse=true&limit=$limit")
+        endpoints.add("$baseHost/json/stations/search?name=${Uri.encode(categoryQuery)}&order=votes&reverse=true&limit=$limit")
+        // Fallback: just top stations by click
+        endpoints.add("$baseHost/json/stations?order=clickcount&reverse=true&limit=$limit")
 
         for (url in endpoints) {
             try {
@@ -397,7 +591,7 @@ class OnlineStreamRepository @Inject constructor() {
     }
 
     /**
-     * Fetches general music & radio streams combining Audius, YouTube, Jamendo, and Radio Browser.
+     * Fetches general music & radio streams combining Audius, Jamendo, Internet Archive and Radio Browser.
      * Used by the Songs Hub.
      */
     suspend fun getGeneralTrendingSongs(
@@ -410,7 +604,8 @@ class OnlineStreamRepository @Inject constructor() {
         }
 
         val jamendoDeferred = async { runCatching { getJamendoTracks(languages, categoryQuery, limit = 8) }.getOrDefault(emptyList()) }
-        val radioDeferred = async { runCatching { getGlobalInternetRadioStations(languages, categoryQuery, limit = 6) }.getOrDefault(emptyList()) }
+        val archiveDeferred = async { runCatching { getInternetArchiveTracks(languages, categoryQuery, limit = 8) }.getOrDefault(emptyList()) }
+        val radioDeferred = async { runCatching { getGlobalInternetRadioStations(languages, categoryQuery, limit = 5) }.getOrDefault(emptyList()) }
 
         val songs = mutableListOf<Song>()
         val selectedLangs = languages.filter { it != com.moodtunes.app.data.local.preferences.MusicLanguage.ALL }
@@ -467,11 +662,15 @@ class OnlineStreamRepository @Inject constructor() {
                 if (BuildConfig.DEBUG) Log.w(TAG, "General Audius query failed: $q", e)
             }
 
-            // 2. Search YouTube proxy
+            // 2. Try Piped (YouTube) — best effort, non-blocking
             for (pipedBase in pipedInstances) {
                 try {
                     val ytUrl = "$pipedBase/search?q=${Uri.encode(q)}&filter=music"
-                    val request = Request.Builder().url(ytUrl).header("User-Agent", USER_AGENT).build()
+                    val request = Request.Builder()
+                        .url(ytUrl)
+                        .header("User-Agent", USER_AGENT)
+                        .header("Accept", "application/json")
+                        .build()
                     client.newCall(request).execute().use { response ->
                         if (response.isSuccessful) {
                             val body = response.body?.string()
@@ -512,16 +711,17 @@ class OnlineStreamRepository @Inject constructor() {
                         }
                     }
                 } catch (e: Exception) {
-                    if (BuildConfig.DEBUG) Log.w(TAG, "Piped instance failed for general query $q", e)
+                    if (BuildConfig.DEBUG) Log.w(TAG, "Piped instance failed for general query $q at $pipedBase", e)
                 }
-                if (songs.isNotEmpty()) break
+                if (songs.size >= limit / 2) break
             }
         }
 
         val jamendoTracks = jamendoDeferred.await()
+        val archiveTracks = archiveDeferred.await()
         val radioStations = radioDeferred.await()
 
-        (songs + jamendoTracks + radioStations).distinctBy { it.id }
+        (songs + jamendoTracks + archiveTracks + radioStations).distinctBy { it.id }
     }
 
     companion object {

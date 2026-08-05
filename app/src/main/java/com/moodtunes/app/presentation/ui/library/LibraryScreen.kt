@@ -265,7 +265,7 @@ fun LibraryScreen(
 
                         // Genre Category Filter Chips
                         item {
-                            val categories = listOf("Top Hits", "Trending Pop", "Acoustic & Chill", "Dance Party", "Lo-Fi Beats", "Rock Hits")
+                            val categories = listOf("Top Hits", "📻 Live Radio", "Trending Pop", "Acoustic & Chill", "Dance Party", "Lo-Fi Beats", "Rock Hits")
                             LazyRow(
                                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),

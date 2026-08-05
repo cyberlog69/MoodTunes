@@ -271,14 +271,147 @@ class OnlineStreamRepository @Inject constructor() {
     }
 
     /**
-     * Fetches general trending music tracks based on the user's preferred languages and optional genre category.
-     * Used by the Songs Hub — NOT restricted to mood keywords.
+     * Searches Jamendo Music API for 320 kbps MP3 tracks.
+     * 100% legal, royalty-free Creative Commons independent music.
+     */
+    suspend fun getJamendoTracks(
+        languages: Set<com.moodtunes.app.data.local.preferences.MusicLanguage> = setOf(com.moodtunes.app.data.local.preferences.MusicLanguage.ALL),
+        categoryQuery: String = "Top Hits",
+        limit: Int = 10
+    ): List<Song> = withContext(Dispatchers.IO) {
+        val songs = mutableListOf<Song>()
+        val selectedLangs = languages.filter { it != com.moodtunes.app.data.local.preferences.MusicLanguage.ALL }
+        val langPrefix = if (selectedLangs.isNotEmpty()) selectedLangs.first().searchQueryPrefix else ""
+        val query = "$langPrefix $categoryQuery".trim()
+
+        try {
+            val url = "https://api.jamendo.com/v3.0/tracks/?client_id=56d30c95&format=json&hasimage=true&limit=$limit&order=popularity_week&namesearch=${Uri.encode(query)}"
+            val request = Request.Builder().url(url).header("User-Agent", USER_AGENT).build()
+            client.newCall(request).execute().use { response ->
+                if (response.isSuccessful) {
+                    val body = response.body?.string()
+                    if (body != null) {
+                        val json = JSONObject(body)
+                        val results = json.optJSONArray("results") ?: JSONArray()
+                        for (i in 0 until results.length()) {
+                            val track = results.getJSONObject(i)
+                            val id = track.optString("id", "")
+                            val name = track.optString("name", "Jamendo Track")
+                            val artist = track.optString("artist_name", "Jamendo Artist")
+                            val album = track.optString("album_name", "Jamendo Indie")
+                            val audioUrl = track.optString("audio", "")
+                            val image = track.optString("image", "")
+                            val duration = track.optLong("duration", 180) * 1000L
+
+                            if (audioUrl.startsWith("https://")) {
+                                songs.add(
+                                    Song(
+                                        id = id.hashCode().toLong() and 0x7FFFFFFF,
+                                        title = name,
+                                        artist = artist,
+                                        album = album,
+                                        duration = duration,
+                                        uri = Uri.parse(audioUrl),
+                                        albumArtUri = if (image.isNotEmpty()) Uri.parse(image) else null,
+                                        genre = categoryQuery,
+                                        audioFormat = AudioFormat.STREAM,
+                                        isStream = true
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.w(TAG, "Jamendo fetch failed for $query", e)
+        }
+
+        songs
+    }
+
+    /**
+     * Fetches live 24/7 global internet radio stations via Radio Browser API.
+     * Supports language filtering (Hindi, English, Punjabi, Spanish, Tamil, Telugu, K-Pop, etc.).
+     */
+    suspend fun getGlobalInternetRadioStations(
+        languages: Set<com.moodtunes.app.data.local.preferences.MusicLanguage> = setOf(com.moodtunes.app.data.local.preferences.MusicLanguage.ALL),
+        categoryQuery: String = "Top Hits",
+        limit: Int = 12
+    ): List<Song> = withContext(Dispatchers.IO) {
+        val songs = mutableListOf<Song>()
+        val selectedLangs = languages.filter { it != com.moodtunes.app.data.local.preferences.MusicLanguage.ALL }
+        val primaryLang = if (selectedLangs.isNotEmpty()) selectedLangs.first().displayName.lowercase() else ""
+
+        val endpoints = mutableListOf<String>()
+        if (primaryLang.isNotEmpty()) {
+            endpoints.add("https://de1.api.radio-browser.info/json/stations/search?language=${Uri.encode(primaryLang)}&order=clickcount&reverse=true&limit=$limit")
+        }
+        endpoints.add("https://de1.api.radio-browser.info/json/stations/search?tag=${Uri.encode(categoryQuery)}&order=clickcount&reverse=true&limit=$limit")
+        endpoints.add("https://de1.api.radio-browser.info/json/stations/search?name=${Uri.encode(categoryQuery)}&order=votes&reverse=true&limit=$limit")
+
+        for (url in endpoints) {
+            try {
+                val request = Request.Builder().url(url).header("User-Agent", USER_AGENT).build()
+                client.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        val body = response.body?.string()
+                        if (body != null) {
+                            val stations = JSONArray(body)
+                            for (i in 0 until stations.length()) {
+                                val st = stations.getJSONObject(i)
+                                val name = st.optString("name", "Live Radio").trim()
+                                val streamUrl = st.optString("url_resolved", st.optString("url", ""))
+                                val favicon = st.optString("favicon", "")
+                                val codec = st.optString("codec", "MP3")
+                                val bitrate = st.optInt("bitrate", 128)
+                                val country = st.optString("country", "Global")
+
+                                if (streamUrl.startsWith("http://") || streamUrl.startsWith("https://")) {
+                                    songs.add(
+                                        Song(
+                                            id = (name + streamUrl).hashCode().toLong() and 0x7FFFFFFF,
+                                            title = "📻 $name",
+                                            artist = "$country • $codec ${bitrate}kbps",
+                                            album = "Live Internet Radio 24/7",
+                                            duration = 0L,
+                                            uri = Uri.parse(streamUrl),
+                                            albumArtUri = if (favicon.startsWith("http")) Uri.parse(favicon) else null,
+                                            genre = "Live Radio",
+                                            audioFormat = AudioFormat.STREAM,
+                                            isStream = true
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                if (songs.isNotEmpty()) break
+            } catch (e: Exception) {
+                if (BuildConfig.DEBUG) Log.w(TAG, "Radio Browser endpoint failed: $url", e)
+            }
+        }
+
+        songs.distinctBy { it.uri.toString() }
+    }
+
+    /**
+     * Fetches general music & radio streams combining Audius, YouTube, Jamendo, and Radio Browser.
+     * Used by the Songs Hub.
      */
     suspend fun getGeneralTrendingSongs(
         languages: Set<com.moodtunes.app.data.local.preferences.MusicLanguage> = setOf(com.moodtunes.app.data.local.preferences.MusicLanguage.ALL),
         categoryQuery: String = "Top Hits",
         limit: Int = 14
-    ): List<Song> = withContext(Dispatchers.IO) {
+    ): List<Song> = coroutineScope {
+        if (categoryQuery.contains("Radio") || categoryQuery.contains("📻")) {
+            return@coroutineScope getGlobalInternetRadioStations(languages, categoryQuery, limit)
+        }
+
+        val jamendoDeferred = async { runCatching { getJamendoTracks(languages, categoryQuery, limit = 8) }.getOrDefault(emptyList()) }
+        val radioDeferred = async { runCatching { getGlobalInternetRadioStations(languages, categoryQuery, limit = 6) }.getOrDefault(emptyList()) }
+
         val songs = mutableListOf<Song>()
         val selectedLangs = languages.filter { it != com.moodtunes.app.data.local.preferences.MusicLanguage.ALL }
 
@@ -385,7 +518,10 @@ class OnlineStreamRepository @Inject constructor() {
             }
         }
 
-        songs.distinctBy { it.id }
+        val jamendoTracks = jamendoDeferred.await()
+        val radioStations = radioDeferred.await()
+
+        (songs + jamendoTracks + radioStations).distinctBy { it.id }
     }
 
     companion object {

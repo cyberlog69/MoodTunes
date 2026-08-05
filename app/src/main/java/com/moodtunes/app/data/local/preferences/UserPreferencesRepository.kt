@@ -29,9 +29,11 @@ enum class AudioSourceMode(val displayName: String) {
 }
 
 enum class StreamingProvider(val displayName: String) {
-    BOTH("Both (Audius + YouTube)"),
-    AUDIUS_ONLY("Audius Only"),
-    YOUTUBE_ONLY("YouTube Only")
+    ALL_COMBINED("🌟 All Services Combined (Recommended)"),
+    AUDIUS_ONLY("🎵 Audius Only"),
+    YOUTUBE_ONLY("▶️ YouTube Music Only"),
+    JAMENDO_ONLY("🎸 Jamendo Indie Only"),
+    INTERNET_RADIO("📻 Global Internet Radio Only")
 }
 
 enum class MusicLanguage(
@@ -59,7 +61,7 @@ data class AppUserSettings(
     val wifiOnlyDownloads: Boolean = true,
     val mobileDataHighQuality: Boolean = true,
     val audioSourceMode: AudioSourceMode = AudioSourceMode.BOTH,
-    val streamingProvider: StreamingProvider = StreamingProvider.BOTH,
+    val streamingProvider: StreamingProvider = StreamingProvider.ALL_COMBINED,
     val preferredLanguages: Set<MusicLanguage> = setOf(MusicLanguage.ALL)
 ) {
     val preferredLanguage: MusicLanguage
@@ -80,7 +82,9 @@ class UserPreferencesRepository @Inject constructor(
         val modeStr = prefs.getString("dark_mode", DarkModeOption.DARK.name) ?: DarkModeOption.DARK.name
         val qualityStr = prefs.getString("stream_quality", StreamQuality.LOSSLESS.name) ?: StreamQuality.LOSSLESS.name
         val sourceStr = prefs.getString("audio_source_mode", AudioSourceMode.BOTH.name) ?: AudioSourceMode.BOTH.name
-        val providerStr = prefs.getString("streaming_provider", StreamingProvider.BOTH.name) ?: StreamingProvider.BOTH.name
+        val providerStr = prefs.getString("streaming_provider", StreamingProvider.ALL_COMBINED.name) ?: StreamingProvider.ALL_COMBINED.name
+
+        val providerEnum = runCatching { StreamingProvider.valueOf(providerStr) }.getOrElse { StreamingProvider.ALL_COMBINED }
         
         val rawLangs = prefs.getString("preferred_languages", prefs.getString("preferred_language", MusicLanguage.ALL.name)) 
             ?: MusicLanguage.ALL.name
@@ -97,7 +101,7 @@ class UserPreferencesRepository @Inject constructor(
             wifiOnlyDownloads = prefs.getBoolean("wifi_only_downloads", true),
             mobileDataHighQuality = prefs.getBoolean("mobile_data_hq", true),
             audioSourceMode = runCatching { AudioSourceMode.valueOf(sourceStr) }.getOrDefault(AudioSourceMode.BOTH),
-            streamingProvider = runCatching { StreamingProvider.valueOf(providerStr) }.getOrDefault(StreamingProvider.BOTH),
+            streamingProvider = providerEnum,
             preferredLanguages = parsedLangs
         )
     }

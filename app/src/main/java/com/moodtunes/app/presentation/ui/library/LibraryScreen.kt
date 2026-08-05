@@ -263,6 +263,32 @@ fun LibraryScreen(
                             }
                         }
 
+                        // Genre Category Filter Chips
+                        item {
+                            val categories = listOf("Top Hits", "Trending Pop", "Acoustic & Chill", "Dance Party", "Lo-Fi Beats", "Rock Hits")
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            ) {
+                                items(categories) { cat ->
+                                    val isSelected = uiState.selectedCategory == cat
+                                    FilterChip(
+                                        selected = isSelected,
+                                        onClick = { viewModel.loadOnlineStreamSongs(cat) },
+                                        label = { Text(cat) },
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                            selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                            labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                        ),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                }
+                            }
+                        }
+
                         // Stream Songs Section Header
                         item {
                             Row(
@@ -273,7 +299,7 @@ fun LibraryScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "🔥 Trending Online Streams",
+                                    text = "🔥 ${uiState.selectedCategory}",
                                     style = MaterialTheme.typography.titleMedium,
                                     color = MaterialTheme.colorScheme.onBackground
                                 )

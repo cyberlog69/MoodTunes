@@ -270,6 +270,124 @@ class OnlineStreamRepository @Inject constructor() {
         audiusResult + ytResult
     }
 
+    /**
+     * Fetches general trending music tracks based on the user's preferred languages and optional genre category.
+     * Used by the Songs Hub — NOT restricted to mood keywords.
+     */
+    suspend fun getGeneralTrendingSongs(
+        languages: Set<com.moodtunes.app.data.local.preferences.MusicLanguage> = setOf(com.moodtunes.app.data.local.preferences.MusicLanguage.ALL),
+        categoryQuery: String = "Top Hits",
+        limit: Int = 14
+    ): List<Song> = withContext(Dispatchers.IO) {
+        val songs = mutableListOf<Song>()
+        val selectedLangs = languages.filter { it != com.moodtunes.app.data.local.preferences.MusicLanguage.ALL }
+
+        val queries = if (selectedLangs.isNotEmpty()) {
+            selectedLangs.map { "${it.searchQueryPrefix} $categoryQuery" }
+        } else {
+            listOf("Top $categoryQuery", "Trending Hits", "Popular Music")
+        }
+
+        val host = getAudiusHost()
+
+        for (q in queries) {
+            // 1. Search Audius
+            try {
+                val audiusUrl = "$host/v1/tracks/search?query=${Uri.encode(q)}&app_name=MoodTunes&limit=${limit / 2}"
+                val request = Request.Builder().url(audiusUrl).header("User-Agent", USER_AGENT).build()
+                client.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        val body = response.body?.string()
+                        if (body != null) {
+                            val json = JSONObject(body)
+                            val data = json.getJSONArray("data")
+                            for (i in 0 until data.length()) {
+                                val track = data.getJSONObject(i)
+                                val trackId = track.getString("id")
+                                val title = track.optString("title", "Unknown Track")
+                                val userObj = track.optJSONObject("user")
+                                val artist = userObj?.optString("name") ?: "Audius Artist"
+                                val duration = track.optLong("duration", 180) * 1000L
+                                val artworkObj = track.optJSONObject("artwork")
+                                val artUri = artworkObj?.optString("480x480") ?: artworkObj?.optString("150x150")
+                                val streamUrl = "$host/v1/tracks/$trackId/stream?app_name=MoodTunes"
+
+                                songs.add(
+                                    Song(
+                                        id = trackId.hashCode().toLong() and 0x7FFFFFFF,
+                                        title = title,
+                                        artist = artist,
+                                        album = "Online Stream",
+                                        duration = duration,
+                                        uri = Uri.parse(streamUrl),
+                                        albumArtUri = artUri?.let { Uri.parse(it) },
+                                        genre = categoryQuery,
+                                        audioFormat = AudioFormat.STREAM,
+                                        isStream = true
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                if (BuildConfig.DEBUG) Log.w(TAG, "General Audius query failed: $q", e)
+            }
+
+            // 2. Search YouTube proxy
+            for (pipedBase in pipedInstances) {
+                try {
+                    val ytUrl = "$pipedBase/search?q=${Uri.encode(q)}&filter=music"
+                    val request = Request.Builder().url(ytUrl).header("User-Agent", USER_AGENT).build()
+                    client.newCall(request).execute().use { response ->
+                        if (response.isSuccessful) {
+                            val body = response.body?.string()
+                            if (body != null) {
+                                val json = JSONObject(body)
+                                val items = json.optJSONArray("items") ?: JSONArray()
+                                for (i in 0 until items.length().coerceAtMost(limit / 2)) {
+                                    val item = items.getJSONObject(i)
+                                    val type = item.optString("type")
+                                    if (type == "stream" || type == "music") {
+                                        val urlPath = item.optString("url", "")
+                                        val videoId = urlPath.replace("/watch?v=", "")
+                                        val title = item.optString("title", "YouTube Track")
+                                        val uploaderName = item.optString("uploaderName", "YouTube Music")
+                                        val thumbnail = item.optString("thumbnail", "")
+                                        val duration = item.optLong("duration", 200) * 1000L
+
+                                        if (videoId.isNotEmpty()) {
+                                            val streamUrl = "$pipedBase/streams/$videoId"
+                                            songs.add(
+                                                Song(
+                                                    id = videoId.hashCode().toLong() and 0x7FFFFFFF,
+                                                    title = title,
+                                                    artist = uploaderName,
+                                                    album = "Online Stream",
+                                                    duration = duration,
+                                                    uri = Uri.parse(streamUrl),
+                                                    albumArtUri = if (thumbnail.isNotEmpty()) Uri.parse(thumbnail) else null,
+                                                    genre = categoryQuery,
+                                                    audioFormat = AudioFormat.STREAM,
+                                                    isStream = true
+                                                )
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    if (BuildConfig.DEBUG) Log.w(TAG, "Piped instance failed for general query $q", e)
+                }
+                if (songs.isNotEmpty()) break
+            }
+        }
+
+        songs.distinctBy { it.id }
+    }
+
     companion object {
         private const val TAG = "OnlineStreamRepository"
 

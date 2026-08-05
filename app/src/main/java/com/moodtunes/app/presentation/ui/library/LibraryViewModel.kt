@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.moodtunes.app.data.local.preferences.UserPreferencesRepository
 import com.moodtunes.app.data.remote.OnlineStreamRepository
-import com.moodtunes.app.domain.model.MoodType
 import com.moodtunes.app.domain.model.Song
 import com.moodtunes.app.domain.usecase.GetAllSongsUseCase
 import com.moodtunes.app.domain.usecase.GetFavoriteSongsUseCase
@@ -25,6 +24,7 @@ data class LibraryUiState(
     val searchQuery: String = "",
     val filteredSongs: List<Song> = emptyList(),
     val selectedTab: LibraryTab = LibraryTab.LOCAL,
+    val selectedCategory: String = "Top Hits",
     val currentSongId: Long? = null,
     val isPlaying: Boolean = false
 )
@@ -77,16 +77,13 @@ class LibraryViewModel @Inject constructor(
         }
     }
 
-    fun loadOnlineStreamSongs() {
+    fun loadOnlineStreamSongs(category: String = _uiState.value.selectedCategory) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoadingOnline = true) }
+            _uiState.update { it.copy(isLoadingOnline = true, selectedCategory = category) }
             try {
                 val languages = userPreferencesRepository.settings.value.preferredLanguages
-                val primaryLang = languages.firstOrNull() ?: com.moodtunes.app.data.local.preferences.MusicLanguage.ALL
-                val audiusTracks = onlineStreamRepository.getAudiusTracksByMood(MoodType.HAPPY, primaryLang, limit = 10)
-                val ytTracks = onlineStreamRepository.getYouTubeAudioTracksByMood(MoodType.ENERGETIC, primaryLang, limit = 10)
-                val combined = (audiusTracks + ytTracks).distinctBy { it.id }
-                _uiState.update { it.copy(isLoadingOnline = false, onlineStreamSongs = combined) }
+                val streamTracks = onlineStreamRepository.getGeneralTrendingSongs(languages, category, limit = 16)
+                _uiState.update { it.copy(isLoadingOnline = false, onlineStreamSongs = streamTracks) }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isLoadingOnline = false) }
             }

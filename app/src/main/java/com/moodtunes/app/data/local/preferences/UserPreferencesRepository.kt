@@ -170,4 +170,22 @@ class UserPreferencesRepository @Inject constructor(
     fun updatePreferredLanguage(language: MusicLanguage) {
         togglePreferredLanguage(language)
     }
+
+    fun checkShouldShowWhatsNew(): String? {
+        val lastSeen = prefs.getString("last_seen_version", "") ?: ""
+        val currentVersion = com.moodtunes.app.BuildConfig.VERSION_NAME
+        if (lastSeen.isEmpty()) {
+            prefs.edit().putString("last_seen_version", currentVersion).apply()
+            return null
+        }
+        if (lastSeen != currentVersion) {
+            return lastSeen
+        }
+        return null
+    }
+
+    fun markCurrentVersionSeen() {
+        val currentVersion = com.moodtunes.app.BuildConfig.VERSION_NAME
+        prefs.edit().putString("last_seen_version", currentVersion).apply()
+    }
 }

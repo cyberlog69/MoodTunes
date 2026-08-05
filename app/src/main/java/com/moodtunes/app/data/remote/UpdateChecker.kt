@@ -14,9 +14,10 @@ import javax.inject.Singleton
 data class UpdateCheckResult(
     val isUpdateAvailable: Boolean,
     val latestVersion: String,
-    val currentVersion: String = "1.0.0",
+    val currentVersion: String = "v${BuildConfig.VERSION_NAME}",
     val releaseNotes: String = "",
-    val downloadUrl: String = "https://github.com/cyberlog69/MoodTunes/releases"
+    val downloadUrl: String = "https://github.com/cyberlog69/MoodTunes/releases",
+    val apkDownloadUrl: String = ""
 )
 
 @Singleton
@@ -27,7 +28,7 @@ class UpdateChecker @Inject constructor() {
         .readTimeout(5, TimeUnit.SECONDS)
         .build()
 
-    suspend fun checkForUpdates(currentVersion: String = "1.0.0"): UpdateCheckResult = withContext(Dispatchers.IO) {
+    suspend fun checkForUpdates(currentVersion: String = BuildConfig.VERSION_NAME): UpdateCheckResult = withContext(Dispatchers.IO) {
         try {
             val request = Request.Builder()
                 .url("https://api.github.com/repos/cyberlog69/MoodTunes/releases/latest")
@@ -41,7 +42,6 @@ class UpdateChecker @Inject constructor() {
                         val json = JSONObject(body)
                         val tagName = json.optString("tag_name", "v1.0.0").replace("v", "")
                         val bodyText = json.optString("body", "Bug fixes and performance improvements.")
-                            .take(500) // Limit release notes length
                         val htmlUrl = json.optString("html_url", "")
 
                         // SECURITY FIX (S3): Validate download URL must be a GitHub URL — no MITM redirect
@@ -51,9 +51,27 @@ class UpdateChecker @Inject constructor() {
                             "https://github.com/cyberlog69/MoodTunes/releases"
                         }
 
+                        // Extract direct APK asset download URL
+                        var directApkUrl = ""
+                        val assets = json.optJSONArray("assets")
+                        if (assets != null) {
+                            for (i in 0 until assets.length()) {
+                                val asset = assets.getJSONObject(i)
+                                val assetUrl = asset.optString("browser_download_url", "")
+                                if (assetUrl.endsWith(".apk") && assetUrl.startsWith("https://github.com/cyberlog69/MoodTunes")) {
+                                    directApkUrl = assetUrl
+                                    break
+                                }
+                            }
+                        }
+
                         // Sanitize version string: only allow digits and dots
                         val sanitizedVersion = tagName.filter { it.isDigit() || it == '.' }
                             .ifEmpty { "1.0.0" }
+
+                        if (directApkUrl.isEmpty()) {
+                            directApkUrl = "https://github.com/cyberlog69/MoodTunes/releases/download/v$sanitizedVersion/MoodTunes-v$sanitizedVersion.apk"
+                        }
 
                         val isNewer = isVersionNewer(currentVersion, sanitizedVersion)
                         return@withContext UpdateCheckResult(
@@ -61,7 +79,8 @@ class UpdateChecker @Inject constructor() {
                             latestVersion = "v$sanitizedVersion",
                             currentVersion = "v$currentVersion",
                             releaseNotes = bodyText,
-                            downloadUrl = safeDownloadUrl
+                            downloadUrl = safeDownloadUrl,
+                            apkDownloadUrl = directApkUrl
                         )
                     }
                 }

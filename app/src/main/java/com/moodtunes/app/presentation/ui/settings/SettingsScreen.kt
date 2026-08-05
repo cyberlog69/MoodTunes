@@ -405,7 +405,8 @@ fun SettingsScreen(
                         ) {
                             Column {
                                 Text("MoodTunes Player", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-                                Text("Current Version: v1.0.0", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("MoodTunes Player", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+                                Text("Current Version: v${com.moodtunes.app.BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
 
                             Button(
@@ -461,15 +462,163 @@ fun SettingsScreen(
                                         )
                                     }
                                     if (result.isUpdateAvailable) {
-                                        IconButton(onClick = {
-                                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(result.downloadUrl))
-                                            context.startActivity(intent)
-                                        }) {
-                                            Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = "Download", tint = Color(0xFF4CAF50))
+                                        Button(
+                                            onClick = { viewModel.startInAppUpdate(context) },
+                                            enabled = !uiState.isDownloading,
+                                            shape = RoundedCornerShape(10.dp)
+                                        ) {
+                                            Text(if (uiState.isDownloading) "${uiState.downloadProgress}%" else "Update")
                                         }
                                     }
                                 }
                             }
+                        }
+
+                        // ─── In-App Update Prompt Dialog ──────────────────────────────
+                        if (uiState.showUpdateDialog && uiState.updateResult != null) {
+                            val result = uiState.updateResult!!
+                            AlertDialog(
+                                onDismissRequest = {
+                                    if (!uiState.isDownloading) viewModel.dismissUpdateDialog()
+                                },
+                                title = {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            Icons.Rounded.DownloadForOffline,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(28.dp)
+                                        )
+                                        Spacer(Modifier.width(10.dp))
+                                        Text(
+                                            text = "Update Found (${result.latestVersion})",
+                                            style = MaterialTheme.typography.titleMedium
+                                        )
+                                    }
+                                },
+                                text = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        Text(
+                                            text = "A new update for MoodTunes is ready. Would you like to download and install it now?",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        if (result.releaseNotes.isNotEmpty()) {
+                                            Surface(
+                                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                                shape = RoundedCornerShape(8.dp),
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Column(modifier = Modifier.padding(10.dp)) {
+                                                    Text(
+                                                        text = "Changelog:",
+                                                        style = MaterialTheme.typography.labelMedium,
+                                                        color = MaterialTheme.colorScheme.primary
+                                                    )
+                                                    Spacer(Modifier.height(4.dp))
+                                                    Text(
+                                                        text = result.releaseNotes,
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
+                                            }
+                                        }
+
+                                        if (uiState.isDownloading) {
+                                            Spacer(Modifier.height(6.dp))
+                                            LinearProgressIndicator(
+                                                progress = { uiState.downloadProgress / 100f },
+                                                modifier = Modifier.fillMaxWidth(),
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                            Text(
+                                                text = "Downloading update... ${uiState.downloadProgress}%",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.align(Alignment.End)
+                                            )
+                                        }
+                                    }
+                                },
+                                confirmButton = {
+                                    Button(
+                                        onClick = { viewModel.startInAppUpdate(context) },
+                                        enabled = !uiState.isDownloading,
+                                        shape = RoundedCornerShape(10.dp)
+                                    ) {
+                                        Text(if (uiState.isDownloading) "Downloading..." else "Update")
+                                    }
+                                },
+                                dismissButton = {
+                                    if (!uiState.isDownloading) {
+                                        OutlinedButton(
+                                            onClick = viewModel::dismissUpdateDialog,
+                                            shape = RoundedCornerShape(10.dp)
+                                        ) {
+                                            Text("Cancel")
+                                        }
+                                    }
+                                }
+                            )
+                        }
+
+                        // ─── Post-Update "What's New" Dialog ───────────────────────
+                        if (uiState.whatsNewVersion != null) {
+                            AlertDialog(
+                                onDismissRequest = viewModel::dismissWhatsNewDialog,
+                                title = {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            Icons.Rounded.CheckCircle,
+                                            contentDescription = null,
+                                            tint = Color(0xFF4CAF50),
+                                            modifier = Modifier.size(28.dp)
+                                        )
+                                        Spacer(Modifier.width(10.dp))
+                                        Text(
+                                            text = "Welcome to MoodTunes v${com.moodtunes.app.BuildConfig.VERSION_NAME}!",
+                                            style = MaterialTheme.typography.titleMedium
+                                        )
+                                    }
+                                },
+                                text = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Text(
+                                            text = "App successfully updated! Here is what's new in this version:",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Surface(
+                                            color = MaterialTheme.colorScheme.surfaceVariant,
+                                            shape = RoundedCornerShape(8.dp),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Column(modifier = Modifier.padding(12.dp)) {
+                                                Text(
+                                                    text = "✨ Version ${com.moodtunes.app.BuildConfig.VERSION_NAME} Highlights:",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                                Spacer(Modifier.height(4.dp))
+                                                Text(
+                                                    text = "• In-App Update Engine: Auto-downloads and installs updates directly within MoodTunes\n• Post-Update Welcome Window displaying changelog and version info\n• Multi-Service Music Streaming Aggregator (Jamendo + Audius + YouTube)\n• 24/7 Global Internet Radio Streams (35,000+ stations)",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+                                    }
+                                },
+                                confirmButton = {
+                                    Button(
+                                        onClick = viewModel::dismissWhatsNewDialog,
+                                        shape = RoundedCornerShape(10.dp)
+                                    ) {
+                                        Text("OK")
+                                    }
+                                }
+                            )
                         }
                     }
                 }

@@ -2,7 +2,6 @@ package com.moodtunes.app.presentation.ui.theme
 
 import android.app.Activity
 import android.os.Build
-
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
@@ -27,14 +26,14 @@ private val DarkColorScheme = darkColorScheme(
     onSecondaryContainer = CalmAccent,
     tertiary = HappyAccent,
     onTertiary = Black,
-    background = Background,
-    onBackground = OnBackground,
-    surface = Surface,
-    onSurface = OnSurface,
-    surfaceVariant = SurfaceVariant,
-    onSurfaceVariant = OnSurfaceVariant,
-    outline = CardBorder,
-    outlineVariant = DividerColor,
+    background = Color(0xFF0A0A0F),
+    onBackground = Color(0xFFEEEEF4),
+    surface = Color(0xFF12121A),
+    onSurface = Color(0xFFCCCCDD),
+    surfaceVariant = Color(0xFF1E1E2A),
+    onSurfaceVariant = Color(0xFF8888AA),
+    outline = Color(0xFF2E2E40),
+    outlineVariant = Color(0xFF2A2A3A),
     error = FavoriteRed,
     onError = White
 )
@@ -42,25 +41,30 @@ private val DarkColorScheme = darkColorScheme(
 private val LightColorScheme = lightColorScheme(
     primary = EuphoricGradientStart,
     onPrimary = White,
+    primaryContainer = Color(0xFFF3E5F5),
+    onPrimaryContainer = Color(0xFF4A148C),
     secondary = CalmGradientStart,
     onSecondary = White,
+    secondaryContainer = Color(0xFFE0F2F1),
+    onSecondaryContainer = Color(0xFF004D40),
     tertiary = HappyGradientStart,
     onTertiary = White,
-    background = Color(0xFFFAFAFC),
-    onBackground = Color(0xFF1A1A1E),
+    background = Color(0xFFF7F7FA),
+    onBackground = Color(0xFF181820),
     surface = Color(0xFFFFFFFF),
-    onSurface = Color(0xFF1A1A1E),
-    surfaceVariant = Color(0xFFF0F0F5),
-    onSurfaceVariant = Color(0xFF444455),
-    outline = Color(0xFFD0D0DD),
+    onSurface = Color(0xFF181820),
+    surfaceVariant = Color(0xFFEEEEF3),
+    onSurfaceVariant = Color(0xFF555566),
+    outline = Color(0xFFD8D8E5),
+    outlineVariant = Color(0xFFE5E5F0),
     error = FavoriteRed,
     onError = White
 )
 
 @Composable
 fun MoodTunesTheme(
-    darkTheme: Boolean = true, // Defaults to dark theme for immersive music player experience
-    dynamicColor: Boolean = true, // Material You dynamic colors on Android 12+ (API 31+)
+    darkTheme: Boolean = true,
+    dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
     val context = LocalContext.current
@@ -76,9 +80,6 @@ fun MoodTunesTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as? Activity)?.window ?: return@SideEffect
-            // statusBarColor / navigationBarColor are deprecated on API 35+.
-            // enableEdgeToEdge() in MainActivity handles them on API 35+.
-            // Keep this for API 26–34 backward compatibility.
             @Suppress("DEPRECATION")
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) {
                 window.statusBarColor = colorScheme.background.toArgb()
@@ -95,4 +96,3 @@ fun MoodTunesTheme(
         content = content
     )
 }
-

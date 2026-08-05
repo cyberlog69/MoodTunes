@@ -57,7 +57,10 @@ fun PermissionScreen(
             .fillMaxSize()
             .background(
                 Brush.radialGradient(
-                    colors = listOf(Color(0xFF1A0A2E), Background),
+                    colors = listOf(
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                        MaterialTheme.colorScheme.background
+                    ),
                     center = Offset(0.5f, 0.3f),
                     radius = 1200f
                 )
@@ -95,13 +98,13 @@ fun PermissionScreen(
             Text(
                 text = "MoodTunes",
                 style = MaterialTheme.typography.displaySmall,
-                color = White
+                color = MaterialTheme.colorScheme.onBackground
             )
 
             Text(
                 text = "Music that matches\nyour every mood",
                 style = MaterialTheme.typography.titleMedium,
-                color = OnSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
 
@@ -109,7 +112,7 @@ fun PermissionScreen(
 
             Card(
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = SurfaceVariant),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
@@ -119,12 +122,12 @@ fun PermissionScreen(
                     Text(
                         text = "🎵  Access your music",
                         style = MaterialTheme.typography.titleSmall,
-                        color = OnSurface
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
                         text = "MoodTunes needs access to your audio files to discover songs and build mood-based playlists.",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = OnSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -138,13 +141,13 @@ fun PermissionScreen(
                     .height(56.dp),
                 shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = EuphoricGradientStart
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
                 )
             ) {
                 Text(
                     text = "Grant Permission",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = White
+                    style = MaterialTheme.typography.titleMedium
                 )
             }
         }

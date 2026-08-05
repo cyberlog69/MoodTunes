@@ -20,7 +20,6 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -42,7 +41,7 @@ fun HomeScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Background)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         // Animated background gradient that shifts with mood
         val gradientColor = uiState.selectedMood?.gradientStart ?: Color(0xFF1A0A2E)
@@ -81,12 +80,12 @@ fun HomeScreen(
                     Text(
                         text = "MoodTunes",
                         style = MaterialTheme.typography.headlineMedium,
-                        color = White
+                        color = MaterialTheme.colorScheme.onBackground
                     )
                     Text(
                         text = "How are you feeling today?",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = OnSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -94,21 +93,21 @@ fun HomeScreen(
                         Icon(
                             Icons.Rounded.BarChart,
                             contentDescription = "History",
-                            tint = OnSurfaceVariant
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     IconButton(onClick = onNavigateToLibrary) {
                         Icon(
                             Icons.Rounded.LibraryMusic,
                             contentDescription = "Library",
-                            tint = OnSurfaceVariant
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     IconButton(onClick = onNavigateToSettings) {
                         Icon(
                             Icons.Rounded.Settings,
                             contentDescription = "Settings",
-                            tint = OnSurfaceVariant
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }

@@ -67,7 +67,7 @@ fun PlayerScreen(
                     colors = listOf(
                         animatedGradientStart.copy(alpha = 0.8f),
                         animatedGradientEnd.copy(alpha = 0.95f),
-                        Background
+                        MaterialTheme.colorScheme.background
                     )
                 )
             )

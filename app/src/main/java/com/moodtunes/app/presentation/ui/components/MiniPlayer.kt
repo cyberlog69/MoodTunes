@@ -59,7 +59,7 @@ fun MiniPlayer(
                 .background(
                     Brush.linearGradient(
                         colors = listOf(
-                            SurfaceVariant,
+                            MaterialTheme.colorScheme.surfaceVariant,
                             animatedAccent.copy(alpha = 0.3f)
                         )
                     )
@@ -75,7 +75,7 @@ fun MiniPlayer(
                     modifier = Modifier
                         .size(48.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .background(SurfaceVariant),
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
                     contentAlignment = Alignment.Center
                 ) {
                     AsyncImage(
@@ -90,7 +90,7 @@ fun MiniPlayer(
                         Icon(
                             imageVector = Icons.Rounded.MusicNote,
                             contentDescription = null,
-                            tint = OnSurfaceVariant,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(24.dp)
                         )
                     }
@@ -101,7 +101,7 @@ fun MiniPlayer(
                     Text(
                         text = song.title,
                         style = MaterialTheme.typography.titleSmall,
-                        color = White,
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -112,7 +112,7 @@ fun MiniPlayer(
                         Text(
                             text = song.artist,
                             style = MaterialTheme.typography.bodySmall,
-                            color = OnSurfaceVariant,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -136,7 +136,7 @@ fun MiniPlayer(
                         Icon(
                             Icons.Rounded.SkipPrevious,
                             contentDescription = "Previous",
-                            tint = OnSurface
+                            tint = MaterialTheme.colorScheme.onSurface
                         )
                     }
 
@@ -161,7 +161,7 @@ fun MiniPlayer(
                         Icon(
                             Icons.Rounded.SkipNext,
                             contentDescription = "Next",
-                            tint = OnSurface
+                            tint = MaterialTheme.colorScheme.onSurface
                         )
                     }
                 }

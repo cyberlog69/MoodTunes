@@ -35,7 +35,7 @@ fun HistoryScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Background)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         // Background accent
         Box(
@@ -44,7 +44,10 @@ fun HistoryScreen(
                 .height(350.dp)
                 .background(
                     Brush.verticalGradient(
-                        colors = listOf(Color(0xFF0D1040).copy(alpha = 0.8f), Color.Transparent)
+                        colors = listOf(
+                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                            Color.Transparent
+                        )
                     )
                 )
         )
@@ -65,12 +68,16 @@ fun HistoryScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Rounded.ArrowBackIosNew, "Back", tint = White)
+                        Icon(
+                            Icons.Rounded.ArrowBackIosNew,
+                            "Back",
+                            tint = MaterialTheme.colorScheme.onBackground
+                        )
                     }
                     Text(
                         text = "Mood History",
                         style = MaterialTheme.typography.headlineSmall,
-                        color = White
+                        color = MaterialTheme.colorScheme.onBackground
                     )
                 }
             }
@@ -148,7 +155,7 @@ fun HistoryScreen(
                             Text(
                                 "No history yet.\nSelect a mood on the home screen to start!",
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = OnSurfaceVariant,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center
                             )
                         }
@@ -188,7 +195,7 @@ private fun StatCard(
                 Text(icon, style = MaterialTheme.typography.headlineMedium)
                 Spacer(Modifier.height(8.dp))
                 Text(value, style = MaterialTheme.typography.headlineSmall, color = White)
-                Text(label, style = MaterialTheme.typography.bodySmall, color = White.copy(alpha = 0.7f))
+                Text(label, style = MaterialTheme.typography.bodySmall, color = White.copy(alpha = 0.8f))
             }
         }
     }
@@ -220,7 +227,7 @@ private fun TopMoodCard(mood: MoodType, modifier: Modifier = Modifier) {
                     Text(
                         "Your Top Mood",
                         style = MaterialTheme.typography.labelMedium,
-                        color = White.copy(alpha = 0.8f)
+                        color = White.copy(alpha = 0.9f)
                     )
                     Text(
                         mood.displayName,
@@ -230,7 +237,7 @@ private fun TopMoodCard(mood: MoodType, modifier: Modifier = Modifier) {
                     Text(
                         mood.description,
                         style = MaterialTheme.typography.bodySmall,
-                        color = White.copy(alpha = 0.7f)
+                        color = White.copy(alpha = 0.8f)
                     )
                 }
             }
@@ -261,8 +268,8 @@ private fun MoodStatRow(stat: MoodStat) {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(stat.mood.displayName, style = MaterialTheme.typography.bodyMedium, color = White)
-                Text("${stat.count} sessions", style = MaterialTheme.typography.bodySmall, color = OnSurfaceVariant)
+                Text(stat.mood.displayName, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                Text("${stat.count} sessions", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Spacer(Modifier.height(4.dp))
             Box(
@@ -270,7 +277,7 @@ private fun MoodStatRow(stat: MoodStat) {
                     .fillMaxWidth()
                     .height(6.dp)
                     .clip(RoundedCornerShape(3.dp))
-                    .background(SurfaceVariant)
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 Box(
                     modifier = Modifier
@@ -293,8 +300,8 @@ private fun SectionHeader(title: String, subtitle: String) {
     Column(
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)
     ) {
-        Text(title, style = MaterialTheme.typography.titleLarge, color = White)
-        Text(subtitle, style = MaterialTheme.typography.bodySmall, color = OnSurfaceVariant)
+        Text(title, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onBackground)
+        Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -322,17 +329,17 @@ private fun MoodHistoryItem(entry: MoodEntry) {
         }
 
         Column(modifier = Modifier.weight(1f)) {
-            Text(entry.moodType.displayName, style = MaterialTheme.typography.titleSmall, color = White)
+            Text(entry.moodType.displayName, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
             Text(
                 "${entry.formattedDate} • ${entry.songCount} songs • ${entry.formattedDuration}",
                 style = MaterialTheme.typography.bodySmall,
-                color = OnSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
 
     HorizontalDivider(
         modifier = Modifier.padding(horizontal = 16.dp),
-        color = DividerColor
+        color = MaterialTheme.colorScheme.outlineVariant
     )
 }

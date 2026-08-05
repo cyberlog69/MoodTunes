@@ -2,9 +2,7 @@ package com.moodtunes.app.presentation.ui.settings
 
 import android.content.Intent
 import android.net.Uri
-import androidx.compose.animation.*
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,7 +14,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -43,7 +40,7 @@ fun SettingsScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Background)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         // Top background gradient
         Box(
@@ -53,7 +50,7 @@ fun SettingsScreen(
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            Color(0xFF2C1654).copy(alpha = 0.5f),
+                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
                             Color.Transparent
                         )
                     )
@@ -76,13 +73,13 @@ fun SettingsScreen(
                     Icon(
                         Icons.Rounded.ArrowBackIosNew,
                         contentDescription = "Back",
-                        tint = White
+                        tint = MaterialTheme.colorScheme.onBackground
                     )
                 }
                 Text(
                     text = "Settings",
                     style = MaterialTheme.typography.headlineSmall,
-                    color = White,
+                    color = MaterialTheme.colorScheme.onBackground,
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -99,14 +96,14 @@ fun SettingsScreen(
 
                 Card(
                     shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = SurfaceVariant),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         Text(
                             text = "Dark Mode",
                             style = MaterialTheme.typography.titleMedium,
-                            color = White
+                            color = MaterialTheme.colorScheme.onSurface
                         )
 
                         Row(
@@ -120,17 +117,17 @@ fun SettingsScreen(
                                     onClick = { viewModel.onDarkModeChanged(option) },
                                     label = { Text(option.displayName, style = MaterialTheme.typography.labelSmall) },
                                     colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = EuphoricAccent,
-                                        selectedLabelColor = White,
-                                        containerColor = SurfaceVariant,
-                                        labelColor = OnSurfaceVariant
+                                        selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                                        containerColor = MaterialTheme.colorScheme.surface,
+                                        labelColor = MaterialTheme.colorScheme.onSurfaceVariant
                                     ),
                                     modifier = Modifier.weight(1f)
                                 )
                             }
                         }
 
-                        HorizontalDivider(color = DividerColor)
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -138,13 +135,16 @@ fun SettingsScreen(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("Material You Dynamic Colors", style = MaterialTheme.typography.titleSmall, color = White)
-                                Text("Adapt system colors on Android 12+", style = MaterialTheme.typography.bodySmall, color = OnSurfaceVariant)
+                                Text("Material You Dynamic Colors", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
+                                Text("Adapt system colors on Android 12+", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             Switch(
                                 checked = settings.useDynamicColors,
                                 onCheckedChange = viewModel::onDynamicColorsChanged,
-                                colors = SwitchDefaults.colors(checkedThumbColor = White, checkedTrackColor = EuphoricAccent)
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                                    checkedTrackColor = MaterialTheme.colorScheme.primary
+                                )
                             )
                         }
                     }
@@ -155,19 +155,19 @@ fun SettingsScreen(
 
                 Card(
                     shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = SurfaceVariant),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         Text(
                             text = "Audio Source Mode",
                             style = MaterialTheme.typography.titleMedium,
-                            color = White
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             text = "Switch between local storage audio files, online streams, or both combined.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = OnSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
 
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -181,10 +181,10 @@ fun SettingsScreen(
                                         { Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
                                     } else null,
                                     colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = EuphoricAccent,
-                                        selectedLabelColor = White,
-                                        containerColor = SurfaceVariant,
-                                        labelColor = OnSurfaceVariant
+                                        selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                                        containerColor = MaterialTheme.colorScheme.surface,
+                                        labelColor = MaterialTheme.colorScheme.onSurfaceVariant
                                     ),
                                     modifier = Modifier.fillMaxWidth()
                                 )
@@ -192,17 +192,17 @@ fun SettingsScreen(
                         }
 
                         if (settings.audioSourceMode != AudioSourceMode.LOCAL_ONLY) {
-                            HorizontalDivider(color = DividerColor)
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
                             Text(
                                 text = "Online Streaming Provider",
                                 style = MaterialTheme.typography.titleMedium,
-                                color = White
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
                                 text = "Select whether to fetch music from Audius, YouTube, or both simultaneously.",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = OnSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
 
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -216,10 +216,10 @@ fun SettingsScreen(
                                             { Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
                                         } else null,
                                         colors = FilterChipDefaults.filterChipColors(
-                                            selectedContainerColor = CalmAccent,
-                                            selectedLabelColor = White,
-                                            containerColor = SurfaceVariant,
-                                            labelColor = OnSurfaceVariant
+                                            selectedContainerColor = MaterialTheme.colorScheme.secondary,
+                                            selectedLabelColor = MaterialTheme.colorScheme.onSecondary,
+                                            containerColor = MaterialTheme.colorScheme.surface,
+                                            labelColor = MaterialTheme.colorScheme.onSurfaceVariant
                                         ),
                                         modifier = Modifier.fillMaxWidth()
                                     )
@@ -234,7 +234,7 @@ fun SettingsScreen(
 
                 Card(
                     shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = SurfaceVariant),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -244,13 +244,16 @@ fun SettingsScreen(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("Audio Stream Quality", style = MaterialTheme.typography.titleSmall, color = White)
-                                Text(settings.streamQuality.displayName, style = MaterialTheme.typography.bodySmall, color = OnSurfaceVariant)
+                                Text("Audio Stream Quality", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
+                                Text(settings.streamQuality.displayName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             Box {
                                 Button(
                                     onClick = { isQualityDropdownExpanded = true },
-                                    colors = ButtonDefaults.buttonColors(containerColor = EuphoricAccent.copy(alpha = 0.2f), contentColor = EuphoricAccent),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+                                        contentColor = MaterialTheme.colorScheme.primary
+                                    ),
                                     shape = RoundedCornerShape(12.dp)
                                 ) {
                                     Text(settings.streamQuality.badgeText)
@@ -281,7 +284,7 @@ fun SettingsScreen(
 
                 Card(
                     shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = SurfaceVariant),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -291,17 +294,20 @@ fun SettingsScreen(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("Stream on Wi-Fi Only", style = MaterialTheme.typography.titleSmall, color = White)
-                                Text("Prevent online streaming on mobile cellular data", style = MaterialTheme.typography.bodySmall, color = OnSurfaceVariant)
+                                Text("Stream on Wi-Fi Only", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
+                                Text("Prevent online streaming on mobile cellular data", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             Switch(
                                 checked = settings.wifiOnlyStreaming,
                                 onCheckedChange = viewModel::onWifiOnlyStreamingChanged,
-                                colors = SwitchDefaults.colors(checkedThumbColor = White, checkedTrackColor = EuphoricAccent)
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                                    checkedTrackColor = MaterialTheme.colorScheme.primary
+                                )
                             )
                         }
 
-                        HorizontalDivider(color = DividerColor)
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -309,17 +315,20 @@ fun SettingsScreen(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("Download on Wi-Fi Only", style = MaterialTheme.typography.titleSmall, color = White)
-                                Text("Save offline tracks over Wi-Fi only", style = MaterialTheme.typography.bodySmall, color = OnSurfaceVariant)
+                                Text("Download on Wi-Fi Only", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
+                                Text("Save offline tracks over Wi-Fi only", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             Switch(
                                 checked = settings.wifiOnlyDownloads,
                                 onCheckedChange = viewModel::onWifiOnlyDownloadsChanged,
-                                colors = SwitchDefaults.colors(checkedThumbColor = White, checkedTrackColor = EuphoricAccent)
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                                    checkedTrackColor = MaterialTheme.colorScheme.primary
+                                )
                             )
                         }
 
-                        HorizontalDivider(color = DividerColor)
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -327,13 +336,16 @@ fun SettingsScreen(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("High Quality over Mobile Data", style = MaterialTheme.typography.titleSmall, color = White)
-                                Text("Allow Lossless FLAC streams on 4G/5G data", style = MaterialTheme.typography.bodySmall, color = OnSurfaceVariant)
+                                Text("High Quality over Mobile Data", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
+                                Text("Allow Lossless FLAC streams on 4G/5G data", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             Switch(
                                 checked = settings.mobileDataHighQuality,
                                 onCheckedChange = viewModel::onMobileDataHighQualityChanged,
-                                colors = SwitchDefaults.colors(checkedThumbColor = White, checkedTrackColor = EuphoricAccent)
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                                    checkedTrackColor = MaterialTheme.colorScheme.primary
+                                )
                             )
                         }
                     }
@@ -344,7 +356,7 @@ fun SettingsScreen(
 
                 Card(
                     shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = SurfaceVariant),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -354,20 +366,20 @@ fun SettingsScreen(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Column {
-                                Text("MoodTunes Player", style = MaterialTheme.typography.titleMedium, color = White)
-                                Text("Current Version: v1.0.0", style = MaterialTheme.typography.bodySmall, color = OnSurfaceVariant)
+                                Text("MoodTunes Player", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+                                Text("Current Version: v1.0.0", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
 
                             Button(
                                 onClick = viewModel::checkForUpdates,
                                 enabled = !uiState.isCheckingUpdate,
-                                colors = ButtonDefaults.buttonColors(containerColor = EuphoricAccent),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                                 shape = RoundedCornerShape(12.dp)
                             ) {
                                 if (uiState.isCheckingUpdate) {
                                     CircularProgressIndicator(
                                         modifier = Modifier.size(18.dp),
-                                        color = White,
+                                        color = MaterialTheme.colorScheme.onPrimary,
                                         strokeWidth = 2.dp
                                     )
                                     Spacer(Modifier.width(8.dp))
@@ -384,7 +396,7 @@ fun SettingsScreen(
                         uiState.updateResult?.let { result ->
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
-                                color = if (result.isUpdateAvailable) Color(0xFF2E7D32).copy(alpha = 0.25f) else SurfaceVariant,
+                                color = if (result.isUpdateAvailable) Color(0xFF2E7D32).copy(alpha = 0.25f) else MaterialTheme.colorScheme.surface,
                                 border = if (result.isUpdateAvailable) androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF4CAF50)) else null,
                                 modifier = Modifier.fillMaxWidth()
                             ) {
@@ -396,18 +408,18 @@ fun SettingsScreen(
                                     Icon(
                                         imageVector = if (result.isUpdateAvailable) Icons.Rounded.DownloadForOffline else Icons.Rounded.CheckCircle,
                                         contentDescription = null,
-                                        tint = if (result.isUpdateAvailable) Color(0xFF4CAF50) else EuphoricAccent
+                                        tint = if (result.isUpdateAvailable) Color(0xFF4CAF50) else MaterialTheme.colorScheme.primary
                                     )
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
                                             text = if (result.isUpdateAvailable) "Update Available! ${result.latestVersion}" else "MoodTunes is Up to Date",
                                             style = MaterialTheme.typography.titleSmall,
-                                            color = White
+                                            color = MaterialTheme.colorScheme.onSurface
                                         )
                                         Text(
                                             text = result.releaseNotes,
                                             style = MaterialTheme.typography.bodySmall,
-                                            color = OnSurfaceVariant
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
                                     if (result.isUpdateAvailable) {
@@ -437,11 +449,11 @@ private fun SettingsSectionHeader(title: String, icon: androidx.compose.ui.graph
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier.padding(start = 4.dp)
     ) {
-        Icon(icon, contentDescription = null, tint = EuphoricAccent, modifier = Modifier.size(22.dp))
+        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
         Text(
             text = title,
             style = MaterialTheme.typography.titleSmall,
-            color = EuphoricAccent
+            color = MaterialTheme.colorScheme.primary
         )
     }
 }

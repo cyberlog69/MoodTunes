@@ -3,14 +3,12 @@ package com.moodtunes.app.presentation.ui.library
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
-import androidx.compose.foundation.layout.height
 import androidx.compose.ui.draw.clip
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -40,7 +38,7 @@ fun LibraryScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Background)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         // Subtle gradient top
         Box(
@@ -50,7 +48,7 @@ fun LibraryScreen(
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            Color(0xFF1A0A35).copy(alpha = 0.6f),
+                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
                             Color.Transparent
                         )
                     )
@@ -73,19 +71,19 @@ fun LibraryScreen(
                     Icon(
                         Icons.Rounded.ArrowBackIosNew,
                         contentDescription = "Back",
-                        tint = White
+                        tint = MaterialTheme.colorScheme.onBackground
                     )
                 }
                 Text(
                     text = "Library",
                     style = MaterialTheme.typography.headlineSmall,
-                    color = White,
+                    color = MaterialTheme.colorScheme.onBackground,
                     modifier = Modifier.weight(1f)
                 )
                 Text(
                     text = "${uiState.allSongs.size} songs",
                     style = MaterialTheme.typography.labelMedium,
-                    color = OnSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(end = 16.dp)
                 )
             }
@@ -95,15 +93,15 @@ fun LibraryScreen(
                 value = uiState.searchQuery,
                 onValueChange = viewModel::onSearchQueryChanged,
                 placeholder = {
-                    Text("Search songs, artists…", color = OnSurfaceVariant)
+                    Text("Search songs, artists…", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 },
                 leadingIcon = {
-                    Icon(Icons.Rounded.Search, contentDescription = null, tint = OnSurfaceVariant)
+                    Icon(Icons.Rounded.Search, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 },
                 trailingIcon = {
                     if (uiState.searchQuery.isNotEmpty()) {
                         IconButton(onClick = { viewModel.onSearchQueryChanged("") }) {
-                            Icon(Icons.Rounded.Close, contentDescription = "Clear", tint = OnSurfaceVariant)
+                            Icon(Icons.Rounded.Close, contentDescription = "Clear", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 },
@@ -112,13 +110,13 @@ fun LibraryScreen(
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 shape = RoundedCornerShape(16.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = EuphoricAccent,
-                    unfocusedBorderColor = CardBorder,
-                    focusedTextColor = White,
-                    unfocusedTextColor = White,
-                    cursorColor = EuphoricAccent,
-                    focusedContainerColor = SurfaceVariant,
-                    unfocusedContainerColor = SurfaceVariant
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                    focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                    cursorColor = MaterialTheme.colorScheme.primary,
+                    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
                 ),
                 singleLine = true
             )
@@ -127,7 +125,7 @@ fun LibraryScreen(
             TabRow(
                 selectedTabIndex = LibraryTab.entries.indexOf(uiState.selectedTab),
                 containerColor = Color.Transparent,
-                contentColor = White,
+                contentColor = MaterialTheme.colorScheme.onBackground,
                 indicator = { tabPositions ->
                     val index = LibraryTab.entries.indexOf(uiState.selectedTab)
                     if (index in tabPositions.indices) {
@@ -137,7 +135,7 @@ fun LibraryScreen(
                                 .fillMaxWidth()
                                 .height(3.dp)
                                 .clip(RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp))
-                                .background(EuphoricAccent)
+                                .background(MaterialTheme.colorScheme.primary)
                         )
                     }
                 },
@@ -153,18 +151,18 @@ fun LibraryScreen(
                                 style = MaterialTheme.typography.titleSmall
                             )
                         },
-                        selectedContentColor = White,
-                        unselectedContentColor = OnSurfaceVariant
+                        selectedContentColor = MaterialTheme.colorScheme.primary,
+                        unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
 
-            HorizontalDivider(color = DividerColor)
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
             // ─── Song List ──────────────────────────────────────────────────
             if (uiState.isLoading) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = EuphoricAccent)
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                 }
             } else if (displayedSongs.isEmpty()) {
                 Box(
@@ -176,7 +174,7 @@ fun LibraryScreen(
                             imageVector = if (uiState.selectedTab == LibraryTab.FAVORITES)
                                 Icons.Rounded.FavoriteBorder else Icons.Rounded.MusicOff,
                             contentDescription = null,
-                            tint = OnSurfaceVariant,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(64.dp)
                         )
                         Spacer(Modifier.height(16.dp))
@@ -185,7 +183,7 @@ fun LibraryScreen(
                                 "No favorites yet.\nHeart a song to add it here."
                             else "No songs found.",
                             style = MaterialTheme.typography.bodyLarge,
-                            color = OnSurfaceVariant,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center
                         )
                     }
@@ -207,7 +205,7 @@ fun LibraryScreen(
                         )
                         HorizontalDivider(
                             modifier = Modifier.padding(horizontal = 16.dp),
-                            color = DividerColor
+                            color = MaterialTheme.colorScheme.outlineVariant
                         )
                     }
                 }

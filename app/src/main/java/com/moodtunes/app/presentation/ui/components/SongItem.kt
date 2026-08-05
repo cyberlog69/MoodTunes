@@ -43,7 +43,7 @@ fun SongItem(
             modifier = Modifier
                 .size(52.dp)
                 .clip(RoundedCornerShape(10.dp))
-                .background(SurfaceVariant),
+                .background(MaterialTheme.colorScheme.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {
             AsyncImage(
@@ -57,7 +57,7 @@ fun SongItem(
                 Icon(
                     imageVector = Icons.Rounded.MusicNote,
                     contentDescription = null,
-                    tint = OnSurfaceVariant,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(24.dp)
                 )
             }
@@ -68,7 +68,7 @@ fun SongItem(
             Text(
                 text = song.title,
                 style = MaterialTheme.typography.titleSmall,
-                color = if (isPlaying) EuphoricAccent else White,
+                color = if (isPlaying) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -80,7 +80,7 @@ fun SongItem(
                 Text(
                     text = "${song.artist} • ${song.formattedDuration}",
                     style = MaterialTheme.typography.bodySmall,
-                    color = OnSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -103,7 +103,7 @@ fun SongItem(
             Icon(
                 imageVector = if (song.isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                 contentDescription = "Favorite",
-                tint = if (song.isFavorite) FavoriteRed else OnSurfaceVariant,
+                tint = if (song.isFavorite) FavoriteRed else MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp)
             )
         }

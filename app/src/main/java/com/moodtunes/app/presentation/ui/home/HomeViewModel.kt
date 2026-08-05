@@ -2,6 +2,8 @@ package com.moodtunes.app.presentation.ui.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.moodtunes.app.data.local.preferences.MusicLanguage
+import com.moodtunes.app.data.local.preferences.UserPreferencesRepository
 import com.moodtunes.app.domain.model.MoodEntry
 import com.moodtunes.app.domain.model.MoodType
 import com.moodtunes.app.domain.model.Song
@@ -16,6 +18,7 @@ import javax.inject.Inject
 data class HomeUiState(
     val isLoading: Boolean = false,
     val selectedMood: MoodType? = null,
+    val selectedLanguage: MusicLanguage = MusicLanguage.ALL,
     val moodSongs: List<Song> = emptyList(),
     val currentSong: Song? = null,
     val isPlaying: Boolean = false,
@@ -26,7 +29,8 @@ data class HomeUiState(
 class HomeViewModel @Inject constructor(
     private val getSongsByMoodUseCase: GetSongsByMoodUseCase,
     private val saveMoodHistoryUseCase: SaveMoodHistoryUseCase,
-    private val playbackManager: PlaybackManager
+    private val playbackManager: PlaybackManager,
+    private val preferencesRepository: UserPreferencesRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -34,12 +38,14 @@ class HomeViewModel @Inject constructor(
         _uiState,
         playbackManager.currentSong,
         playbackManager.isPlaying,
-        playbackManager.currentMood
-    ) { state, song, playing, mood ->
+        playbackManager.currentMood,
+        preferencesRepository.settings.map { it.preferredLanguage }.distinctUntilChanged()
+    ) { state, song, playing, mood, language ->
         state.copy(
             currentSong = song,
             isPlaying = playing,
-            selectedMood = mood ?: state.selectedMood
+            selectedMood = mood ?: state.selectedMood,
+            selectedLanguage = language
         )
     }.stateIn(
         scope = viewModelScope,
@@ -48,6 +54,14 @@ class HomeViewModel @Inject constructor(
     )
 
     private var sessionStartTime: Long = 0L
+
+    fun onLanguageSelected(language: MusicLanguage) {
+        preferencesRepository.updatePreferredLanguage(language)
+        val currentMood = uiState.value.selectedMood
+        if (currentMood != null) {
+            onMoodSelected(currentMood)
+        }
+    }
 
     fun onMoodSelected(mood: MoodType) {
         viewModelScope.launch {

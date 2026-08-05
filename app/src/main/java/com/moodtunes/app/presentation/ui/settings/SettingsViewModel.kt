@@ -79,6 +79,10 @@ class SettingsViewModel @Inject constructor(
         preferencesRepository.updateStreamingProvider(provider)
     }
 
+    fun onPreferredLanguageChanged(language: com.moodtunes.app.data.local.preferences.MusicLanguage) {
+        preferencesRepository.updatePreferredLanguage(language)
+    }
+
     fun checkForUpdates() {
         viewModelScope.launch {
             _isCheckingUpdate.value = true

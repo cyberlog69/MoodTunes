@@ -175,7 +175,7 @@ class MediaStoreRepository @Inject constructor(
 
         if (provider == StreamingProvider.AUDIUS_ONLY || provider == StreamingProvider.BOTH) {
             try {
-                val audiusTracks = onlineStreamRepository.getAudiusTracksByMood(mood, limit = 8)
+                val audiusTracks = onlineStreamRepository.getAudiusTracksByMood(mood, settings.preferredLanguage, limit = 8)
                 resultList.addAll(audiusTracks)
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -184,7 +184,7 @@ class MediaStoreRepository @Inject constructor(
 
         if (provider == StreamingProvider.YOUTUBE_ONLY || provider == StreamingProvider.BOTH) {
             try {
-                val ytTracks = onlineStreamRepository.getYouTubeAudioTracksByMood(mood, limit = 6)
+                val ytTracks = onlineStreamRepository.getYouTubeAudioTracksByMood(mood, settings.preferredLanguage, limit = 6)
                 resultList.addAll(ytTracks)
             } catch (e: Exception) {
                 e.printStackTrace()

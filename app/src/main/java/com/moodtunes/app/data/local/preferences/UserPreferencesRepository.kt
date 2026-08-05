@@ -34,6 +34,23 @@ enum class StreamingProvider(val displayName: String) {
     YOUTUBE_ONLY("YouTube Only")
 }
 
+enum class MusicLanguage(
+    val displayName: String,
+    val flagEmoji: String,
+    val searchQueryPrefix: String
+) {
+    ALL("All", "🌐", ""),
+    HINDI("Hindi", "🇮🇳", "Hindi"),
+    ENGLISH("English", "🇬🇧", "English"),
+    PUNJABI("Punjabi", "🌾", "Punjabi"),
+    TAMIL("Tamil", "🏛️", "Tamil"),
+    TELUGU("Telugu", "🕌", "Telugu"),
+    SPANISH("Spanish", "💃", "Spanish"),
+    KPOP("K-Pop", "🇰🇷", "K-Pop Korean"),
+    JPOP("J-Pop", "🇯🇵", "J-Pop Japanese"),
+    INSTRUMENTAL("Instrumental", "🎻", "Instrumental")
+}
+
 data class AppUserSettings(
     val darkModeOption: DarkModeOption = DarkModeOption.DARK,
     val useDynamicColors: Boolean = true,
@@ -42,7 +59,8 @@ data class AppUserSettings(
     val wifiOnlyDownloads: Boolean = true,
     val mobileDataHighQuality: Boolean = true,
     val audioSourceMode: AudioSourceMode = AudioSourceMode.BOTH,
-    val streamingProvider: StreamingProvider = StreamingProvider.BOTH
+    val streamingProvider: StreamingProvider = StreamingProvider.BOTH,
+    val preferredLanguage: MusicLanguage = MusicLanguage.ALL
 )
 
 @Singleton
@@ -60,6 +78,7 @@ class UserPreferencesRepository @Inject constructor(
         val qualityStr = prefs.getString("stream_quality", StreamQuality.LOSSLESS.name) ?: StreamQuality.LOSSLESS.name
         val sourceStr = prefs.getString("audio_source_mode", AudioSourceMode.BOTH.name) ?: AudioSourceMode.BOTH.name
         val providerStr = prefs.getString("streaming_provider", StreamingProvider.BOTH.name) ?: StreamingProvider.BOTH.name
+        val langStr = prefs.getString("preferred_language", MusicLanguage.ALL.name) ?: MusicLanguage.ALL.name
 
         return AppUserSettings(
             darkModeOption = runCatching { DarkModeOption.valueOf(modeStr) }.getOrDefault(DarkModeOption.DARK),
@@ -69,7 +88,8 @@ class UserPreferencesRepository @Inject constructor(
             wifiOnlyDownloads = prefs.getBoolean("wifi_only_downloads", true),
             mobileDataHighQuality = prefs.getBoolean("mobile_data_hq", true),
             audioSourceMode = runCatching { AudioSourceMode.valueOf(sourceStr) }.getOrDefault(AudioSourceMode.BOTH),
-            streamingProvider = runCatching { StreamingProvider.valueOf(providerStr) }.getOrDefault(StreamingProvider.BOTH)
+            streamingProvider = runCatching { StreamingProvider.valueOf(providerStr) }.getOrDefault(StreamingProvider.BOTH),
+            preferredLanguage = runCatching { MusicLanguage.valueOf(langStr) }.getOrDefault(MusicLanguage.ALL)
         )
     }
 
@@ -111,5 +131,10 @@ class UserPreferencesRepository @Inject constructor(
     fun updateStreamingProvider(provider: StreamingProvider) {
         prefs.edit().putString("streaming_provider", provider.name).apply()
         _settings.value = _settings.value.copy(streamingProvider = provider)
+    }
+
+    fun updatePreferredLanguage(language: MusicLanguage) {
+        prefs.edit().putString("preferred_language", language.name).apply()
+        _settings.value = _settings.value.copy(preferredLanguage = language)
     }
 }

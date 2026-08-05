@@ -88,16 +88,22 @@ class OnlineStreamRepository @Inject constructor() {
     }
 
     /**
-     * Searches Audius tracks by mood keyword.
+     * Searches Audius tracks by mood keyword and language preference.
      * Audius is a decentralised, royalty-free streaming protocol — legally safe to use.
      */
-    suspend fun getAudiusTracksByMood(mood: MoodType, limit: Int = 8): List<Song> = withContext(Dispatchers.IO) {
+    suspend fun getAudiusTracksByMood(
+        mood: MoodType,
+        language: com.moodtunes.app.data.local.preferences.MusicLanguage = com.moodtunes.app.data.local.preferences.MusicLanguage.ALL,
+        limit: Int = 8
+    ): List<Song> = withContext(Dispatchers.IO) {
         val host = getAudiusHost()
         val songs = mutableListOf<Song>()
         val keyword = mood.keywords.firstOrNull() ?: mood.displayName
+        val langPrefix = if (language != com.moodtunes.app.data.local.preferences.MusicLanguage.ALL) "${language.searchQueryPrefix} " else ""
+        val searchQuery = "$langPrefix$keyword"
 
         try {
-            val url = "$host/v1/tracks/search?query=${Uri.encode(keyword)}&app_name=MoodTunes&limit=$limit"
+            val url = "$host/v1/tracks/search?query=${Uri.encode(searchQuery)}&app_name=MoodTunes&limit=$limit"
             val request = Request.Builder()
                 .url(url)
                 .header("User-Agent", USER_AGENT)
@@ -149,9 +155,14 @@ class OnlineStreamRepository @Inject constructor() {
     /**
      * Searches YouTube audio tracks via Piped instances pool with fast stream resolution.
      */
-    suspend fun getYouTubeAudioTracksByMood(mood: MoodType, limit: Int = 6): List<Song> = withContext(Dispatchers.IO) {
+    suspend fun getYouTubeAudioTracksByMood(
+        mood: MoodType,
+        language: com.moodtunes.app.data.local.preferences.MusicLanguage = com.moodtunes.app.data.local.preferences.MusicLanguage.ALL,
+        limit: Int = 6
+    ): List<Song> = withContext(Dispatchers.IO) {
         val songs = mutableListOf<Song>()
-        val query = "${mood.displayName} music"
+        val langPrefix = if (language != com.moodtunes.app.data.local.preferences.MusicLanguage.ALL) "${language.searchQueryPrefix} " else ""
+        val query = "$langPrefix${mood.displayName} music"
 
         for (pipedBase in pipedInstances) {
             try {
@@ -245,10 +256,13 @@ class OnlineStreamRepository @Inject constructor() {
         streamUrl
     }
 
-    /** Parallel fetching of both Audius and YouTube online tracks for a mood */
-    suspend fun fetchAllOnlineTracksForMood(mood: MoodType): List<Song> = coroutineScope {
-        val audiusDeferred = async { runCatching { getAudiusTracksByMood(mood) }.getOrDefault(emptyList()) }
-        val ytDeferred = async { runCatching { getYouTubeAudioTracksByMood(mood) }.getOrDefault(emptyList()) }
+    /** Parallel fetching of both Audius and YouTube online tracks for a mood and language */
+    suspend fun fetchAllOnlineTracksForMood(
+        mood: MoodType,
+        language: com.moodtunes.app.data.local.preferences.MusicLanguage = com.moodtunes.app.data.local.preferences.MusicLanguage.ALL
+    ): List<Song> = coroutineScope {
+        val audiusDeferred = async { runCatching { getAudiusTracksByMood(mood, language) }.getOrDefault(emptyList()) }
+        val ytDeferred = async { runCatching { getYouTubeAudioTracksByMood(mood, language) }.getOrDefault(emptyList()) }
 
         val audiusResult = audiusDeferred.await()
         val ytResult = ytDeferred.await()

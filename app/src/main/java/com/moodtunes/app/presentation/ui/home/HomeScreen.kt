@@ -4,8 +4,6 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -36,7 +34,7 @@ fun HomeScreen(
     onNavigateToPlayer: () -> Unit,
     onNavigateToLibrary: () -> Unit,
     onNavigateToHistory: () -> Unit,
-    onNavigateToSettings: () -> Unit = {}
+    onNavigateToSettings: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -45,22 +43,19 @@ fun HomeScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // Animated background gradient that shifts with mood
-        val gradientColor = uiState.selectedMood?.gradientStart ?: Color(0xFF1A0A2E)
-        val animatedColor by animateColorAsState(
-            targetValue = gradientColor.copy(alpha = 0.15f),
-            animationSpec = tween(800),
-            label = "bgGradient"
-        )
-
+        // Animated gradient background accent
         Box(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
+                .height(280.dp)
                 .background(
                     Brush.radialGradient(
-                        colors = listOf(animatedColor, Color.Transparent),
-                        center = Offset.Zero,
-                        radius = 900f
+                        colors = listOf(
+                            (uiState.selectedMood?.gradientStart ?: MaterialTheme.colorScheme.primary).copy(alpha = 0.25f),
+                            Color.Transparent
+                        ),
+                        center = Offset(500f, 100f),
+                        radius = 800f
                     )
                 )
         )
@@ -100,8 +95,8 @@ fun HomeScreen(
                     }
                     IconButton(onClick = onNavigateToLibrary) {
                         Icon(
-                            Icons.Rounded.LibraryMusic,
-                            contentDescription = "Library",
+                            Icons.Rounded.MusicNote,
+                            contentDescription = "Songs",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -115,29 +110,6 @@ fun HomeScreen(
                 }
             }
 
-            // ─── Language Selector Bar ──────────────────────────────────────
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(bottom = 8.dp)
-            ) {
-                items(com.moodtunes.app.data.local.preferences.MusicLanguage.entries.toTypedArray()) { language ->
-                    val isSelected = uiState.selectedLanguage == language
-                    FilterChip(
-                        selected = isSelected,
-                        onClick = { viewModel.onLanguageSelected(language) },
-                        label = { Text("${language.flagEmoji} ${language.displayName}") },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primary,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                            labelColor = MaterialTheme.colorScheme.onSurfaceVariant
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                }
-            }
-
             // ─── Mood Grid ──────────────────────────────────────────────────
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
@@ -145,7 +117,7 @@ fun HomeScreen(
                     start = 16.dp,
                     end = 16.dp,
                     top = 8.dp,
-                    bottom = if (uiState.currentSong != null) 120.dp else 32.dp
+                    bottom = if (uiState.currentSong != null) 140.dp else 90.dp
                 ),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -166,26 +138,63 @@ fun HomeScreen(
             }
         }
 
-        // ─── Mini Player ────────────────────────────────────────────────────
-        AnimatedVisibility(
-            visible = uiState.currentSong != null,
-            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
-            modifier = Modifier.align(Alignment.BottomCenter)
+        // ─── Bottom Navigation Dock ─────────────────────────────────────────
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
         ) {
-            uiState.currentSong?.let { song ->
-                MiniPlayer(
-                    song = song,
-                    isPlaying = uiState.isPlaying,
-                    mood = uiState.selectedMood,
-                    onPlayPauseClick = { viewModel.playPause() },
-                    onSkipPreviousClick = { viewModel.skipPrevious() },
-                    onSkipNextClick = { viewModel.skipNext() },
-                    onExpandClick = onNavigateToPlayer,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .navigationBarsPadding()
-                        .padding(12.dp)
+            // Mini Player if active
+            AnimatedVisibility(
+                visible = uiState.currentSong != null,
+                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
+            ) {
+                uiState.currentSong?.let { song ->
+                    MiniPlayer(
+                        song = song,
+                        isPlaying = uiState.isPlaying,
+                        mood = uiState.selectedMood,
+                        onPlayPauseClick = { viewModel.playPause() },
+                        onSkipPreviousClick = { viewModel.skipPrevious() },
+                        onSkipNextClick = { viewModel.skipNext() },
+                        onExpandClick = onNavigateToPlayer,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 4.dp)
+                    )
+                }
+            }
+
+            // Bottom Navigation Bar with "Songs" button
+            NavigationBar(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                tonalElevation = 8.dp,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                NavigationBarItem(
+                    selected = true,
+                    onClick = { /* Already on Home */ },
+                    icon = { Icon(Icons.Rounded.Home, contentDescription = "Home") },
+                    label = { Text("Home") }
+                )
+                NavigationBarItem(
+                    selected = false,
+                    onClick = onNavigateToLibrary,
+                    icon = { Icon(Icons.Rounded.MusicNote, contentDescription = "Songs") },
+                    label = { Text("Songs") }
+                )
+                NavigationBarItem(
+                    selected = false,
+                    onClick = onNavigateToHistory,
+                    icon = { Icon(Icons.Rounded.BarChart, contentDescription = "Stats") },
+                    label = { Text("Stats") }
+                )
+                NavigationBarItem(
+                    selected = false,
+                    onClick = onNavigateToSettings,
+                    icon = { Icon(Icons.Rounded.Settings, contentDescription = "Settings") },
+                    label = { Text("Settings") }
                 )
             }
         }
@@ -224,8 +233,7 @@ private fun MoodCard(
             .height(160.dp)
             .scale(pulse),
         shape = RoundedCornerShape(24.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = elevation.dp),
-        border = if (isSelected) BorderStroke(2.dp, mood.gradientStart) else null
+        elevation = CardDefaults.cardElevation(defaultElevation = elevation.dp)
     ) {
         Box(
             modifier = Modifier
@@ -244,57 +252,48 @@ private fun MoodCard(
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
-                // Emoji
-                Text(
-                    text = mood.emoji,
-                    style = MaterialTheme.typography.displaySmall
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = mood.emoji,
+                        style = MaterialTheme.typography.displaySmall
+                    )
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = Color.White,
+                            strokeWidth = 2.5.dp
+                        )
+                    } else if (songCount != null) {
+                        Surface(
+                            shape = CircleShape,
+                            color = Color.White.copy(alpha = 0.25f)
+                        ) {
+                            Text(
+                                text = "$songCount songs",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.White,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                }
 
                 Column {
                     Text(
                         text = mood.displayName,
-                        style = MaterialTheme.typography.titleLarge,
-                        color = White,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = Color.White
                     )
                     Text(
-                        text = if (isLoading) "Loading…"
-                        else songCount?.let { "$it songs" } ?: mood.description,
+                        text = mood.description,
                         style = MaterialTheme.typography.bodySmall,
-                        color = White.copy(alpha = 0.8f),
+                        color = Color.White.copy(alpha = 0.85f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-
-            // Loading indicator
-            if (isLoading) {
-                CircularProgressIndicator(
-                    modifier = Modifier
-                        .size(24.dp)
-                        .align(Alignment.TopEnd),
-                    color = White,
-                    strokeWidth = 2.dp
-                )
-            }
-
-            // Selected checkmark
-            if (isSelected && !isLoading) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .size(28.dp)
-                        .clip(CircleShape)
-                        .background(White.copy(alpha = 0.25f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Check,
-                        contentDescription = "Selected",
-                        tint = White,
-                        modifier = Modifier.size(16.dp)
                     )
                 }
             }

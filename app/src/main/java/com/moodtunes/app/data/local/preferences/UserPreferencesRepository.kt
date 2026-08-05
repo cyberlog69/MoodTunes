@@ -39,7 +39,7 @@ enum class MusicLanguage(
     val flagEmoji: String,
     val searchQueryPrefix: String
 ) {
-    ALL("All", "🌐", ""),
+    ALL("All Languages", "🌐", ""),
     HINDI("Hindi", "🇮🇳", "Hindi"),
     ENGLISH("English", "🇬🇧", "English"),
     PUNJABI("Punjabi", "🌾", "Punjabi"),
@@ -60,8 +60,11 @@ data class AppUserSettings(
     val mobileDataHighQuality: Boolean = true,
     val audioSourceMode: AudioSourceMode = AudioSourceMode.BOTH,
     val streamingProvider: StreamingProvider = StreamingProvider.BOTH,
-    val preferredLanguage: MusicLanguage = MusicLanguage.ALL
-)
+    val preferredLanguages: Set<MusicLanguage> = setOf(MusicLanguage.ALL)
+) {
+    val preferredLanguage: MusicLanguage
+        get() = preferredLanguages.firstOrNull() ?: MusicLanguage.ALL
+}
 
 @Singleton
 class UserPreferencesRepository @Inject constructor(
@@ -78,7 +81,13 @@ class UserPreferencesRepository @Inject constructor(
         val qualityStr = prefs.getString("stream_quality", StreamQuality.LOSSLESS.name) ?: StreamQuality.LOSSLESS.name
         val sourceStr = prefs.getString("audio_source_mode", AudioSourceMode.BOTH.name) ?: AudioSourceMode.BOTH.name
         val providerStr = prefs.getString("streaming_provider", StreamingProvider.BOTH.name) ?: StreamingProvider.BOTH.name
-        val langStr = prefs.getString("preferred_language", MusicLanguage.ALL.name) ?: MusicLanguage.ALL.name
+        
+        val rawLangs = prefs.getString("preferred_languages", prefs.getString("preferred_language", MusicLanguage.ALL.name)) 
+            ?: MusicLanguage.ALL.name
+        val parsedLangs = rawLangs.split(",")
+            .mapNotNull { runCatching { MusicLanguage.valueOf(it.trim()) }.getOrNull() }
+            .toSet()
+            .ifEmpty { setOf(MusicLanguage.ALL) }
 
         return AppUserSettings(
             darkModeOption = runCatching { DarkModeOption.valueOf(modeStr) }.getOrDefault(DarkModeOption.DARK),
@@ -89,7 +98,7 @@ class UserPreferencesRepository @Inject constructor(
             mobileDataHighQuality = prefs.getBoolean("mobile_data_hq", true),
             audioSourceMode = runCatching { AudioSourceMode.valueOf(sourceStr) }.getOrDefault(AudioSourceMode.BOTH),
             streamingProvider = runCatching { StreamingProvider.valueOf(providerStr) }.getOrDefault(StreamingProvider.BOTH),
-            preferredLanguage = runCatching { MusicLanguage.valueOf(langStr) }.getOrDefault(MusicLanguage.ALL)
+            preferredLanguages = parsedLangs
         )
     }
 
@@ -133,8 +142,28 @@ class UserPreferencesRepository @Inject constructor(
         _settings.value = _settings.value.copy(streamingProvider = provider)
     }
 
+    fun togglePreferredLanguage(language: MusicLanguage) {
+        val currentSet = _settings.value.preferredLanguages.toMutableSet()
+        if (language == MusicLanguage.ALL) {
+            currentSet.clear()
+            currentSet.add(MusicLanguage.ALL)
+        } else {
+            currentSet.remove(MusicLanguage.ALL)
+            if (currentSet.contains(language)) {
+                currentSet.remove(language)
+            } else {
+                currentSet.add(language)
+            }
+            if (currentSet.isEmpty()) {
+                currentSet.add(MusicLanguage.ALL)
+            }
+        }
+        val joined = currentSet.joinToString(",") { it.name }
+        prefs.edit().putString("preferred_languages", joined).apply()
+        _settings.value = _settings.value.copy(preferredLanguages = currentSet)
+    }
+
     fun updatePreferredLanguage(language: MusicLanguage) {
-        prefs.edit().putString("preferred_language", language.name).apply()
-        _settings.value = _settings.value.copy(preferredLanguage = language)
+        togglePreferredLanguage(language)
     }
 }

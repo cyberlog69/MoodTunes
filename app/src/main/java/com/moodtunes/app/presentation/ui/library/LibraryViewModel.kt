@@ -2,6 +2,9 @@ package com.moodtunes.app.presentation.ui.library
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.moodtunes.app.data.local.preferences.UserPreferencesRepository
+import com.moodtunes.app.data.remote.OnlineStreamRepository
+import com.moodtunes.app.domain.model.MoodType
 import com.moodtunes.app.domain.model.Song
 import com.moodtunes.app.domain.usecase.GetAllSongsUseCase
 import com.moodtunes.app.domain.usecase.GetFavoriteSongsUseCase
@@ -15,18 +18,21 @@ import javax.inject.Inject
 
 data class LibraryUiState(
     val isLoading: Boolean = true,
+    val isLoadingOnline: Boolean = false,
     val allSongs: List<Song> = emptyList(),
     val favoriteSongs: List<Song> = emptyList(),
+    val onlineStreamSongs: List<Song> = emptyList(),
     val searchQuery: String = "",
     val filteredSongs: List<Song> = emptyList(),
-    val selectedTab: LibraryTab = LibraryTab.ALL_SONGS,
+    val selectedTab: LibraryTab = LibraryTab.LOCAL,
     val currentSongId: Long? = null,
     val isPlaying: Boolean = false
 )
 
 enum class LibraryTab(val label: String) {
-    ALL_SONGS("All Songs"),
-    FAVORITES("Favorites")
+    LOCAL("📁 Local Files"),
+    ONLINE_STREAM("🌐 Online Stream"),
+    FAVORITES("❤️ Favorites")
 }
 
 @HiltViewModel
@@ -34,7 +40,9 @@ class LibraryViewModel @Inject constructor(
     private val getAllSongsUseCase: GetAllSongsUseCase,
     private val getFavoriteSongsUseCase: GetFavoriteSongsUseCase,
     private val toggleFavoriteUseCase: ToggleFavoriteUseCase,
-    private val playbackManager: PlaybackManager
+    private val playbackManager: PlaybackManager,
+    private val onlineStreamRepository: OnlineStreamRepository,
+    private val userPreferencesRepository: UserPreferencesRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LibraryUiState())
@@ -59,12 +67,29 @@ class LibraryViewModel @Inject constructor(
         loadSongs()
         observeFavorites()
         observeSearch()
+        loadOnlineStreamSongs()
     }
 
     private fun loadSongs() {
         viewModelScope.launch {
             val songs = getAllSongsUseCase()
             _uiState.update { it.copy(isLoading = false, allSongs = songs, filteredSongs = songs) }
+        }
+    }
+
+    fun loadOnlineStreamSongs() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoadingOnline = true) }
+            try {
+                val languages = userPreferencesRepository.settings.value.preferredLanguages
+                val primaryLang = languages.firstOrNull() ?: com.moodtunes.app.data.local.preferences.MusicLanguage.ALL
+                val audiusTracks = onlineStreamRepository.getAudiusTracksByMood(MoodType.HAPPY, primaryLang, limit = 10)
+                val ytTracks = onlineStreamRepository.getYouTubeAudioTracksByMood(MoodType.ENERGETIC, primaryLang, limit = 10)
+                val combined = (audiusTracks + ytTracks).distinctBy { it.id }
+                _uiState.update { it.copy(isLoadingOnline = false, onlineStreamSongs = combined) }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isLoadingOnline = false) }
+            }
         }
     }
 
@@ -101,6 +126,9 @@ class LibraryViewModel @Inject constructor(
 
     fun onTabSelected(tab: LibraryTab) {
         _uiState.update { it.copy(selectedTab = tab) }
+        if (tab == LibraryTab.ONLINE_STREAM && _uiState.value.onlineStreamSongs.isEmpty()) {
+            loadOnlineStreamSongs()
+        }
     }
 
     fun onToggleFavorite(songId: Long) {
@@ -112,7 +140,8 @@ class LibraryViewModel @Inject constructor(
 
     fun onSongSelected(song: Song) {
         val displayed = when (_uiState.value.selectedTab) {
-            LibraryTab.ALL_SONGS -> _uiState.value.filteredSongs
+            LibraryTab.LOCAL -> _uiState.value.filteredSongs
+            LibraryTab.ONLINE_STREAM -> _uiState.value.onlineStreamSongs
             LibraryTab.FAVORITES -> _uiState.value.favoriteSongs
         }
         val index = displayed.indexOfFirst { it.id == song.id }.coerceAtLeast(0)

@@ -230,12 +230,12 @@ fun SettingsScreen(
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
                         Text(
-                            text = "Music Language Preference",
+                            text = "Music Language Preferences (Multi-Select)",
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "Filter online music streams and mood playlists by your preferred language.",
+                            text = "Select one or multiple languages. Your online streams and mood playlists will be personalized to your selection.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -247,10 +247,10 @@ fun SettingsScreen(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             com.moodtunes.app.data.local.preferences.MusicLanguage.entries.forEach { language ->
-                                val isSelected = settings.preferredLanguage == language
+                                val isSelected = settings.preferredLanguages.contains(language)
                                 FilterChip(
                                     selected = isSelected,
-                                    onClick = { viewModel.onPreferredLanguageChanged(language) },
+                                    onClick = { viewModel.onTogglePreferredLanguage(language) },
                                     label = { Text("${language.flagEmoji} ${language.displayName}") },
                                     leadingIcon = if (isSelected) {
                                         { Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }

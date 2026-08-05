@@ -80,7 +80,11 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun onPreferredLanguageChanged(language: com.moodtunes.app.data.local.preferences.MusicLanguage) {
-        preferencesRepository.updatePreferredLanguage(language)
+        preferencesRepository.togglePreferredLanguage(language)
+    }
+
+    fun onTogglePreferredLanguage(language: com.moodtunes.app.data.local.preferences.MusicLanguage) {
+        preferencesRepository.togglePreferredLanguage(language)
     }
 
     fun checkForUpdates() {

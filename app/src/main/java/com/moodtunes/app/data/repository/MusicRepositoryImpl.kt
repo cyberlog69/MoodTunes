@@ -21,20 +21,16 @@ class MusicRepositoryImpl @Inject constructor(
 
     override suspend fun getAllSongs(): List<Song> {
         val mediaSongs = mediaStoreRepository.getAllSongs()
-        // Sync with Room to preserve favorites status
-        val favoriteIds = getFavoriteIdsFromDb()
-        val syncedSongs = mediaSongs.map { song ->
-            song.copy(isFavorite = favoriteIds.contains(song.id))
-        }
-        // Upsert into db (preserves isFavorite)
-        songDao.upsertSongs(syncedSongs.map { it.toEntity() })
-        return syncedSongs
+        // Merge persisted state (favorites, play counts, recency) so a rescan
+        // never clobbers listening history.
+        val merged = mergeDbStats(mediaSongs)
+        songDao.upsertSongs(merged.map { it.toEntity() })
+        return merged
     }
 
     override suspend fun getSongsByMood(mood: MoodType): List<Song> {
         val moodSongs = mediaStoreRepository.getSongsByMood(mood)
-        val favoriteIds = getFavoriteIdsFromDb()
-        return moodSongs.map { it.copy(isFavorite = favoriteIds.contains(it.id)) }
+        return mergeDbStats(moodSongs)
     }
 
     override fun getFavoriteSongs(): Flow<List<Song>> =
@@ -51,8 +47,16 @@ class MusicRepositoryImpl @Inject constructor(
         return songDao.searchSongs(query).map { it.toDomain() }
     }
 
-    private suspend fun getFavoriteIdsFromDb(): Set<Long> {
-        return emptySet()
+    override fun getRecentlyPlayed(limit: Int): Flow<List<Song>> =
+        songDao.getRecentlyPlayed(limit).map { entities -> entities.map { it.toDomain() } }
+
+    override fun getMostPlayed(limit: Int): Flow<List<Song>> =
+        songDao.getMostPlayed(limit).map { entities -> entities.map { it.toDomain() } }
+
+    /** Loads persisted rows for the given songs and overlays DB-only state. */
+    private suspend fun mergeDbStats(songs: List<Song>): List<Song> {
+        if (songs.isEmpty()) return songs
+        return mergeStats(songs, songDao.getSongsByIds(songs.map { it.id }))
     }
 
     // --- Mappers ---
@@ -67,7 +71,9 @@ class MusicRepositoryImpl @Inject constructor(
         genre = genre,
         isFavorite = isFavorite,
         audioFormatName = audioFormat.name,
-        isStream = isStream
+        isStream = isStream,
+        playCount = playCount,
+        lastPlayedAt = lastPlayedAt
     )
 
     private fun SongEntity.toDomain() = Song(
@@ -81,6 +87,29 @@ class MusicRepositoryImpl @Inject constructor(
         genre = genre,
         isFavorite = isFavorite,
         audioFormat = runCatching { AudioFormat.valueOf(audioFormatName) }.getOrDefault(AudioFormat.MP3),
-        isStream = isStream
+        isStream = isStream,
+        playCount = playCount,
+        lastPlayedAt = lastPlayedAt
     )
+}
+
+/**
+ * Pure overlay of persisted (DB-only) state onto fresh MediaStore scans, so a
+ * rescan never clobbers favorites, play counts, or listening recency.
+ */
+internal fun mergeStats(songs: List<Song>, dbRows: List<SongEntity>): List<Song> {
+    if (songs.isEmpty()) return songs
+    val rowsById = dbRows.associateBy { it.id }
+    return songs.map { song ->
+        val existing = rowsById[song.id]
+        if (existing == null) {
+            song
+        } else {
+            song.copy(
+                isFavorite = existing.isFavorite,
+                playCount = existing.playCount,
+                lastPlayedAt = existing.lastPlayedAt
+            )
+        }
+    }
 }

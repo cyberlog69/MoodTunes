@@ -5,8 +5,12 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -20,23 +24,35 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil.compose.AsyncImage
 import com.moodtunes.app.domain.model.MoodType
+import com.moodtunes.app.domain.model.Song
 import com.moodtunes.app.presentation.ui.components.MiniPlayer
 import com.moodtunes.app.presentation.ui.theme.*
 
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel(),
+    deepLinkMood: MoodType? = null,
     onNavigateToPlayer: () -> Unit,
     onNavigateToLibrary: () -> Unit,
     onNavigateToHistory: () -> Unit,
     onNavigateToSettings: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    // Triggered by app shortcut deep links (moodtunes://mood/<MOOD>).
+    LaunchedEffect(deepLinkMood) {
+        if (deepLinkMood != null) {
+            viewModel.onMoodSelected(deepLinkMood)
+            onNavigateToPlayer()
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -110,7 +126,7 @@ fun HomeScreen(
                 }
             }
 
-            // ─── Mood Grid ──────────────────────────────────────────────────
+            // ─── Mood Grid + Discovery Rails ────────────────────────────────
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
                 contentPadding = PaddingValues(
@@ -123,6 +139,37 @@ fun HomeScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.weight(1f)
             ) {
+                if (uiState.forYou.isNotEmpty()) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        SectionHeader(title = "For You", subtitle = "Based on your favorites and top mood")
+                    }
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        SongRail(
+                            songs = uiState.forYou,
+                            onPlay = { index ->
+                                viewModel.playForYou(index)
+                                onNavigateToPlayer()
+                            }
+                        )
+                    }
+                }
+                if (uiState.recentlyPlayed.isNotEmpty()) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        SectionHeader(title = "Recently Played", subtitle = null)
+                    }
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        SongRail(
+                            songs = uiState.recentlyPlayed,
+                            onPlay = { index ->
+                                viewModel.playRecentlyPlayed(index)
+                                onNavigateToPlayer()
+                            }
+                        )
+                    }
+                }
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    SectionHeader(title = "Moods", subtitle = "Pick how you feel and we'll match the music")
+                }
                 items(MoodType.entries) { mood ->
                     MoodCard(
                         mood = mood,
@@ -195,6 +242,107 @@ fun HomeScreen(
                     onClick = onNavigateToSettings,
                     icon = { Icon(Icons.Rounded.Settings, contentDescription = "Settings") },
                     label = { Text("Settings") }
+                )
+            }
+        }
+    }
+}
+
+// ─── Section Header ──────────────────────────────────────────────────────────
+@Composable
+private fun SectionHeader(title: String, subtitle: String?) {
+    Column(modifier = Modifier.padding(top = 12.dp, bottom = 4.dp, start = 4.dp)) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onBackground
+        )
+        if (subtitle != null) {
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+// ─── Horizontal Song Rail ────────────────────────────────────────────────────
+@Composable
+private fun SongRail(songs: List<Song>, onPlay: (Int) -> Unit) {
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
+    ) {
+        itemsIndexed(songs, key = { index, song -> "rail_${song.id}_$index" }) { index, song ->
+            RailCard(song = song, onClick = { onPlay(index) })
+        }
+    }
+}
+
+// ─── Compact Rail Card ───────────────────────────────────────────────────────
+@Composable
+private fun RailCard(song: Song, onClick: () -> Unit) {
+    Card(
+        onClick = onClick,
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.width(148.dp)
+    ) {
+        Column {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(148.dp)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                if (song.albumArtUri != null) {
+                    AsyncImage(
+                        model = song.albumArtUri,
+                        contentDescription = "Album art",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Rounded.MusicNote,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(36.dp)
+                    )
+                }
+                // Play overlay
+                Box(
+                    modifier = Modifier
+                        .padding(8.dp)
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.55f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.PlayArrow,
+                        contentDescription = "Play",
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+            Column(modifier = Modifier.padding(10.dp)) {
+                Text(
+                    text = song.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = song.artist,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }

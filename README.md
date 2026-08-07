@@ -6,7 +6,7 @@
 [![Media3](https://img.shields.io/badge/Audio-androidx.media3%20ExoPlayer-FF6F00?style=flat-square)](https://developer.android.com/guide/topics/media/media3)
 [![Hilt](https://img.shields.io/badge/DI-Hilt-00897B?style=flat-square)](https://dagger.dev/hilt/)
 [![Room](https://img.shields.io/badge/Database-Room%202.7-4285F4?style=flat-square)](https://developer.android.com/training/data-storage/room)
-[![Release](https://img.shields.io/badge/Version-v1.0.0--beta-purple?style=flat-square)](https://github.com/cyberlog69/MoodTunes/releases)
+[![Release](https://img.shields.io/badge/Version-v1.0.7-blue?style=flat-square)](https://github.com/cyberlog69/MoodTunes/releases)
 
 ---
 
@@ -19,17 +19,25 @@ Designed to deliver an effortless listening experience, MoodTunes curates music 
 ### 🌟 Key Vision & Design Philosophy
 - **Emotion-Driven Curation**: Categorizes music into 6 curated mood profiles using intelligent sentiment and metadata analysis.
 - **Audiophile Grade Quality**: Full support for 24-bit/32-bit float audio output, FLAC Lossless, ALAC Lossless, and WAV Hi-Res formats.
-- **Unrestricted Global Access**: Built-in dynamic host failover across decentralised Audius protocol nodes and YouTube proxy pools (Piped/Invidious), ensuring zero network blockades across Indian ISPs (Jio, Airtel, Vi, BSNL, ACT) and global networks.
+- **Unrestricted Global Access**: Multi-service streaming aggregator with dynamic host failover across **Jamendo**, **Internet Archive**, decentralised **Audius** protocol nodes, and YouTube proxy pools (Piped/Invidious) — ensuring zero network blockades across Indian ISPs (Jio, Airtel, Vi, BSNL, ACT) and global networks.
+- **Reliability First**: 512 MB LRU streaming cache with disk fallback, crash recovery guardian with automatic database backup/restore, and thread-safe playback pipeline.
 - **Privacy & Security First**: Zero tracking, network security HTTPS enforcement, encrypted shared preferences exclusion, and non-exported background services.
 
 ---
 
 ## ✨ Features
 
-- **🎭 6 Mood Categories**: Automatically groups tracks into *Happy*, *Sad*, *Energetic*, *Calm*, *Euphoric*, and *Sleep* playlists.
+- **🎭 6 Mood Categories**: Automatically groups tracks into *Happy*, *Sad*, *Energetic*, *Calm*, *Euphoric*, and *Sleep* profiles.
 - **🎼 FLAC & ALAC Lossless Support**: Native decoding for FLAC (`.flac`), ALAC (`.m4a`), WAV (`.wav`), AAC, and MP3 formats with 24-bit float high-resolution audio pipeline.
-- **🌐 Global & Indian ISP Unrestricted Streaming**: Dual-engine streaming powered by **Audius Protocol** (CC-licensed, royalty-free open protocol) + **YouTube (via Piped/Invidious fast proxy pools)** with dynamic host failover.
+- **📀 Animated Vinyl Disc Player**: Full-screen player with real-time rotating vinyl disc artwork, seek bar, play/pause, shuffle, repeat, queue, and favorite toggle.
+- **📚 Songs Hub with Local & Online Tabs**: Spotify-style hub separating *Local* device tracks from curated *Online* streams, plus **Favorites** and **Playlists** tabs.
+- **🌐 Multi-Service Online Streaming**: Aggregates global CC-licensed content from **Jamendo** (multi-strategy search), **Internet Archive**, **Audius Protocol**, and **YouTube (via Piped/Invidious fast proxy pools)** with dynamic host failover — including live radio streams and full album/audiobook playlists.
+- **🗣️ Music Language Selection**: Multi-select language filters (Hindi, English, Punjabi, Tamil, Telugu, Spanish, K-Pop, J-Pop, Instrumental) driving stream recommendations.
+- **📁 Full Playlist Management**: Create, rename, delete, add/remove songs, and reorder tracks within playlists, persisted in Room.
 - **⚡ Ultra-Low Playback Latency**: Tuned 250ms buffer load control, OkHttp connection pooling, and parallel stream URL resolution for instant playback startup.
+- **🔁 Smooth Crossfade**: Configurable crossfade between tracks (0.5s–3.0s).
+- **🎚️ Equalizer & Bass Boost**: Real-time AudioFX effects bound to the player's audio session via a system audio session.
+- **📜 Inline Lyrics**: Time-synced lyrics parsing with a full-screen lyrics sheet on the player.
 - **⚙️ Extensive Customization & Settings**:
   - **Theme Selection**: Switch between *Follow System*, *Always Dark*, and *Always Light* themes.
   - **Material You Dynamic Colors**: Adapts theme accent colors to your Android system wallpaper (Android 12+ / API 31+).
@@ -37,17 +45,18 @@ Designed to deliver an effortless listening experience, MoodTunes curates music 
   - **Streaming Provider Selection**: Select between *Audius Only*, *YouTube Only*, or *Both Combined*.
   - **Audio Stream Quality**: Choose between *FLAC 24-bit Lossless*, *320 kbps High*, *128 kbps Standard*, or *Adaptive (Auto)*.
   - **Network & Data Controls**: Enforce *Wi-Fi Only Streaming*, *Wi-Fi Only Downloads*, or allow *High Quality over Mobile Data*.
-  - **In-App Update Checker**: Directly checks GitHub Releases for new updates with release notes and one-click download.
-- **🛡️ Security & Copyright Hardening**:
+  - **In-App Update Engine**: Checks GitHub Releases for new updates, downloads the APK in-app, launches the package installer, and shows a post-update changelog.
+- **🛡️ Security, Reliability & Copyright Hardening**:
   - Unexported `MusicPlaybackService` preventing unauthorized 3rd-party app hijacking.
   - HTTPS-only network security config disabling cleartext HTTP vulnerabilities.
   - GitHub domain validation on update downloads and scheme validation on stream resolution.
-  - Backup rules excluding user preferences and local database from cloud extraction.
+  - 512 MB LRU stream cache served from disk when connectivity drops.
+  - Crash recovery guardian that detects unexpected exits and restores the database from an automatic backup.
 - **🎧 Seamless Background Playback**: `androidx.media3` `MediaSessionService` for background playback, notification controls, and Bluetooth headset button support.
-- **📀 Animated Vinyl Disc Player**: Real-time rotating vinyl disc artwork animation synchronized with playback.
-- **🔍 Debounced Library Search**: Search local tracks by title, artist, or album with real-time 300ms debouncing.
-- **📊 Mood Analytics & Listening Stats**: View 30-day listening history, total session time, and animated vibe statistics.
+- **🔍 Debounced Library Search**: Search tracks by title, artist, or album with real-time 300ms debouncing.
+- **📊 Mood Analytics & Listening Stats**: View 30-day listening history, total session time, top mood, and animated vibe statistics.
 - **❤️ Favorites Management**: Save and toggle favorite tracks persisted locally via Room database.
+- **🎛️ Media Widget & Quick Settings Tile**: Home-screen playback widget, pause/play quick settings tile, app shortcuts per mood, and Android Auto / Automotive media support.
 
 ---
 
@@ -57,10 +66,11 @@ Built following **Android Clean Architecture** guidelines and modern Android dev
 
 ```
 app/src/main/java/com/moodtunes/app/
-├── domain/            # Pure Kotlin: Models (Song, MoodType), Repository Contracts & UseCases
-├── data/              # MediaStore API, Room Database Entities, DAOs & Preferences Repositories
+├── domain/            # Pure Kotlin: Models (Song, MoodType, LyricsLine), Repository Contracts & UseCases
+├── data/              # MediaStore API, Room Entities/DAOs, Backup/Guardian, Preferences & Remote Repositories
 ├── di/                # Hilt Dependency Injection Modules (DatabaseModule, RepositoryModule)
-├── service/           # MusicPlaybackService (Media3 MediaSession) & PlaybackManager
+├── service/           # MusicPlaybackService (Media3 MediaSession), PlaybackManager, AudioEffectsManager
+├── platform/          # Media3 MediaSession callbacks & MediaItem factory
 └── presentation/      # Jetpack Compose UI Screens, ViewModels, Navigation & Dynamic Design System
 ```
 
@@ -70,11 +80,11 @@ app/src/main/java/com/moodtunes/app/
 | **UI Framework** | Jetpack Compose (Compose BOM 2025.01.00) + Material 3 |
 | **Audio Engine** | `androidx.media3:media3-exoplayer` & `media3-session` (1.6.1) |
 | **Dependency Injection** | Dagger Hilt 2.56.2 |
-| **Database & Storage** | Room 2.7.1 (SQLite) & SharedPreferences |
+| **Database & Storage** | Room 2.7.1 (SQLite), SharedPreferences, JSON serialization |
 | **Asynchrony** | Kotlin Coroutines 1.10.2 & StateFlow / SharedFlow |
 | **Image Loading** | Coil 2.7.0 |
 | **Permissions** | Accompanist Permissions 0.37.3 |
-| **Build System** | Gradle 8.14+, Android Gradle Plugin 8.10.1, KSP 2.1 |
+| **Build System** | Gradle 8.14+, Android Gradle Plugin 8.10.1, KSP 2.1, AGP Signing v2/v3/v4 + zipalign |
 | **Target Platform** | Android 8.0 (API 26) to Android 15 (API 36) |
 
 ---
@@ -83,10 +93,11 @@ app/src/main/java/com/moodtunes/app/
 
 1. **Permission Screen**: Onboarding screen requesting audio storage permissions with animated bubble graphic.
 2. **Home Screen**: Interactive grid featuring 6 animated mood cards, top listening stats header, and persistent mini-player.
-3. **Player Screen**: Full-screen audio player with vinyl disc animation, seek bar, play/pause, shuffle, repeat, and favorite toggle.
-4. **Library Screen**: Filterable track list with search bar and *All Songs* / *Favorites* tab switching.
-5. **Mood History Screen**: Personal analytics dashboard displaying top listening mood, session history, and animated progress bars.
-6. **Settings Screen**: Comprehensive preferences panel for theme, dark mode, dynamic colors, streaming providers, audio quality, network constraints, and update checking.
+3. **Songs Hub**: Bottom-navigation hub with *Local* / *Online* / *Favorites* / *Playlists* tabs, language-filtered streaming sections, live radio, and trending mixes.
+4. **Player Screen**: Full-screen audio player with rotating vinyl disc animation, seek bar, play/pause, shuffle, repeat, queue, favorite toggle, and lyrics sheet.
+5. **Playlist Detail Screen**: Reorder, rename, and manage songs inside a playlist.
+6. **Mood History Screen**: Personal analytics dashboard displaying top listening mood, session history, and animated progress bars.
+7. **Settings Screen**: Comprehensive preferences panel for theme, dynamic colors, crossfade, equalizer, streaming providers, audio quality, network constraints, language selection, and in-app updates.
 
 ---
 

@@ -7,6 +7,8 @@ import com.moodtunes.app.data.local.preferences.UserPreferencesRepository
 import com.moodtunes.app.domain.model.MoodEntry
 import com.moodtunes.app.domain.model.MoodType
 import com.moodtunes.app.domain.model.Song
+import com.moodtunes.app.domain.usecase.GetForYouSongsUseCase
+import com.moodtunes.app.domain.usecase.GetRecentlyPlayedUseCase
 import com.moodtunes.app.domain.usecase.GetSongsByMoodUseCase
 import com.moodtunes.app.domain.usecase.SaveMoodHistoryUseCase
 import com.moodtunes.app.service.PlaybackManager
@@ -20,6 +22,8 @@ data class HomeUiState(
     val selectedMood: MoodType? = null,
     val selectedLanguage: MusicLanguage = MusicLanguage.ALL,
     val moodSongs: List<Song> = emptyList(),
+    val recentlyPlayed: List<Song> = emptyList(),
+    val forYou: List<Song> = emptyList(),
     val currentSong: Song? = null,
     val isPlaying: Boolean = false,
     val error: String? = null
@@ -29,6 +33,8 @@ data class HomeUiState(
 class HomeViewModel @Inject constructor(
     private val getSongsByMoodUseCase: GetSongsByMoodUseCase,
     private val saveMoodHistoryUseCase: SaveMoodHistoryUseCase,
+    private val getRecentlyPlayedUseCase: GetRecentlyPlayedUseCase,
+    private val getForYouSongsUseCase: GetForYouSongsUseCase,
     private val playbackManager: PlaybackManager,
     private val preferencesRepository: UserPreferencesRepository
 ) : ViewModel() {
@@ -54,6 +60,18 @@ class HomeViewModel @Inject constructor(
     )
 
     private var sessionStartTime: Long = 0L
+
+    init {
+        viewModelScope.launch {
+            getRecentlyPlayedUseCase(20).collect { songs ->
+                _uiState.update { it.copy(recentlyPlayed = songs) }
+            }
+        }
+        viewModelScope.launch {
+            runCatching { getForYouSongsUseCase(20) }
+                .onSuccess { recs -> _uiState.update { it.copy(forYou = recs) } }
+        }
+    }
 
     fun onLanguageSelected(language: MusicLanguage) {
         preferencesRepository.updatePreferredLanguage(language)
@@ -97,6 +115,20 @@ class HomeViewModel @Inject constructor(
 
     fun playPause() {
         playbackManager.playPause()
+    }
+
+    fun playForYou(index: Int) {
+        val songs = uiState.value.forYou
+        if (index in songs.indices) {
+            playbackManager.playSongs(songs, index)
+        }
+    }
+
+    fun playRecentlyPlayed(index: Int) {
+        val songs = uiState.value.recentlyPlayed
+        if (index in songs.indices) {
+            playbackManager.playSongs(songs, index)
+        }
     }
 
     fun skipNext() {

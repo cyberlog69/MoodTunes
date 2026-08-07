@@ -4,23 +4,28 @@ import android.Manifest
 import android.os.Build
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
+import com.moodtunes.app.domain.model.MoodType
 import com.moodtunes.app.presentation.ui.history.HistoryScreen
 import com.moodtunes.app.presentation.ui.home.HomeScreen
 import com.moodtunes.app.presentation.ui.library.LibraryScreen
 import com.moodtunes.app.presentation.ui.permission.PermissionScreen
 import com.moodtunes.app.presentation.ui.player.PlayerScreen
+import com.moodtunes.app.presentation.ui.playlistdetail.PlaylistDetailScreen
 import com.moodtunes.app.presentation.ui.settings.SettingsScreen
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun MoodTunesNavGraph(
-    navController: NavHostController = rememberNavController()
+    navController: NavHostController = rememberNavController(),
+    shortcutMood: MoodType? = null
 ) {
     val audioPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         rememberPermissionState(Manifest.permission.READ_MEDIA_AUDIO)
@@ -50,6 +55,7 @@ fun MoodTunesNavGraph(
 
         composable(Routes.HOME) {
             HomeScreen(
+                deepLinkMood = shortcutMood,
                 onNavigateToPlayer = { navController.navigate(Routes.PLAYER) },
                 onNavigateToLibrary = { navController.navigate(Routes.LIBRARY) },
                 onNavigateToHistory = { navController.navigate(Routes.HISTORY) },
@@ -66,7 +72,19 @@ fun MoodTunesNavGraph(
         composable(Routes.LIBRARY) {
             LibraryScreen(
                 onNavigateBack = { navController.popBackStack() },
-                onNavigateToPlayer = { navController.navigate(Routes.PLAYER) }
+                onNavigateToPlayer = { navController.navigate(Routes.PLAYER) },
+                onNavigateToPlaylist = { playlistId ->
+                    navController.navigate(Routes.playlistDetail(playlistId))
+                }
+            )
+        }
+
+        composable(
+            route = Routes.PLAYLIST_DETAIL,
+            arguments = listOf(navArgument("playlistId") { type = NavType.LongType })
+        ) {
+            PlaylistDetailScreen(
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 

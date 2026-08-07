@@ -16,5 +16,7 @@ data class SongEntity(
     val isFavorite: Boolean = false,
     val moodTagsJson: String = "[]",
     val audioFormatName: String = "MP3",
-    val isStream: Boolean = false
+    val isStream: Boolean = false,
+    val playCount: Int = 0,
+    val lastPlayedAt: Long = 0
 )

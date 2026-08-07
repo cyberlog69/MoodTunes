@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <shortcut
+        android:shortcutId="mood_happy"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_happy"
+        android:shortcutShortLabel="@string/mood_happy"
+        android:shortcutLongLabel="@string/mood_happy_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="moodtunes://mood/HAPPY" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="mood_sad"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_sad"
+        android:shortcutShortLabel="@string/mood_sad"
+        android:shortcutLongLabel="@string/mood_sad_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="moodtunes://mood/SAD" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="mood_energetic"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_energetic"
+        android:shortcutShortLabel="@string/mood_energetic"
+        android:shortcutLongLabel="@string/mood_energetic_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="moodtunes://mood/ENERGETIC" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="mood_calm"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_calm"
+        android:shortcutShortLabel="@string/mood_calm"
+        android:shortcutLongLabel="@string/mood_calm_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="moodtunes://mood/CALM" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="mood_euphoric"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_euphoric"
+        android:shortcutShortLabel="@string/mood_euphoric"
+        android:shortcutLongLabel="@string/mood_euphoric_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="moodtunes://mood/EUPHORIC" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="mood_sleep"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_sleep"
+        android:shortcutShortLabel="@string/mood_sleep"
+        android:shortcutLongLabel="@string/mood_sleep_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="moodtunes://mood/SLEEP" />
+    </shortcut>
+
+</shortcuts>

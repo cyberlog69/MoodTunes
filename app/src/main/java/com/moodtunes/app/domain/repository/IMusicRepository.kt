@@ -22,4 +22,10 @@ interface IMusicRepository {
 
     /** Searches songs by title or artist. */
     suspend fun searchSongs(query: String): List<Song>
+
+    /** Returns recently played songs, most recent first. */
+    fun getRecentlyPlayed(limit: Int = 20): Flow<List<Song>>
+
+    /** Returns most-played songs, highest play count first. */
+    fun getMostPlayed(limit: Int = 50): Flow<List<Song>>
 }

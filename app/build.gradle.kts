@@ -57,6 +57,13 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+
+    testOptions {
+        unitTests {
+            // Allows JVM unit tests to run against android.jar stubs (Uri.parse etc.)
+            isReturnDefaultValues = true
+        }
+    }
 }
 
 dependencies {
@@ -89,6 +96,15 @@ dependencies {
     implementation(libs.androidx.media3.session)
     implementation(libs.androidx.media3.common)
     implementation(libs.androidx.media3.ui)
+    implementation(libs.androidx.media3.cast)
+    implementation(libs.androidx.media3.datasource)
+    implementation(libs.androidx.media3.database)
+
+    // Glance (home screen widget)
+    implementation(libs.androidx.glance.appwidget)
+
+    // MediaRouter (Chromecast route picker)
+    implementation(libs.androidx.mediarouter)
 
     // Room
     implementation(libs.androidx.room.runtime)
@@ -110,8 +126,14 @@ dependencies {
     // Accompanist (permission handling)
     implementation(libs.accompanist.permissions)
 
+    // Timber (logging)
+    implementation(libs.timber)
+
     // Testing
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.org.json)
+    testImplementation(libs.robolectric)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))

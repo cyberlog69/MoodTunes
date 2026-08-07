@@ -1,12 +1,12 @@
 package com.moodtunes.app.data.remote
 
-import android.util.Log
 import com.moodtunes.app.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
+import timber.log.Timber
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -87,7 +87,7 @@ class UpdateChecker @Inject constructor() {
             }
         } catch (e: Exception) {
             // SECURITY FIX (S9): No printStackTrace in production — debug-only logging
-            if (BuildConfig.DEBUG) Log.w(TAG, "Update check failed", e)
+            Timber.w(e, "Update check failed")
         }
 
         UpdateCheckResult(
@@ -109,9 +109,5 @@ class UpdateChecker @Inject constructor() {
             if (c > l) return false
         }
         return false
-    }
-
-    companion object {
-        private const val TAG = "UpdateChecker"
     }
 }

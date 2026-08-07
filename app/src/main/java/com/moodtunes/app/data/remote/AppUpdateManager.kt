@@ -6,13 +6,12 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.Settings
-import android.util.Log
 import androidx.core.content.FileProvider
-import com.moodtunes.app.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import timber.log.Timber
 import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.TimeUnit
@@ -78,7 +77,7 @@ class AppUpdateManager @Inject constructor() {
                 return@withContext apkFile
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e("AppUpdateManager", "Failed to download update APK", e)
+            Timber.e(e, "Failed to download update APK")
             return@withContext null
         }
     }
@@ -112,7 +111,7 @@ class AppUpdateManager @Inject constructor() {
 
             context.startActivity(installIntent)
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e("AppUpdateManager", "Failed to launch package installer", e)
+            Timber.e(e, "Failed to launch package installer")
         }
     }
 }

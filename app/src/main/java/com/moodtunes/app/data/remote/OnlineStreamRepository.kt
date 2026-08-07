@@ -1,8 +1,6 @@
 package com.moodtunes.app.data.remote
 
 import android.net.Uri
-import android.util.Log
-import com.moodtunes.app.BuildConfig
 import com.moodtunes.app.domain.model.AudioFormat
 import com.moodtunes.app.domain.model.MoodType
 import com.moodtunes.app.domain.model.Song
@@ -15,6 +13,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
+import timber.log.Timber
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -89,7 +88,7 @@ class OnlineStreamRepository @Inject constructor() {
                     }
                 }
             } catch (e: Exception) {
-                if (BuildConfig.DEBUG) Log.w(TAG, "Audius host failed: $host", e)
+                Timber.w(e, "Audius host failed: $host")
             }
         }
 
@@ -156,7 +155,7 @@ class OnlineStreamRepository @Inject constructor() {
                 }
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w(TAG, "Audius search failed for mood ${mood.displayName}", e)
+            Timber.w(e, "Audius search failed for mood ${mood.displayName}")
         }
         songs
     }
@@ -225,7 +224,7 @@ class OnlineStreamRepository @Inject constructor() {
                     }
                 }
             } catch (e: Exception) {
-                if (BuildConfig.DEBUG) Log.w(TAG, "Piped instance failed: $pipedBase", e)
+                Timber.w(e, "Piped instance failed: $pipedBase")
             }
         }
 
@@ -261,7 +260,7 @@ class OnlineStreamRepository @Inject constructor() {
                 }
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w(TAG, "Stream URL resolution failed", e)
+            Timber.w(e, "Stream URL resolution failed")
         }
 
         streamUrl
@@ -371,7 +370,7 @@ class OnlineStreamRepository @Inject constructor() {
                 }
                 if (songs.size >= 3) break
             } catch (e: Exception) {
-                if (BuildConfig.DEBUG) Log.w(TAG, "Jamendo strategy failed: $strategyUrl", e)
+                Timber.w(e, "Jamendo strategy failed: $strategyUrl")
             }
         }
 
@@ -443,7 +442,7 @@ class OnlineStreamRepository @Inject constructor() {
                 }
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w(TAG, "Internet Archive search failed for mood ${mood.displayName}", e)
+            Timber.w(e, "Internet Archive search failed for mood ${mood.displayName}")
         }
         songs
     }
@@ -509,7 +508,7 @@ class OnlineStreamRepository @Inject constructor() {
                 }
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w(TAG, "Internet Archive general search failed: $categoryQuery", e)
+            Timber.w(e, "Internet Archive general search failed: $categoryQuery")
         }
         songs
     }
@@ -583,7 +582,7 @@ class OnlineStreamRepository @Inject constructor() {
                 }
                 if (songs.isNotEmpty()) break
             } catch (e: Exception) {
-                if (BuildConfig.DEBUG) Log.w(TAG, "Radio Browser endpoint failed: $url", e)
+                Timber.w(e, "Radio Browser endpoint failed: $url")
             }
         }
 
@@ -659,7 +658,7 @@ class OnlineStreamRepository @Inject constructor() {
                     }
                 }
             } catch (e: Exception) {
-                if (BuildConfig.DEBUG) Log.w(TAG, "General Audius query failed: $q", e)
+                Timber.w(e, "General Audius query failed: $q")
             }
 
             // 2. Try Piped (YouTube) — best effort, non-blocking
@@ -711,7 +710,7 @@ class OnlineStreamRepository @Inject constructor() {
                         }
                     }
                 } catch (e: Exception) {
-                    if (BuildConfig.DEBUG) Log.w(TAG, "Piped instance failed for general query $q at $pipedBase", e)
+                    Timber.w(e, "Piped instance failed for general query $q at $pipedBase")
                 }
                 if (songs.size >= limit / 2) break
             }
@@ -725,8 +724,6 @@ class OnlineStreamRepository @Inject constructor() {
     }
 
     companion object {
-        private const val TAG = "OnlineStreamRepository"
-
         // COPYRIGHT FIX (C3): Honest, transparent User-Agent — no browser impersonation
         private const val USER_AGENT = "MoodTunes/1.0 (Android; Music Player App)"
     }

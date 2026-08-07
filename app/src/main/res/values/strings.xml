@@ -34,4 +34,17 @@
     <string name="queue">Queue</string>
     <string name="add_to_favorites">Add to Favorites</string>
     <string name="remove_from_favorites">Remove from Favorites</string>
+    <string name="mood_happy_long">Play Happy Mood</string>
+    <string name="mood_sad_long">Play Sad Mood</string>
+    <string name="mood_energetic_long">Play Energetic Mood</string>
+    <string name="mood_calm_long">Play Calm Mood</string>
+    <string name="mood_euphoric_long">Play Euphoric Mood</string>
+    <string name="mood_sleep_long">Play Sleep Mood</string>
+    <string name="widget_description">MoodTunes playback controls</string>
+    <string name="widget_open_app">Open MoodTunes</string>
+    <string name="tile_label_playing">Pause MoodTunes</string>
+    <string name="tile_label_paused">Play MoodTunes</string>
+    <string name="cast_device">Casting to %1$s</string>
+    <string name="bluetooth_device">Listening on %1$s</string>
+    <string name="share_song">Share song</string>
 </resources>

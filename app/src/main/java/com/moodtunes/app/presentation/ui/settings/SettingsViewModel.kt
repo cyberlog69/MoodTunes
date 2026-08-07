@@ -1,9 +1,11 @@
 package com.moodtunes.app.presentation.ui.settings
 
 import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.moodtunes.app.BuildConfig
+import com.moodtunes.app.data.local.backup.BackupManager
 import com.moodtunes.app.data.local.preferences.AppUserSettings
 import com.moodtunes.app.data.local.preferences.AudioSourceMode
 import com.moodtunes.app.data.local.preferences.DarkModeOption
@@ -33,7 +35,8 @@ data class SettingsUiState(
 class SettingsViewModel @Inject constructor(
     private val preferencesRepository: UserPreferencesRepository,
     private val updateChecker: UpdateChecker,
-    private val appUpdateManager: AppUpdateManager
+    private val appUpdateManager: AppUpdateManager,
+    private val backupManager: BackupManager
 ) : ViewModel() {
 
     private val _updateState = MutableStateFlow<UpdateCheckResult?>(null)
@@ -42,6 +45,7 @@ class SettingsViewModel @Inject constructor(
     private val _isDownloading = MutableStateFlow(false)
     private val _downloadProgress = MutableStateFlow(0)
     private val _whatsNewVersion = MutableStateFlow<String?>(null)
+    private val _message = MutableStateFlow<String?>(null)
 
     val uiState: StateFlow<SettingsUiState> = combine(
         preferencesRepository.settings,
@@ -50,7 +54,8 @@ class SettingsViewModel @Inject constructor(
         _showUpdateDialog,
         _isDownloading,
         _downloadProgress,
-        _whatsNewVersion
+        _whatsNewVersion,
+        _message
     ) { args: Array<Any?> ->
         val settings = args[0] as AppUserSettings
         val checking = args[1] as Boolean
@@ -59,6 +64,7 @@ class SettingsViewModel @Inject constructor(
         val downloading = args[4] as Boolean
         val progress = args[5] as Int
         val whatsNew = args[6] as String?
+        val message = args[7] as String?
 
         SettingsUiState(
             userSettings = settings,
@@ -67,7 +73,8 @@ class SettingsViewModel @Inject constructor(
             showUpdateDialog = showDialog,
             isDownloading = downloading,
             downloadProgress = progress,
-            whatsNewVersion = whatsNew
+            whatsNewVersion = whatsNew,
+            message = message
         )
     }.stateIn(
         scope = viewModelScope,
@@ -141,6 +148,26 @@ class SettingsViewModel @Inject constructor(
 
     fun dismissUpdateDialog() {
         _showUpdateDialog.value = false
+    }
+
+    // ── Backup & Restore ─────────────────────────────────────────────────────
+    fun exportBackup(uri: Uri) {
+        viewModelScope.launch {
+            val ok = backupManager.exportBackup(uri)
+            _message.value = if (ok) "Backup exported successfully ✅" else "Backup export failed ❌"
+        }
+    }
+
+    fun importBackup(uri: Uri) {
+        viewModelScope.launch {
+            val result = backupManager.importBackup(uri)
+            _message.value =
+                "Imported ${result.favoritesImported} favorites and ${result.playlistsImported} playlists ✅"
+        }
+    }
+
+    fun consumeMessage() {
+        _message.value = null
     }
 
     fun startInAppUpdate(context: Context) {

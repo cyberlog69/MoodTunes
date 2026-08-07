@@ -4,9 +4,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.moodtunes.app.data.local.preferences.UserPreferencesRepository
 import com.moodtunes.app.data.remote.OnlineStreamRepository
+import com.moodtunes.app.domain.model.Playlist
 import com.moodtunes.app.domain.model.Song
+import com.moodtunes.app.domain.usecase.CreatePlaylistUseCase
 import com.moodtunes.app.domain.usecase.GetAllSongsUseCase
 import com.moodtunes.app.domain.usecase.GetFavoriteSongsUseCase
+import com.moodtunes.app.domain.usecase.GetMostPlayedUseCase
+import com.moodtunes.app.domain.usecase.GetPlaylistsUseCase
 import com.moodtunes.app.domain.usecase.ToggleFavoriteUseCase
 import com.moodtunes.app.service.PlaybackManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -15,12 +19,24 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+data class AlbumGroup(
+    val name: String,
+    val artist: String,
+    val songs: List<Song>
+)
+
 data class LibraryUiState(
     val isLoading: Boolean = true,
     val isLoadingOnline: Boolean = false,
     val allSongs: List<Song> = emptyList(),
     val favoriteSongs: List<Song> = emptyList(),
+    val mostPlayed: List<Song> = emptyList(),
     val onlineStreamSongs: List<Song> = emptyList(),
+    val playlists: List<Playlist> = emptyList(),
+    val albums: List<AlbumGroup> = emptyList(),
+    val artists: List<String> = emptyList(),
+    val selectedAlbum: AlbumGroup? = null,
+    val selectedArtist: String? = null,
     val searchQuery: String = "",
     val filteredSongs: List<Song> = emptyList(),
     val selectedTab: LibraryTab = LibraryTab.LOCAL,
@@ -30,15 +46,22 @@ data class LibraryUiState(
 )
 
 enum class LibraryTab(val label: String) {
-    LOCAL("📁 Local Files"),
-    ONLINE_STREAM("🌐 Online Stream"),
-    FAVORITES("❤️ Favorites")
+    LOCAL("📁 Local"),
+    ONLINE_STREAM("🌐 Online"),
+    FAVORITES("❤️ Favorites"),
+    PLAYLISTS("📚 Playlists"),
+    TOP_TRACKS("🔥 Top Tracks"),
+    ALBUMS("💿 Albums"),
+    ARTISTS("🎤 Artists")
 }
 
 @HiltViewModel
 class LibraryViewModel @Inject constructor(
     private val getAllSongsUseCase: GetAllSongsUseCase,
     private val getFavoriteSongsUseCase: GetFavoriteSongsUseCase,
+    private val getMostPlayedUseCase: GetMostPlayedUseCase,
+    private val getPlaylistsUseCase: GetPlaylistsUseCase,
+    private val createPlaylistUseCase: CreatePlaylistUseCase,
     private val toggleFavoriteUseCase: ToggleFavoriteUseCase,
     private val playbackManager: PlaybackManager,
     private val onlineStreamRepository: OnlineStreamRepository,
@@ -67,13 +90,23 @@ class LibraryViewModel @Inject constructor(
         loadSongs()
         observeFavorites()
         observeSearch()
+        observePlaylists()
+        observeMostPlayed()
         loadOnlineStreamSongs()
     }
 
     private fun loadSongs() {
         viewModelScope.launch {
             val songs = getAllSongsUseCase()
-            _uiState.update { it.copy(isLoading = false, allSongs = songs, filteredSongs = songs) }
+            _uiState.update {
+                it.copy(
+                    isLoading = false,
+                    allSongs = songs,
+                    filteredSongs = songs,
+                    albums = groupByAlbum(songs),
+                    artists = groupByArtist(songs)
+                )
+            }
         }
     }
 
@@ -98,6 +131,22 @@ class LibraryViewModel @Inject constructor(
         }
     }
 
+    private fun observeMostPlayed() {
+        viewModelScope.launch {
+            getMostPlayedUseCase(limit = 100).collect { mostPlayed ->
+                _uiState.update { it.copy(mostPlayed = mostPlayed) }
+            }
+        }
+    }
+
+    private fun observePlaylists() {
+        viewModelScope.launch {
+            getPlaylistsUseCase().collect { playlists ->
+                _uiState.update { it.copy(playlists = playlists) }
+            }
+        }
+    }
+
     @OptIn(FlowPreview::class)
     private fun observeSearch() {
         viewModelScope.launch {
@@ -112,10 +161,28 @@ class LibraryViewModel @Inject constructor(
                                 song.artist.contains(query, ignoreCase = true) ||
                                 song.album.contains(query, ignoreCase = true)
                     }
-                    _uiState.update { it.copy(searchQuery = query, filteredSongs = filtered) }
+                    _uiState.update {
+                        it.copy(
+                            searchQuery = query,
+                            filteredSongs = filtered,
+                            albums = groupByAlbum(filtered),
+                            artists = groupByArtist(filtered)
+                        )
+                    }
                 }
         }
     }
+
+    private fun groupByAlbum(songs: List<Song>): List<AlbumGroup> =
+        songs.groupBy { it.album to it.artist }
+            .map { (key, group) -> AlbumGroup(name = key.first, artist = key.second, songs = group) }
+            .sortedBy { it.name.lowercase() }
+
+    private fun groupByArtist(songs: List<Song>): List<String> =
+        songs.map { it.artist }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .sortedBy { it.lowercase() }
 
     fun onSearchQueryChanged(query: String) {
         searchQuery.value = query
@@ -135,13 +202,40 @@ class LibraryViewModel @Inject constructor(
         }
     }
 
-    fun onSongSelected(song: Song) {
-        val displayed = when (_uiState.value.selectedTab) {
-            LibraryTab.LOCAL -> _uiState.value.filteredSongs
-            LibraryTab.ONLINE_STREAM -> _uiState.value.onlineStreamSongs
-            LibraryTab.FAVORITES -> _uiState.value.favoriteSongs
+    fun onAlbumSelected(album: AlbumGroup) {
+        _uiState.update { it.copy(selectedAlbum = album) }
+    }
+
+    fun onArtistSelected(artist: String) {
+        _uiState.update { it.copy(selectedArtist = artist) }
+    }
+
+    fun clearGroupSelection() {
+        _uiState.update { it.copy(selectedAlbum = null, selectedArtist = null) }
+    }
+
+    fun onCreatePlaylist(name: String) {
+        if (name.isBlank()) return
+        viewModelScope.launch {
+            createPlaylistUseCase(name)
         }
-        val index = displayed.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
-        playbackManager.playSongs(displayed, index, mood = null)
+    }
+
+    fun onSongSelected(song: Song) {
+        val state = _uiState.value
+        val group = when (state.selectedTab) {
+            LibraryTab.LOCAL -> state.filteredSongs
+            LibraryTab.ONLINE_STREAM -> state.onlineStreamSongs
+            LibraryTab.FAVORITES -> state.favoriteSongs
+            LibraryTab.ALBUMS -> state.selectedAlbum?.songs ?: state.filteredSongs
+            LibraryTab.ARTISTS -> state.selectedArtist?.let { artist ->
+                state.filteredSongs.filter { it.artist == artist }
+            } ?: state.filteredSongs
+            LibraryTab.TOP_TRACKS -> state.mostPlayed
+            LibraryTab.PLAYLISTS -> emptyList()
+        }
+        if (group.isEmpty()) return
+        val index = group.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
+        playbackManager.playSongs(group, index, mood = null)
     }
 }

@@ -2,6 +2,8 @@ package com.moodtunes.app.presentation.ui.settings
 
 import android.content.Intent
 import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -25,6 +27,8 @@ import com.moodtunes.app.data.local.preferences.DarkModeOption
 import com.moodtunes.app.data.local.preferences.StreamQuality
 import com.moodtunes.app.data.local.preferences.StreamingProvider
 import com.moodtunes.app.presentation.ui.theme.*
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 
 @Composable
 fun SettingsScreen(
@@ -36,6 +40,27 @@ fun SettingsScreen(
     val context = LocalContext.current
 
     var isQualityDropdownExpanded by remember { mutableStateOf(false) }
+
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri: Uri? ->
+        uri?.let(viewModel::exportBackup)
+    }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        uri?.let(viewModel::importBackup)
+    }
+
+    LaunchedEffect(uiState.message) {
+        uiState.message?.let { message ->
+            snackbarHostState.showSnackbar(message)
+            viewModel.consumeMessage()
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -389,7 +414,50 @@ fun SettingsScreen(
                     }
                 }
 
-                // ─── SECTION 5: In-App Update & App Version ─────────────────────
+                // ─── SECTION 5: Backup & Restore ────────────────────────────────
+                SettingsSectionHeader(title = "Backup & Restore", icon = Icons.Rounded.Backup)
+
+                Card(
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(
+                            text = "Export your favorites and playlists as a JSON file, or restore them from a previous backup.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    val date = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"))
+                                    exportLauncher.launch("MoodTunes-Backup-$date.json")
+                                },
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Rounded.Upload, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Export Backup")
+                            }
+                            Button(
+                                onClick = { importLauncher.launch(arrayOf("application/json")) },
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Import Backup")
+                            }
+                        }
+                    }
+                }
+
+                // ─── SECTION 6: In-App Update & App Version ─────────────────────
                 SettingsSectionHeader(title = "App Updates & About", icon = Icons.Rounded.SystemUpdate)
 
                 Card(
@@ -626,6 +694,11 @@ fun SettingsScreen(
                 Spacer(Modifier.height(30.dp))
             }
         }
+
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter)
+        )
     }
 }
 

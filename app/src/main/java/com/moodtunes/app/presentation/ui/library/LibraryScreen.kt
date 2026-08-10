@@ -151,6 +151,7 @@ fun LibraryScreen(
                         text = when (uiState.selectedTab) {
                             LibraryTab.LOCAL -> "${uiState.allSongs.size} offline"
                             LibraryTab.ONLINE_STREAM -> "${uiState.onlineStreamSongs.size} online"
+                            LibraryTab.SERVER -> "${uiState.serverSongs.size} server"
                             LibraryTab.FAVORITES -> "${uiState.favoriteSongs.size} saved"
                             LibraryTab.PLAYLISTS -> "${uiState.playlists.size} lists"
                             LibraryTab.TOP_TRACKS -> "${uiState.mostPlayed.size} tracks"

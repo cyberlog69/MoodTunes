@@ -9,6 +9,7 @@ import com.moodtunes.app.data.local.backup.BackupManager
 import com.moodtunes.app.data.local.preferences.AppUserSettings
 import com.moodtunes.app.data.local.preferences.AudioSourceMode
 import com.moodtunes.app.data.local.preferences.DarkModeOption
+import com.moodtunes.app.data.local.preferences.MusicLanguage
 import com.moodtunes.app.data.local.preferences.StreamQuality
 import com.moodtunes.app.data.local.preferences.StreamingProvider
 import com.moodtunes.app.data.local.preferences.UserPreferencesRepository
@@ -43,51 +44,13 @@ class SettingsViewModel @Inject constructor(
     private val subsonicApiService: SubsonicApiService
 ) : ViewModel() {
 
-    private val _updateState = MutableStateFlow<UpdateCheckResult?>(null)
-    private val _isCheckingUpdate = MutableStateFlow(false)
-    private val _showUpdateDialog = MutableStateFlow(false)
-    private val _isDownloading = MutableStateFlow(false)
-    private val _downloadProgress = MutableStateFlow(0)
-    private val _whatsNewVersion = MutableStateFlow<String?>(null)
-    private val _isTestingNavidrome = MutableStateFlow(false)
-    private val _navidromeTestStatus = MutableStateFlow<String?>(null)
-    private val _message = MutableStateFlow<String?>(null)
+    private val _uiState = MutableStateFlow(SettingsUiState())
 
     val uiState: StateFlow<SettingsUiState> = combine(
-        preferencesRepository.settings,
-        _isCheckingUpdate,
-        _updateState,
-        _showUpdateDialog,
-        _isDownloading,
-        _downloadProgress,
-        _whatsNewVersion,
-        _isTestingNavidrome,
-        _navidromeTestStatus,
-        _message
-    ) { args: Array<Any?> ->
-        val settings = args[0] as AppUserSettings
-        val checking = args[1] as Boolean
-        val updateResult = args[2] as UpdateCheckResult?
-        val showDialog = args[3] as Boolean
-        val downloading = args[4] as Boolean
-        val progress = args[5] as Int
-        val whatsNew = args[6] as String?
-        val isTesting = args[7] as Boolean
-        val testStatus = args[8] as String?
-        val message = args[9] as String?
-
-        SettingsUiState(
-            userSettings = settings,
-            isCheckingUpdate = checking,
-            updateResult = updateResult,
-            showUpdateDialog = showDialog,
-            isDownloading = downloading,
-            downloadProgress = progress,
-            whatsNewVersion = whatsNew,
-            isTestingNavidrome = isTesting,
-            navidromeTestStatus = testStatus,
-            message = message
-        )
+        _uiState,
+        preferencesRepository.settings
+    ) { state, settings ->
+        state.copy(userSettings = settings)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -101,13 +64,13 @@ class SettingsViewModel @Inject constructor(
     private fun checkPostUpdateChangelog() {
         val oldVer = preferencesRepository.checkShouldShowWhatsNew()
         if (oldVer != null) {
-            _whatsNewVersion.value = BuildConfig.VERSION_NAME
+            _uiState.update { it.copy(whatsNewVersion = BuildConfig.VERSION_NAME) }
         }
     }
 
     fun dismissWhatsNewDialog() {
         preferencesRepository.markCurrentVersionSeen()
-        _whatsNewVersion.value = null
+        _uiState.update { it.copy(whatsNewVersion = null) }
     }
 
     fun onDarkModeChanged(option: DarkModeOption) {
@@ -142,46 +105,55 @@ class SettingsViewModel @Inject constructor(
         preferencesRepository.updateStreamingProvider(provider)
     }
 
-    fun onTogglePreferredLanguage(language: com.moodtunes.app.data.local.preferences.MusicLanguage) {
+    fun onTogglePreferredLanguage(language: MusicLanguage) {
         preferencesRepository.togglePreferredLanguage(language)
     }
 
     fun checkForUpdates() {
         viewModelScope.launch {
-            _isCheckingUpdate.value = true
+            _uiState.update { it.copy(isCheckingUpdate = true) }
             val result = updateChecker.checkForUpdates(currentVersion = BuildConfig.VERSION_NAME)
-            _updateState.value = result
-            _isCheckingUpdate.value = false
-            if (result.isUpdateAvailable) {
-                _showUpdateDialog.value = true
+            _uiState.update {
+                it.copy(
+                    isCheckingUpdate = false,
+                    updateResult = result,
+                    showUpdateDialog = result.isUpdateAvailable
+                )
             }
         }
     }
 
     fun dismissUpdateDialog() {
-        _showUpdateDialog.value = false
+        _uiState.update { it.copy(showUpdateDialog = false) }
     }
 
     // ── Backup & Restore ─────────────────────────────────────────────────────
     fun exportBackup(uri: Uri) {
         viewModelScope.launch {
             val ok = backupManager.exportBackup(uri)
-            _message.value = if (ok) "Backup exported successfully ✅" else "Backup export failed ❌"
+            _uiState.update {
+                it.copy(message = if (ok) "Backup exported successfully ✅" else "Backup export failed ❌")
+            }
         }
     }
 
     fun importBackup(uri: Uri) {
         viewModelScope.launch {
             val result = backupManager.importBackup(uri)
-            _message.value =
-                "Imported ${result.favoritesImported} favorites and ${result.playlistsImported} playlists ✅"
+            _uiState.update {
+                it.copy(message = "Imported ${result.favoritesImported} favorites and ${result.playlistsImported} playlists ✅")
+            }
         }
+    }
+
+    fun consumeMessage() {
+        _uiState.update { it.copy(message = null) }
     }
 
     // ── ListenBrainz Controls ────────────────────────────────────────────────
     fun onSaveListenBrainz(token: String, username: String, enabled: Boolean) {
         preferencesRepository.updateListenBrainzConfig(token, username, enabled)
-        _message.value = "ListenBrainz configuration saved ✅"
+        _uiState.update { it.copy(message = "ListenBrainz configuration saved ✅") }
     }
 
     fun onToggleListenBrainzScrobbling(enabled: Boolean) {
@@ -191,7 +163,7 @@ class SettingsViewModel @Inject constructor(
     // ── Navidrome / Subsonic Controls ─────────────────────────────────────────
     fun onSaveNavidrome(serverUrl: String, username: String, password: String, enabled: Boolean) {
         preferencesRepository.updateNavidromeConfig(serverUrl, username, password, enabled)
-        _message.value = "Music server configuration saved ✅"
+        _uiState.update { it.copy(message = "Music server configuration saved ✅") }
     }
 
     fun onToggleNavidrome(enabled: Boolean) {
@@ -200,40 +172,42 @@ class SettingsViewModel @Inject constructor(
 
     fun testNavidromeConnection(serverUrl: String, username: String, password: String) {
         viewModelScope.launch {
-            _isTestingNavidrome.value = true
-            _navidromeTestStatus.value = null
+            _uiState.update { it.copy(isTestingNavidrome = true, navidromeTestStatus = null) }
             val result = subsonicApiService.ping(serverUrl, username, password)
-            _isTestingNavidrome.value = false
-            if (result.isSuccess) {
-                _navidromeTestStatus.value = "Connected to Subsonic Server successfully! ✅"
-            } else {
-                val errorMsg = result.exceptionOrNull()?.localizedMessage ?: "Connection failed"
-                _navidromeTestStatus.value = "Connection failed: $errorMsg ❌"
+            _uiState.update {
+                it.copy(
+                    isTestingNavidrome = false,
+                    navidromeTestStatus = if (result.isSuccess) {
+                        "Connected to Subsonic Server successfully! ✅"
+                    } else {
+                        val errorMsg = result.exceptionOrNull()?.localizedMessage ?: "Connection failed"
+                        "Connection failed: $errorMsg ❌"
+                    }
+                )
             }
         }
     }
 
     fun clearNavidromeTestStatus() {
-        _navidromeTestStatus.value = null
+        _uiState.update { it.copy(navidromeTestStatus = null) }
     }
 
     fun startInAppUpdate(context: Context) {
-        val updateResult = _updateState.value ?: return
+        val updateResult = _uiState.value.updateResult ?: return
         viewModelScope.launch {
-            _isDownloading.value = true
-            _downloadProgress.value = 0
+            _uiState.update { it.copy(isDownloading = true, downloadProgress = 0) }
 
             val apkFile = appUpdateManager.downloadApk(
                 context = context,
                 apkUrl = updateResult.apkDownloadUrl.ifEmpty { updateResult.downloadUrl },
                 onProgress = { progress ->
-                    _downloadProgress.value = progress
+                    _uiState.update { it.copy(downloadProgress = progress) }
                 }
             )
 
-            _isDownloading.value = false
+            _uiState.update { it.copy(isDownloading = false) }
             if (apkFile != null) {
-                _showUpdateDialog.value = false
+                _uiState.update { it.copy(showUpdateDialog = false) }
                 appUpdateManager.installApk(context, apkFile)
             }
         }

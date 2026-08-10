@@ -19,7 +19,7 @@ Designed to deliver an effortless listening experience, MoodTunes curates music 
 ### 🌟 Key Vision & Design Philosophy
 - **Emotion-Driven Curation**: Categorizes music into 6 curated mood profiles using intelligent sentiment and metadata analysis.
 - **Audiophile Grade Quality**: Full support for 24-bit/32-bit float audio output, FLAC Lossless, ALAC Lossless, and WAV Hi-Res formats.
-- **Unrestricted Global Access**: Multi-service streaming aggregator across **Audius Protocol**, **Jamendo (320 kbps)**, **Internet Archive**, **Global Radio Browser (live 24/7)**, **iTunes Previews (30s)**, and **Deezer Charts & Previews** — ensuring zero network blockades and rock-solid reliability.
+- **Unrestricted Global Access**: Multi-service streaming aggregator across **JioSaavn** (16+ Indian regional languages, classical, folk, Bollywood), **Audius Protocol**, **Jamendo (320 kbps)**, **Global Radio Browser (live 24/7)**, **iTunes Previews (30s)**, and **Deezer Charts & Previews** — ensuring zero network blockades and rock-solid reliability.
 - **Reliability First**: 512 MB LRU streaming cache with disk fallback, crash recovery guardian with automatic database backup/restore, and thread-safe playback pipeline.
 - **Privacy & Security First**: Zero tracking, network security HTTPS enforcement, encrypted shared preferences exclusion, and non-exported background services.
 
@@ -31,7 +31,7 @@ Designed to deliver an effortless listening experience, MoodTunes curates music 
 - **🎼 FLAC & ALAC Lossless Support**: Native decoding for FLAC (`.flac`), ALAC (`.m4a`), WAV (`.wav`), AAC, and MP3 formats with 24-bit float high-resolution audio pipeline.
 - **📀 Animated Vinyl Disc Player**: Full-screen player with real-time rotating vinyl disc artwork, seek bar, play/pause, shuffle, repeat, queue, and favorite toggle.
 - **📚 Songs Hub with Local & Online Tabs**: Spotify-style hub separating *Local* device tracks from curated *Online* streams, plus **Favorites** and **Playlists** tabs.
-- **🌐 Multi-Service Online Streaming**: Aggregates global CC-licensed content and previews from **Audius Protocol**, **Jamendo**, **Internet Archive**, **Global Radio Browser**, **iTunes Search API**, and **Deezer API** with metadata enrichment from **MusicBrainz**.
+- **🌐 Multi-Service Online Streaming**: Aggregates full-length tracks, previews, and live streams from **JioSaavn** (on-device DES decryption), **Audius Protocol**, **Jamendo**, **Global Radio Browser**, **iTunes Search API**, and **Deezer API** with metadata enrichment from **MusicBrainz**.
 - **🎤 Spotify-Style Real-Time Synced Lyrics**:
   - Live synced lyrics preview card directly inside the full-screen player.
   - Expanded full-screen view featuring dynamic mood ambient gradients and auto-scrolling synced lines.
@@ -46,7 +46,7 @@ Designed to deliver an effortless listening experience, MoodTunes curates music 
   - **Theme Selection**: Switch between *Follow System*, *Always Dark*, and *Always Light* themes.
   - **Material You Dynamic Colors**: Adapts theme accent colors to your Android system wallpaper (Android 12+ / API 31+).
   - **Audio Source Mode**: Toggle between *Local Device Only*, *Online Streams Only*, or *Both Combined*.
-  - **Streaming Provider Selection**: Select between *All Combined*, *Audius Only*, *Jamendo Only*, *Internet Archive*, *Global Radio*, or *iTunes & Deezer Previews*.
+  - **Streaming Provider Selection**: Select between *All Combined*, *JioSaavn Regional & Traditional*, *Audius Only*, *Jamendo Only*, *Global Radio*, or *iTunes & Deezer Previews*.
   - **Audio Stream Quality**: Choose between *FLAC 24-bit Lossless*, *320 kbps High*, *128 kbps Standard*, or *Adaptive (Auto)*.
   - **Network & Data Controls**: Enforce *Wi-Fi Only Streaming*, *Wi-Fi Only Downloads*, or allow *High Quality over Mobile Data*.
   - **In-App Update Engine**: Checks GitHub Releases for new updates, downloads the APK in-app, launches the package installer, and shows a post-update changelog.

@@ -570,9 +570,9 @@ private fun EmptyQueryContent(
     onSuggestedClick: (String) -> Unit
 ) {
     val trendingVibes = listOf(
-        "Bollywood", "Lo-Fi Beats", "Acoustic Chill", "Punjabi Pop",
-        "Tamil Hits", "Telugu Beats", "Rock Anthem", "EDM Dance",
-        "Deep Sleep", "Workout Energy", "Instrumental Piano", "Global Radio"
+        "Bollywood", "Carnatic & Ragas", "Punjabi Pop", "Tamil Hits",
+        "Telugu Beats", "Sufi & Ghazal", "Malayalam Folk", "Bengali Melodies",
+        "Lo-Fi Beats", "Acoustic Chill", "Rock Anthem", "Global Radio"
     )
 
     Column(

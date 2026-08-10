@@ -182,6 +182,14 @@ class MediaStoreRepository @Inject constructor(
                     e.printStackTrace()
                 }
             }
+            StreamingProvider.JIOSAAVN_REGIONAL -> {
+                try {
+                    val saavnTracks = onlineStreamRepository.getJioSaavnTracksByMood(mood, settings.preferredLanguage, limit = 16)
+                    resultList.addAll(saavnTracks)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
             StreamingProvider.AUDIUS_ONLY -> {
                 try {
                     val audiusTracks = onlineStreamRepository.getAudiusTracksByMood(mood, settings.preferredLanguage, limit = 10)

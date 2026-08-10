@@ -30,6 +30,7 @@ enum class AudioSourceMode(val displayName: String) {
 
 enum class StreamingProvider(val displayName: String) {
     ALL_COMBINED("🌟 All Services Combined (Recommended)"),
+    JIOSAAVN_REGIONAL("🇮🇳 JioSaavn Regional & Traditional"),
     AUDIUS_ONLY("🎵 Audius Only"),
     ITUNES_DEEZER("🍏 iTunes & Deezer Previews"),
     JAMENDO_ONLY("🎸 Jamendo Indie Only"),

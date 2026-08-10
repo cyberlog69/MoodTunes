@@ -19,25 +19,22 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import com.moodtunes.app.data.remote.api.iTunesApiService
 import com.moodtunes.app.data.remote.api.DeezerApiService
+import com.moodtunes.app.data.remote.api.JioSaavnApiService
 
 /**
- * Handles global & Indian ISP (Jio, Airtel, Vi, BSNL, ACT) ultra-low-latency music streaming
+ * Handles global & Indian regional/traditional ultra-low-latency music streaming
  * using parallel host failover pools across:
+ *   - JioSaavn (16+ Indian regional languages, classical, folk, Bollywood)
  *   - Audius Protocol (decentralized royalty-free music)
  *   - Jamendo (Creative Commons 320kbps MP3s)
- *   - Internet Archive (millions of free/open-license audio files)
  *   - Radio Browser (35,000+ live global internet radio stations)
- *
- * Security:
- * - COPYRIGHT FIX (C3): Uses honest MoodTunes User-Agent — no browser impersonation.
- * - SECURITY FIX (S4): All resolved stream URLs are validated for https:// scheme before use.
- * - SECURITY FIX (S8): @Volatile on activeAudiusHost prevents thread-safety race conditions.
- * - SECURITY FIX (S10): No printStackTrace() in production; debug logging only.
+ *   - iTunes & Deezer Previews
  */
 @Singleton
 class OnlineStreamRepository @Inject constructor(
     private val iTunesApi: iTunesApiService,
-    private val deezerApi: DeezerApiService
+    private val deezerApi: DeezerApiService,
+    private val jioSaavnApi: JioSaavnApiService
 ) {
 
     private val client = OkHttpClient.Builder()
@@ -185,22 +182,25 @@ class OnlineStreamRepository @Inject constructor(
 
 
 
-    /** Parallel fetching of Audius, Internet Archive, iTunes, and Deezer online tracks for a mood and language */
+    /** Parallel fetching of JioSaavn, Audius, iTunes, and Deezer online tracks for a mood and language */
     suspend fun fetchAllOnlineTracksForMood(
         mood: MoodType,
         language: com.moodtunes.app.data.local.preferences.MusicLanguage = com.moodtunes.app.data.local.preferences.MusicLanguage.ALL
     ): List<Song> = coroutineScope {
+        val saavnDeferred = async {
+            val langPrefix = if (language != com.moodtunes.app.data.local.preferences.MusicLanguage.ALL) language.searchQueryPrefix else ""
+            runCatching { jioSaavnApi.getSongsByMood(mood, langPrefix, limit = 12) }.getOrDefault(emptyList())
+        }
         val audiusDeferred = async { runCatching { getAudiusTracksByMood(mood, language) }.getOrDefault(emptyList()) }
-        val archiveDeferred = async { runCatching { getInternetArchiveTracksByMood(mood, language) }.getOrDefault(emptyList()) }
         val iTunesDeferred = async { runCatching { iTunesApi.searchTracks("${mood.displayName} music", 6) }.getOrDefault(emptyList()) }
         val deezerDeferred = async { runCatching { deezerApi.searchTracks("${mood.displayName} music", 6) }.getOrDefault(emptyList()) }
 
+        val saavnResult = saavnDeferred.await()
         val audiusResult = audiusDeferred.await()
-        val archiveResult = archiveDeferred.await()
         val iTunesResult = iTunesDeferred.await()
         val deezerResult = deezerDeferred.await()
 
-        (audiusResult + archiveResult + iTunesResult + deezerResult).distinctBy { it.id }
+        (saavnResult + audiusResult + iTunesResult + deezerResult).distinctBy { it.id }
     }
 
     /**
@@ -299,139 +299,36 @@ class OnlineStreamRepository @Inject constructor(
     }
 
     /**
-     * NEW: Searches the Internet Archive (archive.org) for free/open-license audio.
-     * Contains millions of songs: folk, classical, jazz, indie, world music.
-     * Completely free with no API key required.
+     * Searches JioSaavn for full-length Indian regional (Tamil, Telugu, Hindi, Punjabi, Malayalam,
+     * Kannada, Bhojpuri, Bengali, Marathi, Gujarati), traditional, classical, and Bollywood tracks.
      */
-    suspend fun getInternetArchiveTracksByMood(
+    suspend fun getJioSaavnTracksByMood(
         mood: MoodType,
         language: com.moodtunes.app.data.local.preferences.MusicLanguage = com.moodtunes.app.data.local.preferences.MusicLanguage.ALL,
-        limit: Int = 8
+        limit: Int = 14
     ): List<Song> = withContext(Dispatchers.IO) {
-        val songs = mutableListOf<Song>()
-        val langPrefix = if (language != com.moodtunes.app.data.local.preferences.MusicLanguage.ALL) "${language.searchQueryPrefix} " else ""
-        val keyword = mood.keywords.firstOrNull() ?: mood.displayName
-        val query = "$langPrefix$keyword music"
-
-        try {
-            val encodedQuery = Uri.encode("$query AND mediatype:audio AND format:MP3")
-            val url = "https://archive.org/advancedsearch.php" +
-                "?q=$encodedQuery" +
-                "&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator&fl%5B%5D=description" +
-                "&rows=$limit&page=1&output=json&sort%5B%5D=downloads+desc"
-
-            val request = Request.Builder()
-                .url(url)
-                .header("User-Agent", USER_AGENT)
-                .build()
-
-            client.newCall(request).execute().use { response ->
-                if (response.isSuccessful) {
-                    val body = response.body?.string() ?: return@withContext emptyList()
-                    val json = JSONObject(body)
-                    val responseObj = json.optJSONObject("response") ?: return@withContext emptyList()
-                    val docs = responseObj.optJSONArray("docs") ?: JSONArray()
-
-                    for (i in 0 until docs.length()) {
-                        val doc = docs.getJSONObject(i)
-                        val identifier = doc.optString("identifier", "")
-                        val title = doc.optString("title", "Archive Audio")
-                        val creator = doc.optString("creator", "Internet Archive")
-
-                        if (identifier.isNotEmpty()) {
-                            // Stream URL for archive.org (direct MP3)
-                            val streamUrl = "https://archive.org/download/$identifier/$identifier.mp3"
-                            val artUrl = "https://archive.org/services/img/$identifier"
-
-                            songs.add(
-                                Song(
-                                    id = identifier.hashCode().toLong() and 0x7FFFFFFF,
-                                    title = title,
-                                    artist = creator,
-                                    album = "🌐 Internet Archive",
-                                    duration = 0L,
-                                    uri = Uri.parse(streamUrl),
-                                    albumArtUri = Uri.parse(artUrl),
-                                    genre = mood.displayName,
-                                    audioFormat = AudioFormat.STREAM,
-                                    isStream = true,
-                                    moodTags = listOf(mood)
-                                )
-                            )
-                        }
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Timber.w(e, "Internet Archive search failed for mood ${mood.displayName}")
-        }
-        songs
+        val langPrefix = if (language != com.moodtunes.app.data.local.preferences.MusicLanguage.ALL) language.searchQueryPrefix else ""
+        runCatching { jioSaavnApi.getSongsByMood(mood, langPrefix, limit) }.getOrDefault(emptyList())
     }
 
     /**
-     * NEW: General Internet Archive search for the Songs Hub.
+     * Searches JioSaavn for trending regional, classical, and traditional songs.
      */
-    suspend fun getInternetArchiveTracks(
+    suspend fun getJioSaavnTracks(
         languages: Set<com.moodtunes.app.data.local.preferences.MusicLanguage> = setOf(com.moodtunes.app.data.local.preferences.MusicLanguage.ALL),
         categoryQuery: String = "Top Hits",
-        limit: Int = 10
+        limit: Int = 16
     ): List<Song> = withContext(Dispatchers.IO) {
-        val songs = mutableListOf<Song>()
         val selectedLangs = languages.filter { it != com.moodtunes.app.data.local.preferences.MusicLanguage.ALL }
-        val langPrefix = if (selectedLangs.isNotEmpty()) selectedLangs.first().searchQueryPrefix + " " else ""
-        val query = "$langPrefix$categoryQuery"
+        val lang = if (selectedLangs.isNotEmpty()) selectedLangs.first().displayName else ""
+        runCatching { jioSaavnApi.getRegionalTracks(lang, categoryQuery, limit) }.getOrDefault(emptyList())
+    }
 
-        try {
-            val encodedQuery = Uri.encode("$query AND mediatype:audio AND format:MP3")
-            val url = "https://archive.org/advancedsearch.php" +
-                "?q=$encodedQuery" +
-                "&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator" +
-                "&rows=$limit&page=1&output=json&sort%5B%5D=downloads+desc"
-
-            val request = Request.Builder()
-                .url(url)
-                .header("User-Agent", USER_AGENT)
-                .build()
-
-            client.newCall(request).execute().use { response ->
-                if (response.isSuccessful) {
-                    val body = response.body?.string() ?: return@withContext emptyList()
-                    val json = JSONObject(body)
-                    val responseObj = json.optJSONObject("response") ?: return@withContext emptyList()
-                    val docs = responseObj.optJSONArray("docs") ?: JSONArray()
-
-                    for (i in 0 until docs.length()) {
-                        val doc = docs.getJSONObject(i)
-                        val identifier = doc.optString("identifier", "")
-                        val title = doc.optString("title", "Archive Audio")
-                        val creator = doc.optString("creator", "Internet Archive")
-
-                        if (identifier.isNotEmpty()) {
-                            val streamUrl = "https://archive.org/download/$identifier/$identifier.mp3"
-                            val artUrl = "https://archive.org/services/img/$identifier"
-
-                            songs.add(
-                                Song(
-                                    id = identifier.hashCode().toLong() and 0x7FFFFFFF,
-                                    title = title,
-                                    artist = creator,
-                                    album = "🌐 Internet Archive",
-                                    duration = 0L,
-                                    uri = Uri.parse(streamUrl),
-                                    albumArtUri = Uri.parse(artUrl),
-                                    genre = categoryQuery,
-                                    audioFormat = AudioFormat.STREAM,
-                                    isStream = true
-                                )
-                            )
-                        }
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Timber.w(e, "Internet Archive general search failed: $categoryQuery")
-        }
-        songs
+    /**
+     * Direct song search on JioSaavn.
+     */
+    suspend fun searchJioSaavn(query: String, limit: Int = 20): List<Song> = withContext(Dispatchers.IO) {
+        runCatching { jioSaavnApi.searchSongs(query, limit) }.getOrDefault(emptyList())
     }
 
     /**
@@ -523,8 +420,8 @@ class OnlineStreamRepository @Inject constructor(
             return@coroutineScope getGlobalInternetRadioStations(languages, categoryQuery, limit)
         }
 
+        val saavnDeferred = async { runCatching { getJioSaavnTracks(languages, categoryQuery, limit = 10) }.getOrDefault(emptyList()) }
         val jamendoDeferred = async { runCatching { getJamendoTracks(languages, categoryQuery, limit = 8) }.getOrDefault(emptyList()) }
-        val archiveDeferred = async { runCatching { getInternetArchiveTracks(languages, categoryQuery, limit = 8) }.getOrDefault(emptyList()) }
         val radioDeferred = async { runCatching { getGlobalInternetRadioStations(languages, categoryQuery, limit = 5) }.getOrDefault(emptyList()) }
         val iTunesDeferred = async { runCatching { iTunesApi.searchTracks(categoryQuery, limit = 6) }.getOrDefault(emptyList()) }
         val deezerDeferred = async { runCatching { deezerApi.searchTracks(categoryQuery, limit = 6) }.getOrDefault(emptyList()) }
@@ -587,13 +484,13 @@ class OnlineStreamRepository @Inject constructor(
             // Piped (YouTube) has been removed
         }
 
+        val saavnTracks = saavnDeferred.await()
         val jamendoTracks = jamendoDeferred.await()
-        val archiveTracks = archiveDeferred.await()
         val radioStations = radioDeferred.await()
         val iTunesTracks = iTunesDeferred.await()
         val deezerTracks = deezerDeferred.await()
 
-        (songs + jamendoTracks + archiveTracks + radioStations + iTunesTracks + deezerTracks).distinctBy { it.id }
+        (saavnTracks + songs + jamendoTracks + radioStations + iTunesTracks + deezerTracks).distinctBy { it.id }
     }
 
     /**

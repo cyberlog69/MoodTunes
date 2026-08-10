@@ -169,7 +169,7 @@ class JioSaavnApiService @Inject constructor() {
             uri = Uri.parse(highQualityStreamUrl),
             albumArtUri = highResImage?.let { Uri.parse(it) },
             genre = genreTag,
-            audioFormat = AudioFormat.AAC,
+            audioFormat = AudioFormat.AAC_HQ,
             isStream = true,
             isPreview = false
         )

@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.moodtunes.app.data.local.preferences.MusicLanguage
 import com.moodtunes.app.data.local.preferences.UserPreferencesRepository
 import com.moodtunes.app.data.remote.OnlineStreamRepository
+import com.moodtunes.app.data.remote.api.SubsonicApiService
 import com.moodtunes.app.domain.model.Playlist
 import com.moodtunes.app.domain.model.Song
 import com.moodtunes.app.domain.repository.IMusicRepository
@@ -15,6 +16,8 @@ import com.moodtunes.app.domain.usecase.ToggleFavoriteUseCase
 import com.moodtunes.app.service.PlaybackManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -65,6 +68,7 @@ class SearchViewModel @Inject constructor(
     private val musicRepository: IMusicRepository,
     private val playlistRepository: IPlaylistRepository,
     private val onlineStreamRepository: OnlineStreamRepository,
+    private val subsonicApiService: SubsonicApiService,
     private val userPreferencesRepository: UserPreferencesRepository,
     private val playbackManager: PlaybackManager,
     private val toggleFavoriteUseCase: ToggleFavoriteUseCase,
@@ -193,14 +197,36 @@ class SearchViewModel @Inject constructor(
         _matchedPlaylists.value = matchedPlaylists
     }
 
-    private suspend fun performOnlineSearch(query: String) {
-        val preferredLangs = userPreferencesRepository.settings.value.preferredLanguages
-        val songs = onlineStreamRepository.getGeneralTrendingSongs(
-            languages = preferredLangs,
-            categoryQuery = query,
-            limit = 16
-        )
-        _onlineSongs.value = songs
+    private suspend fun performOnlineSearch(query: String) = coroutineScope {
+        val settings = userPreferencesRepository.settings.value
+        val preferredLangs = settings.preferredLanguages
+
+        val onlineDeferred = async {
+            onlineStreamRepository.getGeneralTrendingSongs(
+                languages = preferredLangs,
+                categoryQuery = query,
+                limit = 16
+            )
+        }
+
+        val serverDeferred = async {
+            if (settings.isNavidromeEnabled && settings.navidromeServerUrl.isNotBlank()) {
+                subsonicApiService.search(
+                    serverUrl = settings.navidromeServerUrl,
+                    username = settings.navidromeUsername,
+                    password = settings.navidromePassword,
+                    query = query,
+                    limit = 10
+                )
+            } else {
+                emptyList()
+            }
+        }
+
+        val onlineSongs = onlineDeferred.await()
+        val serverSongs = serverDeferred.await()
+
+        _onlineSongs.value = (serverSongs + onlineSongs).distinctBy { it.id }
     }
 
     fun onFilterSelected(filter: SearchFilter) {

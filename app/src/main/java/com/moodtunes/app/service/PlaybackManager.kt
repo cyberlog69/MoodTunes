@@ -15,7 +15,9 @@ import com.moodtunes.app.data.local.db.dao.MoodHistoryDao
 import com.moodtunes.app.data.local.db.dao.SongDao
 import com.moodtunes.app.data.local.db.entity.MoodHistoryEntity
 import com.moodtunes.app.data.local.preferences.PlaybackPreferencesRepository
+import com.moodtunes.app.data.local.preferences.UserPreferencesRepository
 import com.moodtunes.app.data.remote.OnlineStreamRepository
+import com.moodtunes.app.data.remote.api.ListenBrainzService
 import com.moodtunes.app.domain.model.MoodType
 import com.moodtunes.app.domain.model.Song
 import com.moodtunes.app.platform.ConnectivityMonitor
@@ -34,6 +36,8 @@ class PlaybackManager @Inject constructor(
     private val onlineStreamRepository: OnlineStreamRepository,
     private val audioEffectsManager: AudioEffectsManager,
     private val playbackPreferencesRepository: PlaybackPreferencesRepository,
+    private val userPreferencesRepository: UserPreferencesRepository,
+    private val listenBrainzService: ListenBrainzService,
     private val songDao: SongDao,
     private val moodHistoryDao: MoodHistoryDao,
     private val connectivityMonitor: ConnectivityMonitor
@@ -41,6 +45,7 @@ class PlaybackManager @Inject constructor(
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     private var mediaController: MediaController? = null
+    private var currentSongScrobbled = false
 
     init {
         connectivityMonitor.register()
@@ -504,12 +509,21 @@ class PlaybackManager @Inject constructor(
             }
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                currentSongScrobbled = false
                 val index = controller.currentMediaItemIndex
                 val current = _playlist.value.getOrNull(index)
                 if (current != null) {
                     _currentSong.value = current
                     // Record the listen for Discovery/Personalization.
                     recordPlay(current, reason)
+
+                    // Broadcast "playing_now" to ListenBrainz if enabled
+                    val prefs = userPreferencesRepository.settings.value
+                    if (prefs.isListenBrainzScrobblingEnabled && prefs.listenBrainzToken.isNotBlank()) {
+                        scope.launch {
+                            listenBrainzService.submitPlayingNow(prefs.listenBrainzToken, current)
+                        }
+                    }
                 }
                 _durationMs.value = controller.duration.coerceAtLeast(0L)
                 if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED) {
@@ -630,6 +644,23 @@ class PlaybackManager @Inject constructor(
                         session.listenedMs += now - lastTickMs
                     }
                 }
+
+                // Check and trigger ListenBrainz scrobble if threshold (50% or 4 min) is met
+                val prefs = userPreferencesRepository.settings.value
+                if (!currentSongScrobbled && prefs.isListenBrainzScrobblingEnabled && prefs.listenBrainzToken.isNotBlank()) {
+                    val duration = _durationMs.value
+                    val pos = _currentPositionMs.value
+                    val threshold = if (duration > 0) minOf(duration / 2, 240_000L) else 30_000L
+                    if (pos >= threshold && pos >= 10_000L) {
+                        currentSongScrobbled = true
+                        _currentSong.value?.let { songToScrobble ->
+                            scope.launch {
+                                listenBrainzService.submitListen(prefs.listenBrainzToken, songToScrobble)
+                            }
+                        }
+                    }
+                }
+
                 lastTickMs = now
                 delay(500)
             }

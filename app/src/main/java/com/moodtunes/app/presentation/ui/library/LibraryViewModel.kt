@@ -13,7 +13,7 @@ import com.moodtunes.app.domain.usecase.GetFavoriteSongsUseCase
 import com.moodtunes.app.domain.usecase.GetMostPlayedUseCase
 import com.moodtunes.app.domain.usecase.GetPlaylistsUseCase
 import com.moodtunes.app.domain.usecase.ToggleFavoriteUseCase
-import com.moodtunes.app.service.PlaybackManager
+import com.moodtunes.app.data.remote.api.SubsonicApiService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.*
@@ -29,10 +29,13 @@ data class AlbumGroup(
 data class LibraryUiState(
     val isLoading: Boolean = true,
     val isLoadingOnline: Boolean = false,
+    val isLoadingServer: Boolean = false,
     val allSongs: List<Song> = emptyList(),
     val favoriteSongs: List<Song> = emptyList(),
     val mostPlayed: List<Song> = emptyList(),
     val onlineStreamSongs: List<Song> = emptyList(),
+    val serverSongs: List<Song> = emptyList(),
+    val serverError: String? = null,
     val playlists: List<Playlist> = emptyList(),
     val albums: List<AlbumGroup> = emptyList(),
     val artists: List<String> = emptyList(),
@@ -49,6 +52,7 @@ data class LibraryUiState(
 enum class LibraryTab(val label: String) {
     LOCAL("📁 Local"),
     ONLINE_STREAM("🌐 Online"),
+    SERVER("🏠 Server"),
     FAVORITES("❤️ Favorites"),
     PLAYLISTS("📚 Playlists"),
     TOP_TRACKS("🔥 Top Tracks"),
@@ -67,6 +71,7 @@ class LibraryViewModel @Inject constructor(
     private val toggleFavoriteUseCase: ToggleFavoriteUseCase,
     private val playbackManager: PlaybackManager,
     private val onlineStreamRepository: OnlineStreamRepository,
+    private val subsonicApiService: SubsonicApiService,
     private val userPreferencesRepository: UserPreferencesRepository
 ) : ViewModel() {
 
@@ -194,6 +199,49 @@ class LibraryViewModel @Inject constructor(
         _uiState.update { it.copy(selectedTab = tab) }
         if (tab == LibraryTab.ONLINE_STREAM && _uiState.value.onlineStreamSongs.isEmpty()) {
             loadOnlineStreamSongs()
+        } else if (tab == LibraryTab.SERVER && _uiState.value.serverSongs.isEmpty()) {
+            loadServerSongs()
+        }
+    }
+
+    fun loadServerSongs() {
+        val settings = userPreferencesRepository.settings.value
+        if (!settings.isNavidromeEnabled || settings.navidromeServerUrl.isBlank()) {
+            _uiState.update {
+                it.copy(
+                    isLoadingServer = false,
+                    serverSongs = emptyList(),
+                    serverError = "Personal server is not configured. Go to Settings > Self-Hosted Music Server to connect."
+                )
+            }
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoadingServer = true, serverError = null) }
+            try {
+                val songs = subsonicApiService.getRandomSongs(
+                    serverUrl = settings.navidromeServerUrl,
+                    username = settings.navidromeUsername,
+                    password = settings.navidromePassword,
+                    size = 50
+                )
+                _uiState.update {
+                    it.copy(
+                        isLoadingServer = false,
+                        serverSongs = songs,
+                        serverError = if (songs.isEmpty()) "No tracks found on your server." else null
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isLoadingServer = false,
+                        serverSongs = emptyList(),
+                        serverError = "Failed to connect to server: ${e.localizedMessage}"
+                    )
+                }
+            }
         }
     }
 
@@ -245,6 +293,7 @@ class LibraryViewModel @Inject constructor(
         val group = when (state.selectedTab) {
             LibraryTab.LOCAL -> state.filteredSongs
             LibraryTab.ONLINE_STREAM -> state.onlineStreamSongs
+            LibraryTab.SERVER -> state.serverSongs
             LibraryTab.FAVORITES -> state.favoriteSongs
             LibraryTab.ALBUMS -> state.selectedAlbum?.songs ?: state.filteredSongs
             LibraryTab.ARTISTS -> state.selectedArtist?.let { artist ->

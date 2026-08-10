@@ -15,6 +15,7 @@ import com.moodtunes.app.data.local.preferences.UserPreferencesRepository
 import com.moodtunes.app.data.remote.AppUpdateManager
 import com.moodtunes.app.data.remote.UpdateCheckResult
 import com.moodtunes.app.data.remote.UpdateChecker
+import com.moodtunes.app.data.remote.api.SubsonicApiService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -28,6 +29,8 @@ data class SettingsUiState(
     val isDownloading: Boolean = false,
     val downloadProgress: Int = 0,
     val whatsNewVersion: String? = null,
+    val isTestingNavidrome: Boolean = false,
+    val navidromeTestStatus: String? = null,
     val message: String? = null
 )
 
@@ -36,7 +39,8 @@ class SettingsViewModel @Inject constructor(
     private val preferencesRepository: UserPreferencesRepository,
     private val updateChecker: UpdateChecker,
     private val appUpdateManager: AppUpdateManager,
-    private val backupManager: BackupManager
+    private val backupManager: BackupManager,
+    private val subsonicApiService: SubsonicApiService
 ) : ViewModel() {
 
     private val _updateState = MutableStateFlow<UpdateCheckResult?>(null)
@@ -45,6 +49,8 @@ class SettingsViewModel @Inject constructor(
     private val _isDownloading = MutableStateFlow(false)
     private val _downloadProgress = MutableStateFlow(0)
     private val _whatsNewVersion = MutableStateFlow<String?>(null)
+    private val _isTestingNavidrome = MutableStateFlow(false)
+    private val _navidromeTestStatus = MutableStateFlow<String?>(null)
     private val _message = MutableStateFlow<String?>(null)
 
     val uiState: StateFlow<SettingsUiState> = combine(
@@ -55,6 +61,8 @@ class SettingsViewModel @Inject constructor(
         _isDownloading,
         _downloadProgress,
         _whatsNewVersion,
+        _isTestingNavidrome,
+        _navidromeTestStatus,
         _message
     ) { args: Array<Any?> ->
         val settings = args[0] as AppUserSettings
@@ -64,7 +72,9 @@ class SettingsViewModel @Inject constructor(
         val downloading = args[4] as Boolean
         val progress = args[5] as Int
         val whatsNew = args[6] as String?
-        val message = args[7] as String?
+        val isTesting = args[7] as Boolean
+        val testStatus = args[8] as String?
+        val message = args[9] as String?
 
         SettingsUiState(
             userSettings = settings,
@@ -74,6 +84,8 @@ class SettingsViewModel @Inject constructor(
             isDownloading = downloading,
             downloadProgress = progress,
             whatsNewVersion = whatsNew,
+            isTestingNavidrome = isTesting,
+            navidromeTestStatus = testStatus,
             message = message
         )
     }.stateIn(
@@ -166,8 +178,43 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun consumeMessage() {
-        _message.value = null
+    // ── ListenBrainz Controls ────────────────────────────────────────────────
+    fun onSaveListenBrainz(token: String, username: String, enabled: Boolean) {
+        preferencesRepository.updateListenBrainzConfig(token, username, enabled)
+        _message.value = "ListenBrainz configuration saved ✅"
+    }
+
+    fun onToggleListenBrainzScrobbling(enabled: Boolean) {
+        preferencesRepository.updateListenBrainzScrobbling(enabled)
+    }
+
+    // ── Navidrome / Subsonic Controls ─────────────────────────────────────────
+    fun onSaveNavidrome(serverUrl: String, username: String, password: String, enabled: Boolean) {
+        preferencesRepository.updateNavidromeConfig(serverUrl, username, password, enabled)
+        _message.value = "Music server configuration saved ✅"
+    }
+
+    fun onToggleNavidrome(enabled: Boolean) {
+        preferencesRepository.updateNavidromeEnabled(enabled)
+    }
+
+    fun testNavidromeConnection(serverUrl: String, username: String, password: String) {
+        viewModelScope.launch {
+            _isTestingNavidrome.value = true
+            _navidromeTestStatus.value = null
+            val result = subsonicApiService.ping(serverUrl, username, password)
+            _isTestingNavidrome.value = false
+            if (result.isSuccess) {
+                _navidromeTestStatus.value = "Connected to Subsonic Server successfully! ✅"
+            } else {
+                val errorMsg = result.exceptionOrNull()?.localizedMessage ?: "Connection failed"
+                _navidromeTestStatus.value = "Connection failed: $errorMsg ❌"
+            }
+        }
+    }
+
+    fun clearNavidromeTestStatus() {
+        _navidromeTestStatus.value = null
     }
 
     fun startInAppUpdate(context: Context) {

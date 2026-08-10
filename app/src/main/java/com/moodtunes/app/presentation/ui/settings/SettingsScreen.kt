@@ -41,6 +41,13 @@ fun SettingsScreen(
 
     var isQualityDropdownExpanded by remember { mutableStateOf(false) }
 
+    var listenBrainzToken by remember(settings.listenBrainzToken) { mutableStateOf(settings.listenBrainzToken) }
+    var listenBrainzUser by remember(settings.listenBrainzUsername) { mutableStateOf(settings.listenBrainzUsername) }
+
+    var navidromeUrl by remember(settings.navidromeServerUrl) { mutableStateOf(settings.navidromeServerUrl) }
+    var navidromeUser by remember(settings.navidromeUsername) { mutableStateOf(settings.navidromeUsername) }
+    var navidromePass by remember(settings.navidromePassword) { mutableStateOf(settings.navidromePassword) }
+
     val snackbarHostState = remember { SnackbarHostState() }
 
     val exportLauncher = rememberLauncherForActivityResult(
@@ -414,7 +421,217 @@ fun SettingsScreen(
                     }
                 }
 
-                // ─── SECTION 5: Backup & Restore ────────────────────────────────
+                // ─── SECTION 5: 🧠 ListenBrainz Scrobbler & Stats ──────────────────
+                SettingsSectionHeader(title = "ListenBrainz Scrobbler", icon = Icons.Rounded.GraphicEq)
+
+                Card(
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Auto-Scrobble Music", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
+                                Text("Automatically log played tracks to your open-source ListenBrainz profile", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Switch(
+                                checked = settings.isListenBrainzScrobblingEnabled,
+                                onCheckedChange = viewModel::onToggleListenBrainzScrobbling,
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                                    checkedTrackColor = MaterialTheme.colorScheme.primary
+                                )
+                            )
+                        }
+
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                        OutlinedTextField(
+                            value = listenBrainzToken,
+                            onValueChange = { listenBrainzToken = it },
+                            label = { Text("User Token") },
+                            placeholder = { Text("Paste your ListenBrainz User Token") },
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        OutlinedTextField(
+                            value = listenBrainzUser,
+                            onValueChange = { listenBrainzUser = it },
+                            label = { Text("Username") },
+                            placeholder = { Text("Your ListenBrainz handle") },
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://listenbrainz.org/settings/"))
+                                    context.startActivity(intent)
+                                },
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Get Token", style = MaterialTheme.typography.labelMedium)
+                            }
+
+                            Button(
+                                onClick = {
+                                    viewModel.onSaveListenBrainz(
+                                        token = listenBrainzToken,
+                                        username = listenBrainzUser,
+                                        enabled = settings.isListenBrainzScrobblingEnabled || listenBrainzToken.isNotBlank()
+                                    )
+                                },
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Rounded.Save, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Save Token", style = MaterialTheme.typography.labelMedium)
+                            }
+                        }
+                    }
+                }
+
+                // ─── SECTION 6: 🏠 Self-Hosted Server (Navidrome / Subsonic) ────────
+                SettingsSectionHeader(title = "Self-Hosted Music Server", icon = Icons.Rounded.CloudQueue)
+
+                Card(
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Enable Personal Server", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
+                                Text("Stream your legally owned FLAC/ALAC lossless library (Navidrome, Airsonic, Gonic, Jellyfin)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Switch(
+                                checked = settings.isNavidromeEnabled,
+                                onCheckedChange = viewModel::onToggleNavidrome,
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                                    checkedTrackColor = MaterialTheme.colorScheme.primary
+                                )
+                            )
+                        }
+
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                        OutlinedTextField(
+                            value = navidromeUrl,
+                            onValueChange = { navidromeUrl = it },
+                            label = { Text("Server URL") },
+                            placeholder = { Text("https://music.yourdomain.com") },
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        OutlinedTextField(
+                            value = navidromeUser,
+                            onValueChange = { navidromeUser = it },
+                            label = { Text("Username") },
+                            placeholder = { Text("Server username") },
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        OutlinedTextField(
+                            value = navidromePass,
+                            onValueChange = { navidromePass = it },
+                            label = { Text("Password or App Token") },
+                            placeholder = { Text("Server password") },
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        if (uiState.navidromeTestStatus != null) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = if (uiState.navidromeTestStatus?.contains("✅") == true)
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                else MaterialTheme.colorScheme.error.copy(alpha = 0.15f),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = uiState.navidromeTestStatus ?: "",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (uiState.navidromeTestStatus?.contains("✅") == true)
+                                        MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.padding(10.dp)
+                                )
+                            }
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    viewModel.testNavidromeConnection(
+                                        serverUrl = navidromeUrl,
+                                        username = navidromeUser,
+                                        password = navidromePass
+                                    )
+                                },
+                                enabled = !uiState.isTestingNavidrome && navidromeUrl.isNotBlank() && navidromeUser.isNotBlank(),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                if (uiState.isTestingNavidrome) {
+                                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                } else {
+                                    Icon(Icons.Rounded.WifiTethering, contentDescription = null, modifier = Modifier.size(16.dp))
+                                }
+                                Spacer(Modifier.width(6.dp))
+                                Text("Test Server", style = MaterialTheme.typography.labelMedium)
+                            }
+
+                            Button(
+                                onClick = {
+                                    viewModel.onSaveNavidrome(
+                                        serverUrl = navidromeUrl,
+                                        username = navidromeUser,
+                                        password = navidromePass,
+                                        enabled = true
+                                    )
+                                },
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Rounded.Save, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Save Server", style = MaterialTheme.typography.labelMedium)
+                            }
+                        }
+                    }
+                }
+
+                // ─── SECTION 7: Backup & Restore ────────────────────────────────
                 SettingsSectionHeader(title = "Backup & Restore", icon = Icons.Rounded.Backup)
 
                 Card(

@@ -44,6 +44,7 @@ fun LibraryScreen(
     val displayedSongs = when (uiState.selectedTab) {
         LibraryTab.LOCAL -> uiState.filteredSongs
         LibraryTab.ONLINE_STREAM -> uiState.onlineStreamSongs
+        LibraryTab.SERVER -> uiState.serverSongs
         LibraryTab.FAVORITES -> uiState.favoriteSongs
         else -> emptyList()
     }
@@ -230,6 +231,13 @@ fun LibraryScreen(
 
             when (uiState.selectedTab) {
                 LibraryTab.ONLINE_STREAM -> OnlineStreamsContent(
+                    uiState = uiState,
+                    viewModel = viewModel,
+                    displayedSongs = displayedSongs,
+                    onNavigateToPlayer = onNavigateToPlayer,
+                    onMoreClick = { song -> selectedSongForAction = song }
+                )
+                LibraryTab.SERVER -> ServerContent(
                     uiState = uiState,
                     viewModel = viewModel,
                     displayedSongs = displayedSongs,
@@ -886,5 +894,126 @@ private fun EmptyLibraryMessage(text: String) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
+    }
+}
+
+// ─── Self-Hosted Server tab ──────────────────────────────────────────────────
+
+@Composable
+private fun ServerContent(
+    uiState: LibraryUiState,
+    viewModel: LibraryViewModel,
+    displayedSongs: List<Song>,
+    onNavigateToPlayer: () -> Unit,
+    onMoreClick: (Song) -> Unit = {}
+) {
+    if (uiState.isLoadingServer) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    text = "Connecting to your personal music server...",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    } else if (uiState.serverError != null || displayedSongs.isEmpty()) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(32.dp)
+            ) {
+                Icon(
+                    Icons.Rounded.CloudOff,
+                    contentDescription = null,
+                    modifier = Modifier.size(64.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    text = uiState.serverError ?: "No songs loaded from server.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(Modifier.height(20.dp))
+                Button(
+                    onClick = { viewModel.loadServerSongs() },
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Retry Connection")
+                }
+            }
+        }
+    } else {
+        LazyColumn(
+            contentPadding = PaddingValues(bottom = 120.dp),
+            modifier = Modifier.fillMaxSize()
+        ) {
+            item {
+                Card(
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Rounded.Storage,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.size(40.dp)
+                        )
+                        Spacer(Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Personal Music Server",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                            Text(
+                                text = "${displayedSongs.size} lossless tracks loaded from your server.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
+                            )
+                        }
+                        IconButton(onClick = { viewModel.loadServerSongs() }) {
+                            Icon(
+                                Icons.Rounded.Refresh,
+                                contentDescription = "Refresh",
+                                tint = MaterialTheme.colorScheme.secondary
+                            )
+                        }
+                    }
+                }
+            }
+
+            itemsIndexed(displayedSongs, key = { index, song -> "server_${song.id}_$index" }) { _, song ->
+                SongItem(
+                    song = song,
+                    isPlaying = uiState.currentSongId == song.id && uiState.isPlaying,
+                    onClick = {
+                        viewModel.onSongSelected(song)
+                        onNavigateToPlayer()
+                    },
+                    onFavoriteClick = { viewModel.onToggleFavorite(song.id) },
+                    onMoreClick = { onMoreClick(song) }
+                )
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant
+                )
+            }
+        }
     }
 }

@@ -63,7 +63,16 @@ data class AppUserSettings(
     val mobileDataHighQuality: Boolean = true,
     val audioSourceMode: AudioSourceMode = AudioSourceMode.BOTH,
     val streamingProvider: StreamingProvider = StreamingProvider.ALL_COMBINED,
-    val preferredLanguages: Set<MusicLanguage> = setOf(MusicLanguage.ALL)
+    val preferredLanguages: Set<MusicLanguage> = setOf(MusicLanguage.ALL),
+    // 🧠 ListenBrainz
+    val listenBrainzToken: String = "",
+    val listenBrainzUsername: String = "",
+    val isListenBrainzScrobblingEnabled: Boolean = false,
+    // 🏠 Navidrome / Subsonic
+    val navidromeServerUrl: String = "",
+    val navidromeUsername: String = "",
+    val navidromePassword: String = "",
+    val isNavidromeEnabled: Boolean = false
 ) {
     val preferredLanguage: MusicLanguage
         get() = preferredLanguages.firstOrNull() ?: MusicLanguage.ALL
@@ -103,7 +112,14 @@ class UserPreferencesRepository @Inject constructor(
             mobileDataHighQuality = prefs.getBoolean("mobile_data_hq", true),
             audioSourceMode = runCatching { AudioSourceMode.valueOf(sourceStr) }.getOrDefault(AudioSourceMode.BOTH),
             streamingProvider = providerEnum,
-            preferredLanguages = parsedLangs
+            preferredLanguages = parsedLangs,
+            listenBrainzToken = prefs.getString("listenbrainz_token", "") ?: "",
+            listenBrainzUsername = prefs.getString("listenbrainz_username", "") ?: "",
+            isListenBrainzScrobblingEnabled = prefs.getBoolean("listenbrainz_scrobble_enabled", false),
+            navidromeServerUrl = prefs.getString("navidrome_server_url", "") ?: "",
+            navidromeUsername = prefs.getString("navidrome_username", "") ?: "",
+            navidromePassword = prefs.getString("navidrome_password", "") ?: "",
+            isNavidromeEnabled = prefs.getBoolean("navidrome_enabled", false)
         )
     }
 
@@ -170,6 +186,46 @@ class UserPreferencesRepository @Inject constructor(
 
     fun updatePreferredLanguage(language: MusicLanguage) {
         togglePreferredLanguage(language)
+    }
+
+    // ── ListenBrainz Preferences ─────────────────────────────────────────────
+    fun updateListenBrainzConfig(token: String, username: String, enabled: Boolean) {
+        prefs.edit()
+            .putString("listenbrainz_token", token.trim())
+            .putString("listenbrainz_username", username.trim())
+            .putBoolean("listenbrainz_scrobble_enabled", enabled)
+            .apply()
+        _settings.value = _settings.value.copy(
+            listenBrainzToken = token.trim(),
+            listenBrainzUsername = username.trim(),
+            isListenBrainzScrobblingEnabled = enabled
+        )
+    }
+
+    fun updateListenBrainzScrobbling(enabled: Boolean) {
+        prefs.edit().putBoolean("listenbrainz_scrobble_enabled", enabled).apply()
+        _settings.value = _settings.value.copy(isListenBrainzScrobblingEnabled = enabled)
+    }
+
+    // ── Navidrome / Subsonic Preferences ─────────────────────────────────────
+    fun updateNavidromeConfig(serverUrl: String, username: String, password: String, enabled: Boolean) {
+        prefs.edit()
+            .putString("navidrome_server_url", serverUrl.trim())
+            .putString("navidrome_username", username.trim())
+            .putString("navidrome_password", password.trim())
+            .putBoolean("navidrome_enabled", enabled)
+            .apply()
+        _settings.value = _settings.value.copy(
+            navidromeServerUrl = serverUrl.trim(),
+            navidromeUsername = username.trim(),
+            navidromePassword = password.trim(),
+            isNavidromeEnabled = enabled
+        )
+    }
+
+    fun updateNavidromeEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("navidrome_enabled", enabled).apply()
+        _settings.value = _settings.value.copy(isNavidromeEnabled = enabled)
     }
 
     fun checkShouldShowWhatsNew(): String? {

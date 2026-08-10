@@ -19,6 +19,7 @@ import com.moodtunes.app.presentation.ui.library.LibraryScreen
 import com.moodtunes.app.presentation.ui.permission.PermissionScreen
 import com.moodtunes.app.presentation.ui.player.PlayerScreen
 import com.moodtunes.app.presentation.ui.playlistdetail.PlaylistDetailScreen
+import com.moodtunes.app.presentation.ui.search.SearchScreen
 import com.moodtunes.app.presentation.ui.settings.SettingsScreen
 
 @OptIn(ExperimentalPermissionsApi::class)
@@ -59,7 +60,8 @@ fun MoodTunesNavGraph(
                 onNavigateToPlayer = { navController.navigate(Routes.PLAYER) },
                 onNavigateToLibrary = { navController.navigate(Routes.LIBRARY) },
                 onNavigateToHistory = { navController.navigate(Routes.HISTORY) },
-                onNavigateToSettings = { navController.navigate(Routes.SETTINGS) }
+                onNavigateToSettings = { navController.navigate(Routes.SETTINGS) },
+                onNavigateToSearch = { navController.navigate(Routes.SEARCH) }
             )
         }
 
@@ -69,13 +71,24 @@ fun MoodTunesNavGraph(
             )
         }
 
+        composable(Routes.SEARCH) {
+            SearchScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToPlayer = { navController.navigate(Routes.PLAYER) },
+                onNavigateToPlaylist = { playlistId ->
+                    navController.navigate(Routes.playlistDetail(playlistId))
+                }
+            )
+        }
+
         composable(Routes.LIBRARY) {
             LibraryScreen(
                 onNavigateBack = { navController.popBackStack() },
                 onNavigateToPlayer = { navController.navigate(Routes.PLAYER) },
                 onNavigateToPlaylist = { playlistId ->
                     navController.navigate(Routes.playlistDetail(playlistId))
-                }
+                },
+                onNavigateToSearch = { navController.navigate(Routes.SEARCH) }
             )
         }
 

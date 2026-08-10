@@ -1,6 +1,7 @@
 package com.moodtunes.app.presentation.ui.player
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -47,9 +48,13 @@ fun PlayerBottomSheet(
             PlayerSheet.QUEUE -> QueueSheetContent(
                 songs = uiState.songs,
                 currentIndex = uiState.currentSongIndex,
+                isPlaying = uiState.isPlaying,
+                onSongClick = viewModel::playSongAtIndex,
                 onMoveUp = viewModel::moveQueueItem,
                 onMoveDown = { from, to -> viewModel.moveQueueItem(from, to) },
-                onRemove = viewModel::removeFromQueue
+                onRemove = viewModel::removeFromQueue,
+                onShuffleQueue = viewModel::shuffleQueue,
+                onClearQueue = { viewModel.clearQueue(keepCurrent = true) }
             )
             PlayerSheet.LYRICS -> LyricsSheetContent(
                 lyrics = uiState.lyrics,
@@ -97,85 +102,236 @@ fun PlayerBottomSheet(
 private fun QueueSheetContent(
     songs: List<Song>,
     currentIndex: Int,
+    isPlaying: Boolean,
+    onSongClick: (Int) -> Unit,
     onMoveUp: (Int, Int) -> Unit,
     onMoveDown: (Int, Int) -> Unit,
-    onRemove: (Int) -> Unit
+    onRemove: (Int) -> Unit,
+    onShuffleQueue: () -> Unit,
+    onClearQueue: () -> Unit
 ) {
-    SheetHeader(icon = Icons.AutoMirrored.Rounded.QueueMusic, title = "Up Next", subtitle = "${songs.size} tracks in queue")
+    val totalRemainingMs = remember(songs, currentIndex) {
+        songs.drop(currentIndex.coerceAtLeast(0)).sumOf { it.duration }
+    }
+    val formattedRemaining = remember(totalRemainingMs) {
+        val totalSec = totalRemainingMs / 1000
+        val mins = totalSec / 60
+        if (mins > 60) "${mins / 60}h ${mins % 60}m" else "${mins}m"
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                Icons.AutoMirrored.Rounded.QueueMusic,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(Modifier.width(10.dp))
+            Column {
+                Text(
+                    text = "Up Next Queue",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "${songs.size} tracks • $formattedRemaining left",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (songs.size > 2) {
+                IconButton(
+                    onClick = onShuffleQueue,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        Icons.Rounded.Shuffle,
+                        contentDescription = "Shuffle upcoming",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+            if (songs.size > 1) {
+                IconButton(
+                    onClick = onClearQueue,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        Icons.Rounded.DeleteSweep,
+                        contentDescription = "Clear upcoming",
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+        }
+    }
+
     if (songs.isEmpty()) {
-        EmptySheetMessage(text = "Queue is empty.\nStart playing a song to build a queue.")
+        EmptySheetMessage(text = "Queue is empty.\nSelect a song to start listening.")
     } else {
+        val listState = rememberLazyListState()
+        LaunchedEffect(currentIndex) {
+            if (currentIndex in songs.indices) {
+                listState.animateScrollToItem(currentIndex.coerceAtLeast(0))
+            }
+        }
+
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(max = 420.dp),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp)
+                .heightIn(max = 480.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
         ) {
             itemsIndexed(songs, key = { index, song -> "queue_${song.id}_$index" }) { index, song ->
-                Row(
+                val isCurrent = index == currentIndex
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (isCurrent) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+                    else Color.Transparent,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(vertical = 3.dp)
                 ) {
-                    Text(
-                        text = (index + 1).toString(),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (index == currentIndex) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.width(28.dp)
-                    )
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = song.title,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = if (index == currentIndex) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = song.artist,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                    IconButton(
-                        onClick = { onMoveUp(index, index - 1) },
-                        enabled = index > 0,
-                        modifier = Modifier.size(36.dp)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSongClick(index) }
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            Icons.Rounded.KeyboardArrowUp,
-                            contentDescription = "Move up",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    IconButton(
-                        onClick = { onMoveDown(index, index + 1) },
-                        enabled = index < songs.lastIndex,
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            Icons.Rounded.KeyboardArrowDown,
-                            contentDescription = "Move down",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    IconButton(
-                        onClick = { onRemove(index) },
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            Icons.Rounded.Close,
-                            contentDescription = "Remove from queue",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        // Index or Play indicator
+                        Box(
+                            modifier = Modifier.width(30.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isCurrent) {
+                                Icon(
+                                    imageVector = if (isPlaying) Icons.Rounded.GraphicEq else Icons.Rounded.PlayArrow,
+                                    contentDescription = "Playing",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            } else {
+                                Text(
+                                    text = (index + 1).toString(),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        // Artwork
+                        Box(
+                            modifier = Modifier
+                                .size(42.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            coil.compose.AsyncImage(
+                                model = song.albumArtUri,
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                            )
+                            if (song.albumArtUri == null) {
+                                Icon(
+                                    Icons.Rounded.MusicNote,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(Modifier.width(12.dp))
+
+                        // Title & Artist
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = song.title,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = if (isCurrent) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.Normal,
+                                color = if (isCurrent) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    text = song.artist,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = "• ${song.formattedDuration}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                )
+                            }
+                        }
+
+                        // Move Up
+                        IconButton(
+                            onClick = { onMoveUp(index, index - 1) },
+                            enabled = index > 0,
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                Icons.Rounded.KeyboardArrowUp,
+                                contentDescription = "Move up",
+                                tint = if (index > 0) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        // Move Down
+                        IconButton(
+                            onClick = { onMoveDown(index, index + 1) },
+                            enabled = index < songs.lastIndex,
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                Icons.Rounded.KeyboardArrowDown,
+                                contentDescription = "Move down",
+                                tint = if (index < songs.lastIndex) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        // Remove
+                        IconButton(
+                            onClick = { onRemove(index) },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                Icons.Rounded.Close,
+                                contentDescription = "Remove from queue",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     }
                 }
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             }
         }
     }

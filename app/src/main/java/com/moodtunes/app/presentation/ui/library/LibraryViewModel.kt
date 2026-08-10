@@ -6,6 +6,7 @@ import com.moodtunes.app.data.local.preferences.UserPreferencesRepository
 import com.moodtunes.app.data.remote.OnlineStreamRepository
 import com.moodtunes.app.domain.model.Playlist
 import com.moodtunes.app.domain.model.Song
+import com.moodtunes.app.domain.usecase.AddSongToPlaylistUseCase
 import com.moodtunes.app.domain.usecase.CreatePlaylistUseCase
 import com.moodtunes.app.domain.usecase.GetAllSongsUseCase
 import com.moodtunes.app.domain.usecase.GetFavoriteSongsUseCase
@@ -62,6 +63,7 @@ class LibraryViewModel @Inject constructor(
     private val getMostPlayedUseCase: GetMostPlayedUseCase,
     private val getPlaylistsUseCase: GetPlaylistsUseCase,
     private val createPlaylistUseCase: CreatePlaylistUseCase,
+    private val addSongToPlaylistUseCase: AddSongToPlaylistUseCase,
     private val toggleFavoriteUseCase: ToggleFavoriteUseCase,
     private val playbackManager: PlaybackManager,
     private val onlineStreamRepository: OnlineStreamRepository,
@@ -214,11 +216,28 @@ class LibraryViewModel @Inject constructor(
         _uiState.update { it.copy(selectedAlbum = null, selectedArtist = null) }
     }
 
-    fun onCreatePlaylist(name: String) {
+    fun onCreatePlaylist(name: String, song: Song? = null) {
         if (name.isBlank()) return
         viewModelScope.launch {
-            createPlaylistUseCase(name)
+            val id = createPlaylistUseCase(name)
+            if (song != null) {
+                addSongToPlaylistUseCase(id, song)
+            }
         }
+    }
+
+    fun onAddToPlaylist(playlistId: Long, song: Song) {
+        viewModelScope.launch {
+            addSongToPlaylistUseCase(playlistId, song)
+        }
+    }
+
+    fun playNext(song: Song) {
+        playbackManager.playNext(song)
+    }
+
+    fun addToQueue(song: Song) {
+        playbackManager.addToQueue(song)
     }
 
     fun onSongSelected(song: Song) {

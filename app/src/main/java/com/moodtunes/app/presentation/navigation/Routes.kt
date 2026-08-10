@@ -8,6 +8,7 @@ object Routes {
     const val HISTORY = "history"
     const val PERMISSION = "permission"
     const val SETTINGS = "settings"
+    const val SEARCH = "search"
     const val PLAYLIST_DETAIL = "playlist/{playlistId}"
 
     fun playlistDetail(playlistId: Long) = "playlist/$playlistId"

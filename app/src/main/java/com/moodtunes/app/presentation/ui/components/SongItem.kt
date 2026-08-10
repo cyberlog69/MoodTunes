@@ -1,7 +1,8 @@
 package com.moodtunes.app.presentation.ui.components
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -20,20 +21,26 @@ import com.moodtunes.app.domain.model.Song
 import com.moodtunes.app.presentation.ui.theme.*
 
 /**
- * A single song list item with FLAC/ALAC Lossless audio quality badge support.
+ * A single song list item with FLAC/ALAC Lossless audio quality badge, favorite toggle,
+ * and context menu ("⋮" More Options) support.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SongItem(
     song: Song,
     isPlaying: Boolean = false,
     onClick: () -> Unit,
     onFavoriteClick: () -> Unit,
+    onMoreClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onMoreClick
+            )
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -106,6 +113,18 @@ fun SongItem(
                 tint = if (song.isFavorite) FavoriteRed else MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp)
             )
+        }
+
+        // More Options button ("⋮")
+        if (onMoreClick != null) {
+            IconButton(onClick = onMoreClick, modifier = Modifier.size(36.dp)) {
+                Icon(
+                    imageVector = Icons.Rounded.MoreVert,
+                    contentDescription = "More options",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         }
     }
 }

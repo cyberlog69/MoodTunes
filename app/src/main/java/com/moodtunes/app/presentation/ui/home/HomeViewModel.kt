@@ -7,10 +7,15 @@ import com.moodtunes.app.data.local.preferences.UserPreferencesRepository
 import com.moodtunes.app.domain.model.MoodEntry
 import com.moodtunes.app.domain.model.MoodType
 import com.moodtunes.app.domain.model.Song
+import com.moodtunes.app.domain.model.Playlist
+import com.moodtunes.app.domain.repository.IPlaylistRepository
+import com.moodtunes.app.domain.usecase.AddSongToPlaylistUseCase
+import com.moodtunes.app.domain.usecase.CreatePlaylistUseCase
 import com.moodtunes.app.domain.usecase.GetForYouSongsUseCase
 import com.moodtunes.app.domain.usecase.GetRecentlyPlayedUseCase
 import com.moodtunes.app.domain.usecase.GetSongsByMoodUseCase
 import com.moodtunes.app.domain.usecase.SaveMoodHistoryUseCase
+import com.moodtunes.app.domain.usecase.ToggleFavoriteUseCase
 import com.moodtunes.app.service.PlaybackManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
@@ -26,6 +31,7 @@ data class HomeUiState(
     val forYou: List<Song> = emptyList(),
     val currentSong: Song? = null,
     val isPlaying: Boolean = false,
+    val userPlaylists: List<Playlist> = emptyList(),
     val error: String? = null
 )
 
@@ -35,6 +41,10 @@ class HomeViewModel @Inject constructor(
     private val saveMoodHistoryUseCase: SaveMoodHistoryUseCase,
     private val getRecentlyPlayedUseCase: GetRecentlyPlayedUseCase,
     private val getForYouSongsUseCase: GetForYouSongsUseCase,
+    private val playlistRepository: IPlaylistRepository,
+    private val toggleFavoriteUseCase: ToggleFavoriteUseCase,
+    private val addSongToPlaylistUseCase: AddSongToPlaylistUseCase,
+    private val createPlaylistUseCase: CreatePlaylistUseCase,
     private val playbackManager: PlaybackManager,
     private val preferencesRepository: UserPreferencesRepository
 ) : ViewModel() {
@@ -45,13 +55,17 @@ class HomeViewModel @Inject constructor(
         playbackManager.currentSong,
         playbackManager.isPlaying,
         playbackManager.currentMood,
-        preferencesRepository.settings.map { it.preferredLanguage }.distinctUntilChanged()
-    ) { state, song, playing, mood, language ->
+        combine(
+            preferencesRepository.settings.map { it.preferredLanguage }.distinctUntilChanged(),
+            playlistRepository.getPlaylists()
+        ) { language, playlists -> language to playlists }
+    ) { state, song, playing, mood, (language, playlists) ->
         state.copy(
             currentSong = song,
             isPlaying = playing,
             selectedMood = mood ?: state.selectedMood,
-            selectedLanguage = language
+            selectedLanguage = language,
+            userPlaylists = playlists
         )
     }.stateIn(
         scope = viewModelScope,
@@ -128,6 +142,35 @@ class HomeViewModel @Inject constructor(
         val songs = uiState.value.recentlyPlayed
         if (index in songs.indices) {
             playbackManager.playSongs(songs, index)
+        }
+    }
+
+    fun playNext(song: Song) {
+        playbackManager.playNext(song)
+    }
+
+    fun addToQueue(song: Song) {
+        playbackManager.addToQueue(song)
+    }
+
+    fun toggleFavorite(song: Song) {
+        viewModelScope.launch {
+            toggleFavoriteUseCase(song.id)
+        }
+    }
+
+    fun addToPlaylist(playlistId: Long, song: Song) {
+        viewModelScope.launch {
+            addSongToPlaylistUseCase(playlistId, song)
+        }
+    }
+
+    fun createPlaylist(name: String, song: Song? = null) {
+        viewModelScope.launch {
+            val id = createPlaylistUseCase(name)
+            if (song != null) {
+                addSongToPlaylistUseCase(id, song)
+            }
         }
     }
 

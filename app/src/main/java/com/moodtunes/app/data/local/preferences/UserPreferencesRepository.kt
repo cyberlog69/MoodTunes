@@ -188,4 +188,31 @@ class UserPreferencesRepository @Inject constructor(
         val currentVersion = com.moodtunes.app.BuildConfig.VERSION_NAME
         prefs.edit().putString("last_seen_version", currentVersion).apply()
     }
+
+    // ── Recent Searches ──────────────────────────────────────────────────────
+    fun getRecentSearches(): List<String> {
+        val raw = prefs.getString("recent_searches", "") ?: ""
+        if (raw.isBlank()) return emptyList()
+        return raw.split("|||").filter { it.isNotBlank() }
+    }
+
+    fun addRecentSearch(query: String) {
+        val clean = query.trim()
+        if (clean.isBlank()) return
+        val current = getRecentSearches().toMutableList()
+        current.remove(clean)
+        current.add(0, clean)
+        val trimmed = current.take(15)
+        prefs.edit().putString("recent_searches", trimmed.joinToString("|||")).apply()
+    }
+
+    fun removeRecentSearch(query: String) {
+        val current = getRecentSearches().toMutableList()
+        current.remove(query)
+        prefs.edit().putString("recent_searches", current.joinToString("|||")).apply()
+    }
+
+    fun clearRecentSearches() {
+        prefs.edit().remove("recent_searches").apply()
+    }
 }

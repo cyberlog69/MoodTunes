@@ -361,6 +361,58 @@ class PlaybackManager @Inject constructor(
     }
 
     // ── Queue editor ─────────────────────────────────────────────────────────
+    private fun createMediaItem(song: Song): MediaItem {
+        return MediaItem.Builder()
+            .setUri(song.uri)
+            .setMediaId(song.id.toString())
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(song.title)
+                    .setArtist(song.artist)
+                    .setAlbumTitle(song.album)
+                    .setArtworkUri(song.albumArtUri)
+                    .build()
+            )
+            .build()
+    }
+
+    fun playSongAtIndex(index: Int) {
+        val controller = mediaController ?: return
+        val queue = _playlist.value
+        if (index !in queue.indices) return
+        controller.seekToDefaultPosition(index)
+        controller.play()
+        _currentSong.value = queue[index]
+    }
+
+    fun addToQueue(song: Song) {
+        val queue = _playlist.value
+        if (queue.isEmpty()) {
+            playSongs(listOf(song), 0)
+            return
+        }
+        val controller = mediaController ?: return
+        val mediaItem = createMediaItem(song)
+        controller.addMediaItem(mediaItem)
+        _playlist.value = queue + song
+    }
+
+    fun playNext(song: Song) {
+        val queue = _playlist.value
+        if (queue.isEmpty()) {
+            playSongs(listOf(song), 0)
+            return
+        }
+        val controller = mediaController ?: return
+        val currentIndex = controller.currentMediaItemIndex.coerceAtLeast(0)
+        val insertIndex = (currentIndex + 1).coerceAtMost(queue.size)
+        val mediaItem = createMediaItem(song)
+        controller.addMediaItem(insertIndex, mediaItem)
+        val mutable = queue.toMutableList()
+        mutable.add(insertIndex, song)
+        _playlist.value = mutable
+    }
+
     fun removeFromQueue(index: Int) {
         val controller = mediaController ?: return
         val queue = _playlist.value
@@ -378,6 +430,47 @@ class PlaybackManager @Inject constructor(
             val item = removeAt(fromIndex)
             add(toIndex, item)
         }
+    }
+
+    fun clearQueue(keepCurrent: Boolean = true) {
+        val controller = mediaController ?: return
+        val queue = _playlist.value
+        if (queue.isEmpty()) return
+
+        if (keepCurrent) {
+            val currentIndex = controller.currentMediaItemIndex
+            val currentSong = queue.getOrNull(currentIndex)
+            if (currentSong != null && currentIndex >= 0) {
+                // Remove all items after currentIndex (back to front)
+                for (i in queue.indices.reversed()) {
+                    if (i != currentIndex) {
+                        controller.removeMediaItem(i)
+                    }
+                }
+                _playlist.value = listOf(currentSong)
+            }
+        } else {
+            controller.clearMediaItems()
+            _playlist.value = emptyList()
+            _currentSong.value = null
+            _isPlaying.value = false
+        }
+    }
+
+    fun shuffleQueue() {
+        val controller = mediaController ?: return
+        val queue = _playlist.value
+        if (queue.size <= 2) return
+
+        val currentIndex = controller.currentMediaItemIndex
+        val currentSong = queue.getOrNull(currentIndex) ?: return
+
+        val upcoming = queue.filterIndexed { idx, _ -> idx != currentIndex }.shuffled()
+        val newPlaylist = mutableListOf<Song>().apply {
+            add(currentSong)
+            addAll(upcoming)
+        }
+        playSongs(newPlaylist, 0, _currentMood.value)
     }
 
     // ── Equalizer & bass boost ───────────────────────────────────────────────

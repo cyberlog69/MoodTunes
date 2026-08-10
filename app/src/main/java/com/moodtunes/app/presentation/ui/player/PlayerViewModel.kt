@@ -250,6 +250,26 @@ class PlayerViewModel @Inject constructor(
         playbackManager.moveQueueItem(fromIndex, toIndex)
     }
 
+    fun playSongAtIndex(index: Int) {
+        playbackManager.playSongAtIndex(index)
+    }
+
+    fun addToQueue(song: Song) {
+        playbackManager.addToQueue(song)
+    }
+
+    fun playNext(song: Song) {
+        playbackManager.playNext(song)
+    }
+
+    fun clearQueue(keepCurrent: Boolean = true) {
+        playbackManager.clearQueue(keepCurrent)
+    }
+
+    fun shuffleQueue() {
+        playbackManager.shuffleQueue()
+    }
+
     // ── Equalizer & bass boost ───────────────────────────────────────────────
     fun toggleEqualizer(enabled: Boolean) {
         playbackManager.toggleEqualizer(enabled)

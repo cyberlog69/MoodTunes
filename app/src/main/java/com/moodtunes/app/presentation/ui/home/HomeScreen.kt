@@ -33,6 +33,7 @@ import coil.compose.AsyncImage
 import com.moodtunes.app.domain.model.MoodType
 import com.moodtunes.app.domain.model.Song
 import com.moodtunes.app.presentation.ui.components.MiniPlayer
+import com.moodtunes.app.presentation.ui.components.SongActionBottomSheet
 import com.moodtunes.app.presentation.ui.theme.*
 
 @Composable
@@ -42,9 +43,49 @@ fun HomeScreen(
     onNavigateToPlayer: () -> Unit,
     onNavigateToLibrary: () -> Unit,
     onNavigateToHistory: () -> Unit,
-    onNavigateToSettings: () -> Unit
+    onNavigateToSettings: () -> Unit,
+    onNavigateToSearch: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    var selectedSongForAction by remember { mutableStateOf<Song?>(null) }
+
+    // Song Context Menu Sheet
+    SongActionBottomSheet(
+        song = selectedSongForAction,
+        playlists = uiState.userPlaylists,
+        onDismiss = { selectedSongForAction = null },
+        onPlay = {
+            selectedSongForAction?.let { song ->
+                viewModel.playForYou(0)
+                onNavigateToPlayer()
+            }
+        },
+        onPlayNext = {
+            selectedSongForAction?.let { song ->
+                viewModel.playNext(song)
+            }
+        },
+        onAddToQueue = {
+            selectedSongForAction?.let { song ->
+                viewModel.addToQueue(song)
+            }
+        },
+        onToggleFavorite = {
+            selectedSongForAction?.let { song ->
+                viewModel.toggleFavorite(song)
+            }
+        },
+        onAddToPlaylist = { playlistId ->
+            selectedSongForAction?.let { song ->
+                viewModel.addToPlaylist(playlistId, song)
+            }
+        },
+        onCreatePlaylist = { name ->
+            selectedSongForAction?.let { song ->
+                viewModel.createPlaylist(name, song)
+            }
+        }
+    )
 
     // Triggered by app shortcut deep links (moodtunes://mood/<MOOD>).
     LaunchedEffect(deepLinkMood) {
@@ -85,7 +126,7 @@ fun HomeScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 16.dp),
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -102,6 +143,13 @@ fun HomeScreen(
                     )
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    IconButton(onClick = onNavigateToSearch) {
+                        Icon(
+                            Icons.Rounded.Search,
+                            contentDescription = "Search",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
                     IconButton(onClick = onNavigateToHistory) {
                         Icon(
                             Icons.Rounded.BarChart,
@@ -126,6 +174,36 @@ fun HomeScreen(
                 }
             }
 
+            // ─── Quick Search Launch Bar ────────────────────────────────────
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 4.dp)
+                    .clickable(onClick = onNavigateToSearch)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Rounded.Search,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        text = "Search songs, artists, albums, streams...",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
             // ─── Mood Grid + Discovery Rails ────────────────────────────────
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
@@ -149,7 +227,8 @@ fun HomeScreen(
                             onPlay = { index ->
                                 viewModel.playForYou(index)
                                 onNavigateToPlayer()
-                            }
+                            },
+                            onMoreClick = { song -> selectedSongForAction = song }
                         )
                     }
                 }
@@ -163,7 +242,8 @@ fun HomeScreen(
                             onPlay = { index ->
                                 viewModel.playRecentlyPlayed(index)
                                 onNavigateToPlayer()
-                            }
+                            },
+                            onMoreClick = { song -> selectedSongForAction = song }
                         )
                     }
                 }
@@ -269,24 +349,41 @@ private fun SectionHeader(title: String, subtitle: String?) {
 
 // ─── Horizontal Song Rail ────────────────────────────────────────────────────
 @Composable
-private fun SongRail(songs: List<Song>, onPlay: (Int) -> Unit) {
+private fun SongRail(
+    songs: List<Song>,
+    onPlay: (Int) -> Unit,
+    onMoreClick: (Song) -> Unit = {}
+) {
     LazyRow(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
     ) {
         itemsIndexed(songs, key = { index, song -> "rail_${song.id}_$index" }) { index, song ->
-            RailCard(song = song, onClick = { onPlay(index) })
+            RailCard(
+                song = song,
+                onClick = { onPlay(index) },
+                onLongClick = { onMoreClick(song) }
+            )
         }
     }
 }
 
 // ─── Compact Rail Card ───────────────────────────────────────────────────────
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun RailCard(song: Song, onClick: () -> Unit) {
+private fun RailCard(
+    song: Song,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit = {}
+) {
     Card(
-        onClick = onClick,
         shape = RoundedCornerShape(16.dp),
-        modifier = Modifier.width(148.dp)
+        modifier = Modifier
+            .width(148.dp)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
     ) {
         Column {
             Box(

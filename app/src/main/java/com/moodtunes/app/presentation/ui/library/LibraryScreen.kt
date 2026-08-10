@@ -1,4 +1,4 @@
-﻿package com.moodtunes.app.presentation.ui.library
+package com.moodtunes.app.presentation.ui.library
 
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -25,6 +25,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.moodtunes.app.domain.model.Playlist
 import com.moodtunes.app.domain.model.Song
+import com.moodtunes.app.presentation.ui.components.SongActionBottomSheet
 import com.moodtunes.app.presentation.ui.components.SongItem
 import com.moodtunes.app.presentation.ui.theme.*
 
@@ -34,9 +35,11 @@ fun LibraryScreen(
     viewModel: LibraryViewModel = hiltViewModel(),
     onNavigateBack: () -> Unit,
     onNavigateToPlayer: () -> Unit,
-    onNavigateToPlaylist: (Long) -> Unit
+    onNavigateToPlaylist: (Long) -> Unit,
+    onNavigateToSearch: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    var selectedSongForAction by remember { mutableStateOf<Song?>(null) }
 
     val displayedSongs = when (uiState.selectedTab) {
         LibraryTab.LOCAL -> uiState.filteredSongs
@@ -47,6 +50,44 @@ fun LibraryScreen(
 
     var showCreateDialog by remember { mutableStateOf(false) }
     var newPlaylistName by remember { mutableStateOf("") }
+
+    // Song Context Menu Sheet
+    SongActionBottomSheet(
+        song = selectedSongForAction,
+        playlists = uiState.playlists,
+        onDismiss = { selectedSongForAction = null },
+        onPlay = {
+            selectedSongForAction?.let { song ->
+                viewModel.onSongSelected(song)
+                onNavigateToPlayer()
+            }
+        },
+        onPlayNext = {
+            selectedSongForAction?.let { song ->
+                viewModel.playNext(song)
+            }
+        },
+        onAddToQueue = {
+            selectedSongForAction?.let { song ->
+                viewModel.addToQueue(song)
+            }
+        },
+        onToggleFavorite = {
+            selectedSongForAction?.let { song ->
+                viewModel.onToggleFavorite(song.id)
+            }
+        },
+        onAddToPlaylist = { playlistId ->
+            selectedSongForAction?.let { song ->
+                viewModel.onAddToPlaylist(playlistId, song)
+            }
+        },
+        onCreatePlaylist = { name ->
+            selectedSongForAction?.let { song ->
+                viewModel.onCreatePlaylist(name, song)
+            }
+        }
+    )
 
     Box(
         modifier = Modifier
@@ -73,7 +114,7 @@ fun LibraryScreen(
                 .fillMaxSize()
                 .statusBarsPadding()
         ) {
-            // â”€â”€â”€ Top Header Bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // ─── Top Header Bar ─────────────────────────────────────────────
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -93,10 +134,17 @@ fun LibraryScreen(
                     color = MaterialTheme.colorScheme.onBackground,
                     modifier = Modifier.weight(1f)
                 )
+                IconButton(onClick = onNavigateToSearch) {
+                    Icon(
+                        Icons.Rounded.Search,
+                        contentDescription = "Search",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
                 Surface(
                     shape = CircleShape,
                     color = MaterialTheme.colorScheme.surfaceVariant,
-                    modifier = Modifier.padding(end = 16.dp)
+                    modifier = Modifier.padding(end = 12.dp)
                 ) {
                     Text(
                         text = when (uiState.selectedTab) {
@@ -115,7 +163,7 @@ fun LibraryScreen(
                 }
             }
 
-            // â”€â”€â”€ Search Bar (hidden when browsing albums/artists) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // ─── Search Bar (hidden when browsing albums/artists) ────────────
             if (uiState.selectedTab == LibraryTab.LOCAL ||
                 uiState.selectedTab == LibraryTab.FAVORITES ||
                 uiState.selectedTab == LibraryTab.ALBUMS ||
@@ -125,7 +173,7 @@ fun LibraryScreen(
                     value = uiState.searchQuery,
                     onValueChange = viewModel::onSearchQueryChanged,
                     placeholder = {
-                        Text("Search songs, artists, albumsâ€¦", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Search songs, artists, albums…", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     },
                     leadingIcon = {
                         Icon(Icons.Rounded.Search, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -154,7 +202,7 @@ fun LibraryScreen(
                 )
             }
 
-            // â”€â”€â”€ Tabs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // ─── Tabs ────────────────────────────────────────────────────────
             PrimaryScrollableTabRow(
                 selectedTabIndex = LibraryTab.entries.indexOf(uiState.selectedTab),
                 containerColor = Color.Transparent,
@@ -181,14 +229,30 @@ fun LibraryScreen(
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
             when (uiState.selectedTab) {
-                LibraryTab.ONLINE_STREAM -> OnlineStreamsContent(uiState, viewModel, displayedSongs, onNavigateToPlayer)
+                LibraryTab.ONLINE_STREAM -> OnlineStreamsContent(
+                    uiState = uiState,
+                    viewModel = viewModel,
+                    displayedSongs = displayedSongs,
+                    onNavigateToPlayer = onNavigateToPlayer,
+                    onMoreClick = { song -> selectedSongForAction = song }
+                )
                 LibraryTab.PLAYLISTS -> PlaylistsContent(
                     playlists = uiState.playlists,
                     onCreateClick = { newPlaylistName = ""; showCreateDialog = true },
                     onPlaylistClick = onNavigateToPlaylist
                 )
-                LibraryTab.ALBUMS -> AlbumsContent(uiState, viewModel, onNavigateToPlayer)
-                LibraryTab.ARTISTS -> ArtistsContent(uiState, viewModel, onNavigateToPlayer)
+                LibraryTab.ALBUMS -> AlbumsContent(
+                    uiState = uiState,
+                    viewModel = viewModel,
+                    onNavigateToPlayer = onNavigateToPlayer,
+                    onMoreClick = { song -> selectedSongForAction = song }
+                )
+                LibraryTab.ARTISTS -> ArtistsContent(
+                    uiState = uiState,
+                    viewModel = viewModel,
+                    onNavigateToPlayer = onNavigateToPlayer,
+                    onMoreClick = { song -> selectedSongForAction = song }
+                )
                 LibraryTab.LOCAL, LibraryTab.FAVORITES -> SongListContent(
                     uiState = uiState,
                     displayedSongs = displayedSongs,
@@ -196,7 +260,8 @@ fun LibraryScreen(
                     onSongSelected = { song ->
                         viewModel.onSongSelected(song)
                         onNavigateToPlayer()
-                    }
+                    },
+                    onMoreClick = { song -> selectedSongForAction = song }
                 )
                 LibraryTab.TOP_TRACKS -> SongListContent(
                     uiState = uiState,
@@ -205,7 +270,8 @@ fun LibraryScreen(
                     onSongSelected = { song ->
                         viewModel.onSongSelected(song)
                         onNavigateToPlayer()
-                    }
+                    },
+                    onMoreClick = { song -> selectedSongForAction = song }
                 )
             }
         }
@@ -345,13 +411,14 @@ private fun PlaylistsContent(
     }
 }
 
-// â”€â”€â”€ Albums tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Albums tab ──────────────────────────────────────────────────────────────
 
 @Composable
 private fun AlbumsContent(
     uiState: LibraryUiState,
     viewModel: LibraryViewModel,
-    onNavigateToPlayer: () -> Unit
+    onNavigateToPlayer: () -> Unit,
+    onMoreClick: (Song) -> Unit = {}
 ) {
     val selectedAlbum = uiState.selectedAlbum
     if (selectedAlbum != null) {
@@ -373,7 +440,8 @@ private fun AlbumsContent(
                         viewModel.onSongSelected(song)
                         onNavigateToPlayer()
                     },
-                    onFavoriteClick = { viewModel.onToggleFavorite(song.id) }
+                    onFavoriteClick = { viewModel.onToggleFavorite(song.id) },
+                    onMoreClick = { onMoreClick(song) }
                 )
                 HorizontalDivider(
                     modifier = Modifier.padding(horizontal = 16.dp),
@@ -392,7 +460,7 @@ private fun AlbumsContent(
                 itemsIndexed(uiState.albums, key = { index, album -> "albumgroup_${album.name}_$index" }) { _, album ->
                     AlbumArtistCard(
                         title = album.name,
-                        subtitle = "${album.artist} â€¢ ${album.songs.size} songs",
+                        subtitle = "${album.artist} • ${album.songs.size} songs",
                         artUri = album.songs.firstOrNull()?.albumArtUri,
                         icon = Icons.Rounded.Album,
                         onClick = { viewModel.onAlbumSelected(album) }
@@ -403,13 +471,14 @@ private fun AlbumsContent(
     }
 }
 
-// â”€â”€â”€ Artists tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Artists tab ─────────────────────────────────────────────────────────────
 
 @Composable
 private fun ArtistsContent(
     uiState: LibraryUiState,
     viewModel: LibraryViewModel,
-    onNavigateToPlayer: () -> Unit
+    onNavigateToPlayer: () -> Unit,
+    onMoreClick: (Song) -> Unit = {}
 ) {
     val selectedArtist = uiState.selectedArtist
     if (selectedArtist != null) {
@@ -432,7 +501,8 @@ private fun ArtistsContent(
                         viewModel.onSongSelected(song)
                         onNavigateToPlayer()
                     },
-                    onFavoriteClick = { viewModel.onToggleFavorite(song.id) }
+                    onFavoriteClick = { viewModel.onToggleFavorite(song.id) },
+                    onMoreClick = { onMoreClick(song) }
                 )
                 HorizontalDivider(
                     modifier = Modifier.padding(horizontal = 16.dp),
@@ -463,14 +533,15 @@ private fun ArtistsContent(
     }
 }
 
-// â”€â”€â”€ Local / Favorites list â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Local / Favorites list ──────────────────────────────────────────────────
 
 @Composable
 private fun SongListContent(
     uiState: LibraryUiState,
     displayedSongs: List<Song>,
     onToggleFavorite: (Long) -> Unit,
-    onSongSelected: (Song) -> Unit
+    onSongSelected: (Song) -> Unit,
+    onMoreClick: (Song) -> Unit = {}
 ) {
     if (uiState.isLoading) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -510,7 +581,8 @@ private fun SongListContent(
                     song = song,
                     isPlaying = uiState.currentSongId == song.id && uiState.isPlaying,
                     onClick = { onSongSelected(song) },
-                    onFavoriteClick = { onToggleFavorite(song.id) }
+                    onFavoriteClick = { onToggleFavorite(song.id) },
+                    onMoreClick = { onMoreClick(song) }
                 )
                 HorizontalDivider(
                     modifier = Modifier.padding(horizontal = 16.dp),
@@ -521,14 +593,15 @@ private fun SongListContent(
     }
 }
 
-// â”€â”€â”€ Online streams (unchanged) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Online streams ──────────────────────────────────────────────────────────
 
 @Composable
 private fun OnlineStreamsContent(
     uiState: LibraryUiState,
     viewModel: LibraryViewModel,
     displayedSongs: List<Song>,
-    onNavigateToPlayer: () -> Unit
+    onNavigateToPlayer: () -> Unit,
+    onMoreClick: (Song) -> Unit = {}
 ) {
     if (uiState.isLoadingOnline) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -616,7 +689,7 @@ private fun OnlineStreamsContent(
             }
 
             item {
-                val categories = listOf("Top Hits", "ðŸ“» Live Radio", "Trending Pop", "Acoustic & Chill", "Dance Party", "Lo-Fi Beats", "Rock Hits")
+                val categories = listOf("Top Hits", "📻 Live Radio", "Trending Pop", "Acoustic & Chill", "Dance Party", "Lo-Fi Beats", "Rock Hits")
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -649,7 +722,7 @@ private fun OnlineStreamsContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "ðŸ”¥ ${uiState.selectedCategory}",
+                        text = "🔥 ${uiState.selectedCategory}",
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onBackground
                     )
@@ -669,7 +742,8 @@ private fun OnlineStreamsContent(
                         viewModel.onSongSelected(song)
                         onNavigateToPlayer()
                     },
-                    onFavoriteClick = { viewModel.onToggleFavorite(song.id) }
+                    onFavoriteClick = { viewModel.onToggleFavorite(song.id) },
+                    onMoreClick = { onMoreClick(song) }
                 )
                 HorizontalDivider(
                     modifier = Modifier.padding(horizontal = 16.dp),

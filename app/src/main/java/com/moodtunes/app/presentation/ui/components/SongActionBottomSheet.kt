@@ -13,6 +13,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
+import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
@@ -181,7 +183,7 @@ fun SongActionBottomSheet(
             )
 
             ActionItem(
-                icon = Icons.Rounded.PlaylistPlay,
+                icon = Icons.AutoMirrored.Rounded.PlaylistPlay,
                 title = "Play Next",
                 subtitle = "Insert right after the current song in queue",
                 onClick = {
@@ -203,7 +205,7 @@ fun SongActionBottomSheet(
             )
 
             ActionItem(
-                icon = Icons.Rounded.PlaylistAdd,
+                icon = Icons.AutoMirrored.Rounded.PlaylistAdd,
                 title = "Add to Playlist",
                 subtitle = "Save to your custom playlists",
                 onClick = {

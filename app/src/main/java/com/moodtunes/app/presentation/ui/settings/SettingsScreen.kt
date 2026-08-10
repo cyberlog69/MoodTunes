@@ -225,7 +225,7 @@ fun SettingsScreen(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = "Select whether to fetch streams from Audius, YouTube, Jamendo, Global Internet Radio, or all combined.",
+                                text = "Select whether to fetch streams from Audius, iTunes & Deezer previews, Jamendo, Global Internet Radio, or all combined.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

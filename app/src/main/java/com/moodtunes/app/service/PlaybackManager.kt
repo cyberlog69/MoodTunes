@@ -249,6 +249,10 @@ class PlaybackManager @Inject constructor(
         }
     }
 
+    fun seekToPosition(positionMs: Long) {
+        mediaController?.seekTo(positionMs.coerceAtLeast(0L))
+    }
+
     fun toggleShuffle() {
         val controller = mediaController ?: return
         val newMode = !controller.shuffleModeEnabled

@@ -173,21 +173,63 @@ class MediaStoreRepository @Inject constructor(
         // 2. Online streams according to StreamingProvider setting
         val provider = settings.streamingProvider
 
-        if (provider == StreamingProvider.AUDIUS_ONLY || provider == StreamingProvider.ALL_COMBINED) {
-            try {
-                val audiusTracks = onlineStreamRepository.getAudiusTracksByMood(mood, settings.preferredLanguage, limit = 8)
-                resultList.addAll(audiusTracks)
-            } catch (e: Exception) {
-                e.printStackTrace()
+        when (provider) {
+            StreamingProvider.ALL_COMBINED -> {
+                try {
+                    val tracks = onlineStreamRepository.fetchAllOnlineTracksForMood(mood, settings.preferredLanguage)
+                    resultList.addAll(tracks)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
             }
-        }
-
-        if (provider == StreamingProvider.YOUTUBE_ONLY || provider == StreamingProvider.ALL_COMBINED) {
-            try {
-                val ytTracks = onlineStreamRepository.getYouTubeAudioTracksByMood(mood, settings.preferredLanguage, limit = 6)
-                resultList.addAll(ytTracks)
-            } catch (e: Exception) {
-                e.printStackTrace()
+            StreamingProvider.AUDIUS_ONLY -> {
+                try {
+                    val audiusTracks = onlineStreamRepository.getAudiusTracksByMood(mood, settings.preferredLanguage, limit = 10)
+                    resultList.addAll(audiusTracks)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+            StreamingProvider.ITUNES_DEEZER -> {
+                try {
+                    val itunesTracks = onlineStreamRepository.getITunesPreviewTracks(
+                        languages = setOf(settings.preferredLanguage),
+                        categoryQuery = "${mood.displayName} music",
+                        limit = 8
+                    )
+                    val deezerTracks = onlineStreamRepository.getDeezerPreviewTracks(
+                        languages = setOf(settings.preferredLanguage),
+                        categoryQuery = "${mood.displayName} music",
+                        limit = 8
+                    )
+                    resultList.addAll((itunesTracks + deezerTracks).distinctBy { it.id })
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+            StreamingProvider.JAMENDO_ONLY -> {
+                try {
+                    val jamendoTracks = onlineStreamRepository.getJamendoTracks(
+                        languages = setOf(settings.preferredLanguage),
+                        categoryQuery = mood.displayName,
+                        limit = 12
+                    )
+                    resultList.addAll(jamendoTracks)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+            StreamingProvider.INTERNET_RADIO -> {
+                try {
+                    val radioTracks = onlineStreamRepository.getGlobalInternetRadioStations(
+                        languages = setOf(settings.preferredLanguage),
+                        categoryQuery = mood.displayName,
+                        limit = 12
+                    )
+                    resultList.addAll(radioTracks)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
             }
         }
 

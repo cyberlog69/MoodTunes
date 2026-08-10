@@ -1,5 +1,9 @@
 package com.moodtunes.app.presentation.ui.player
 
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -20,11 +24,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.moodtunes.app.domain.model.LyricsLine
 import com.moodtunes.app.domain.model.Song
+import android.content.Intent
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Brush
+import com.moodtunes.app.domain.model.MoodType
+import com.moodtunes.app.presentation.ui.theme.EuphoricGradientStart
+import com.moodtunes.app.presentation.ui.theme.EuphoricGradientEnd
 import com.moodtunes.app.presentation.ui.theme.White
 
 /** Which bottom sheet is currently open on the player screen. */
@@ -59,7 +71,16 @@ fun PlayerBottomSheet(
             PlayerSheet.LYRICS -> LyricsSheetContent(
                 lyrics = uiState.lyrics,
                 currentPositionMs = uiState.currentPositionMs,
-                isLoading = uiState.isLyricsLoading
+                durationMs = uiState.durationMs,
+                isPlaying = uiState.isPlaying,
+                isLoading = uiState.isLyricsLoading,
+                songTitle = uiState.currentSong?.title,
+                songArtist = uiState.currentSong?.artist,
+                selectedMood = uiState.selectedMood,
+                onSeekToLine = { timeMs -> viewModel.seekToPosition(timeMs) },
+                onPlayPause = viewModel::playPause,
+                onSkipNext = viewModel::skipNext,
+                onDismiss = onDismiss
             )
             PlayerSheet.SPEED -> SpeedSheetContent(
                 speed = uiState.playbackSpeed,
@@ -337,49 +358,367 @@ private fun QueueSheetContent(
     }
 }
 
-// ─── Synced lyrics ───────────────────────────────────────────────────────────
+// ─── Synced lyrics (Spotify-Style UI) ───────────────────────────────────────
 
 @Composable
 private fun LyricsSheetContent(
     lyrics: List<LyricsLine>,
     currentPositionMs: Long,
-    isLoading: Boolean
+    durationMs: Long,
+    isPlaying: Boolean,
+    isLoading: Boolean,
+    songTitle: String?,
+    songArtist: String?,
+    selectedMood: MoodType?,
+    onSeekToLine: (Long) -> Unit,
+    onPlayPause: () -> Unit,
+    onSkipNext: () -> Unit,
+    onDismiss: () -> Unit
 ) {
-    SheetHeader(icon = Icons.Rounded.Subtitles, title = "Lyrics", subtitle = "Synced lyrics")
-    if (isLoading) {
-        Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(modifier = Modifier.size(28.dp))
+    val context = LocalContext.current
+    val listState = rememberLazyListState()
+
+    // Find current lyric line index
+    val currentLineIndex = remember(lyrics, currentPositionMs) {
+        if (lyrics.isEmpty()) -1
+        else {
+            val idx = lyrics.indexOfLast { it.timeMs <= currentPositionMs }
+            idx.coerceAtLeast(0)
         }
-    } else if (lyrics.isEmpty()) {
-        EmptySheetMessage(text = "No synced lyrics found.\nPlace a .lrc file next to the audio file.")
-    } else {
-        val listState = rememberLazyListState()
-        val currentLineIndex = remember(currentPositionMs, lyrics) {
-            lyrics.indexOfLast { it.timeMs <= currentPositionMs }.coerceAtLeast(0)
+    }
+
+    // Auto-scroll to current line
+    LaunchedEffect(currentLineIndex) {
+        if (currentLineIndex >= 0 && lyrics.isNotEmpty()) {
+            listState.animateScrollToItem(
+                index = currentLineIndex.coerceAtMost(lyrics.lastIndex),
+                scrollOffset = -180
+            )
         }
-        LaunchedEffect(currentLineIndex) {
-            listState.animateScrollToItem(currentLineIndex)
-        }
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(max = 460.dp),
-            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp)
-        ) {
-            itemsIndexed(lyrics, key = { index, line -> "lyric_${line.timeMs}_$index" }) { index, line ->
-                val isCurrent = index == currentLineIndex
-                Text(
-                    text = line.text.ifEmpty { "♪" },
-                    style = if (isCurrent) MaterialTheme.typography.titleLarge
-                    else MaterialTheme.typography.titleMedium,
-                    color = if (isCurrent) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp),
-                    textAlign = TextAlign.Center
+    }
+
+    val gradientStart = selectedMood?.gradientStart ?: EuphoricGradientStart
+    val gradientEnd = selectedMood?.gradientEnd ?: EuphoricGradientEnd
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .fillMaxHeight(0.92f)
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        gradientStart.copy(alpha = 0.95f),
+                        gradientEnd.copy(alpha = 0.90f),
+                        Color(0xFF0C0C10)
+                    )
                 )
+            )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .navigationBarsPadding()
+        ) {
+            // ─── Top Bar ────────────────────────────────────────────────────────
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onDismiss) {
+                    Icon(
+                        Icons.Rounded.KeyboardArrowDown,
+                        contentDescription = "Collapse",
+                        tint = White,
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = White.copy(alpha = 0.15f)
+                    ) {
+                        Text(
+                            text = "LYRICS",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                            color = White,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                            letterSpacing = 1.5.sp
+                        )
+                    }
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = songTitle ?: "Now Playing",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                        color = White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (!songArtist.isNullOrBlank()) {
+                        Text(
+                            text = songArtist,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = White.copy(alpha = 0.7f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                // Share Lyrics Button
+                IconButton(
+                    onClick = {
+                        if (lyrics.isNotEmpty()) {
+                            val fullLyrics = lyrics.joinToString("\n") { it.text }
+                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_SUBJECT, "Lyrics: $songTitle by $songArtist")
+                                putExtra(Intent.EXTRA_TEXT, "🎵 \"$songTitle\" by $songArtist\n\n$fullLyrics\n\nShared from MoodTunes")
+                            }
+                            context.startActivity(Intent.createChooser(shareIntent, "Share Lyrics"))
+                        }
+                    }
+                ) {
+                    Icon(
+                        Icons.Rounded.Share,
+                        contentDescription = "Share lyrics",
+                        tint = White.copy(alpha = 0.85f),
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+
+            HorizontalDivider(
+                color = White.copy(alpha = 0.1f),
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+
+            // ─── Lyrics Body ────────────────────────────────────────────────────
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            ) {
+                when {
+                    isLoading -> {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                CircularProgressIndicator(
+                                    color = White,
+                                    modifier = Modifier.size(36.dp),
+                                    strokeWidth = 3.dp
+                                )
+                                Spacer(Modifier.height(16.dp))
+                                Text(
+                                    text = "Finding lyrics on LRCLIB...",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = White.copy(alpha = 0.8f)
+                                )
+                            }
+                        }
+                    }
+                    lyrics.isEmpty() -> {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.padding(horizontal = 32.dp)
+                            ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = White.copy(alpha = 0.1f),
+                                    modifier = Modifier.size(72.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            Icons.Rounded.SubtitlesOff,
+                                            contentDescription = null,
+                                            tint = White.copy(alpha = 0.6f),
+                                            modifier = Modifier.size(36.dp)
+                                        )
+                                    }
+                                }
+                                Spacer(Modifier.height(16.dp))
+                                Text(
+                                    text = "Couldn't find lyrics for this song",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                    color = White
+                                )
+                                Spacer(Modifier.height(6.dp))
+                                Text(
+                                    text = "Lyrics are automatically retrieved from LRCLIB for local and online tracks.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = White.copy(alpha = 0.6f),
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                    }
+                    else -> {
+                        // Spotify-style real-time synced lyrics with tap-to-seek
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 24.dp),
+                            contentPadding = PaddingValues(top = 40.dp, bottom = 120.dp),
+                            verticalArrangement = Arrangement.spacedBy(20.dp)
+                        ) {
+                            itemsIndexed(lyrics) { index, line ->
+                                if (line.text.isBlank()) return@itemsIndexed
+
+                                val isCurrent = index == currentLineIndex
+                                val isPast = index < currentLineIndex
+
+                                val animatedAlpha by animateFloatAsState(
+                                    targetValue = when {
+                                        isCurrent -> 1f
+                                        isPast -> 0.35f
+                                        else -> 0.60f
+                                    },
+                                    animationSpec = tween(300),
+                                    label = "lyricAlpha"
+                                )
+
+                                val animatedScale by animateFloatAsState(
+                                    targetValue = if (isCurrent) 1.04f else 1f,
+                                    animationSpec = spring(
+                                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                                        stiffness = Spring.StiffnessLow
+                                    ),
+                                    label = "lyricScale"
+                                )
+
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .clickable {
+                                            onSeekToLine(line.timeMs)
+                                        }
+                                        .padding(vertical = 4.dp, horizontal = 6.dp)
+                                ) {
+                                    Text(
+                                        text = line.text,
+                                        style = if (isCurrent)
+                                            MaterialTheme.typography.headlineSmall
+                                        else
+                                            MaterialTheme.typography.titleLarge,
+                                        color = White.copy(alpha = animatedAlpha),
+                                        fontWeight = if (isCurrent)
+                                            androidx.compose.ui.text.font.FontWeight.ExtraBold
+                                        else
+                                            androidx.compose.ui.text.font.FontWeight.Bold,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .graphicsLayer {
+                                                scaleX = animatedScale
+                                                scaleY = animatedScale
+                                                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f)
+                                            },
+                                        textAlign = TextAlign.Start
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ─── Bottom Mini-Playback Controller (Spotify-Style) ────────────────
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                shape = RoundedCornerShape(20.dp),
+                color = Color(0xFF16161D).copy(alpha = 0.92f),
+                tonalElevation = 8.dp
+            ) {
+                Column {
+                    // Progress Line
+                    val progressFraction = if (durationMs > 0) currentPositionMs.toFloat() / durationMs else 0f
+                    LinearProgressIndicator(
+                        progress = { progressFraction.coerceIn(0f, 1f) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(3.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = White.copy(alpha = 0.1f)
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = songTitle ?: "Unknown Track",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                color = White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "${formatMs(currentPositionMs)} / ${formatMs(durationMs)}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = White.copy(alpha = 0.6f)
+                            )
+                        }
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            // Play/Pause
+                            Box(
+                                modifier = Modifier
+                                    .size(42.dp)
+                                    .clip(CircleShape)
+                                    .background(White),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                IconButton(
+                                    onClick = onPlayPause,
+                                    modifier = Modifier.fillMaxSize()
+                                ) {
+                                    Icon(
+                                        imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                                        contentDescription = "Play/Pause",
+                                        tint = Color(0xFF121212),
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(Modifier.width(8.dp))
+
+                            // Skip Next
+                            IconButton(onClick = onSkipNext) {
+                                Icon(
+                                    Icons.Rounded.SkipNext,
+                                    contentDescription = "Skip Next",
+                                    tint = White,
+                                    modifier = Modifier.size(28.dp)
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -755,4 +1094,11 @@ private fun formatFrequency(hz: Int): String {
     } else {
         "${hz}Hz"
     }
+}
+
+private fun formatMs(ms: Long): String {
+    val totalSeconds = ms / 1000
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return "%d:%02d".format(minutes, seconds)
 }

@@ -38,6 +38,7 @@ import androidx.mediarouter.app.MediaRouteButton
 import coil.compose.AsyncImage
 import com.google.android.gms.cast.framework.CastButtonFactory
 import com.moodtunes.app.R
+import com.moodtunes.app.domain.model.LyricsLine
 import com.moodtunes.app.domain.model.Song
 import com.moodtunes.app.presentation.ui.theme.*
 import com.moodtunes.app.service.PlaybackError
@@ -536,6 +537,19 @@ fun PlayerScreen(
                     overflow = TextOverflow.Ellipsis
                 )
             }
+
+            // ─── Spotify-Style Live Lyrics Card ─────────────────────────────
+            if (uiState.lyrics.isNotEmpty() || uiState.isLyricsLoading) {
+                Spacer(Modifier.height(20.dp))
+                SpotifyLyricsCard(
+                    lyrics = uiState.lyrics,
+                    currentPositionMs = uiState.currentPositionMs,
+                    isLoading = uiState.isLyricsLoading,
+                    backgroundColor = animatedGradientStart.copy(alpha = 0.28f),
+                    onClick = { activeSheet = PlayerSheet.LYRICS }
+                )
+            }
+            Spacer(Modifier.height(16.dp))
         }
 
         SnackbarHost(
@@ -654,4 +668,129 @@ private fun shareSong(context: Context, song: Song) {
 private fun formatSpeedLabel(speed: Float): String {
     return if (speed % 1f == 0f) speed.toInt().toString()
     else String.format("%.1f", speed)
+}
+
+@Composable
+private fun SpotifyLyricsCard(
+    lyrics: List<LyricsLine>,
+    currentPositionMs: Long,
+    isLoading: Boolean,
+    backgroundColor: Color,
+    onClick: () -> Unit
+) {
+    val currentLineIndex = remember(lyrics, currentPositionMs) {
+        if (lyrics.isEmpty()) -1
+        else {
+            val idx = lyrics.indexOfLast { it.timeMs <= currentPositionMs }
+            idx.coerceAtLeast(0)
+        }
+    }
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(24.dp),
+        color = backgroundColor,
+        border = androidx.compose.foundation.BorderStroke(1.dp, White.copy(alpha = 0.15f))
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Rounded.Subtitles,
+                        contentDescription = null,
+                        tint = White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = "Lyrics",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                        color = White
+                    )
+                }
+                Surface(
+                    shape = CircleShape,
+                    color = White.copy(alpha = 0.15f),
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Rounded.OpenInFull,
+                            contentDescription = "Expand Lyrics",
+                            tint = White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            if (isLoading) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(vertical = 6.dp)
+                ) {
+                    CircularProgressIndicator(
+                        color = White,
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        text = "Loading synced lyrics...",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = White.copy(alpha = 0.7f)
+                    )
+                }
+            } else if (lyrics.isNotEmpty()) {
+                val line1 = lyrics.getOrNull(currentLineIndex)?.text?.takeIf { it.isNotBlank() }
+                    ?: lyrics.firstOrNull { it.text.isNotBlank() }?.text ?: ""
+                val line2 = lyrics.getOrNull(currentLineIndex + 1)?.text ?: ""
+                val line3 = lyrics.getOrNull(currentLineIndex + 2)?.text ?: ""
+
+                if (line1.isNotBlank()) {
+                    Text(
+                        text = line1,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold,
+                        color = White,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                if (line2.isNotBlank()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = line2,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                        color = White.copy(alpha = 0.6f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                if (line3.isNotBlank()) {
+                    Spacer(Modifier.height(3.dp))
+                    Text(
+                        text = line3,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = White.copy(alpha = 0.4f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+    }
 }

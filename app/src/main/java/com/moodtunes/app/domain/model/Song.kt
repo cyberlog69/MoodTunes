@@ -27,6 +27,7 @@ data class Song(
     val moodTags: List<MoodType> = emptyList(),
     val audioFormat: AudioFormat = AudioFormat.MP3,
     val isStream: Boolean = false,
+    val isPreview: Boolean = false,
     val playCount: Int = 0,
     val lastPlayedAt: Long = 0
 ) {

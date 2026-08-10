@@ -19,7 +19,7 @@ Designed to deliver an effortless listening experience, MoodTunes curates music 
 ### 🌟 Key Vision & Design Philosophy
 - **Emotion-Driven Curation**: Categorizes music into 6 curated mood profiles using intelligent sentiment and metadata analysis.
 - **Audiophile Grade Quality**: Full support for 24-bit/32-bit float audio output, FLAC Lossless, ALAC Lossless, and WAV Hi-Res formats.
-- **Unrestricted Global Access**: Multi-service streaming aggregator with dynamic host failover across **Jamendo**, **Internet Archive**, decentralised **Audius** protocol nodes, and YouTube proxy pools (Piped/Invidious) — ensuring zero network blockades across Indian ISPs (Jio, Airtel, Vi, BSNL, ACT) and global networks.
+- **Unrestricted Global Access**: Multi-service streaming aggregator across **Audius Protocol**, **Jamendo (320 kbps)**, **Internet Archive**, **Global Radio Browser (live 24/7)**, **iTunes Previews (30s)**, and **Deezer Charts & Previews** — ensuring zero network blockades and rock-solid reliability.
 - **Reliability First**: 512 MB LRU streaming cache with disk fallback, crash recovery guardian with automatic database backup/restore, and thread-safe playback pipeline.
 - **Privacy & Security First**: Zero tracking, network security HTTPS enforcement, encrypted shared preferences exclusion, and non-exported background services.
 
@@ -31,18 +31,22 @@ Designed to deliver an effortless listening experience, MoodTunes curates music 
 - **🎼 FLAC & ALAC Lossless Support**: Native decoding for FLAC (`.flac`), ALAC (`.m4a`), WAV (`.wav`), AAC, and MP3 formats with 24-bit float high-resolution audio pipeline.
 - **📀 Animated Vinyl Disc Player**: Full-screen player with real-time rotating vinyl disc artwork, seek bar, play/pause, shuffle, repeat, queue, and favorite toggle.
 - **📚 Songs Hub with Local & Online Tabs**: Spotify-style hub separating *Local* device tracks from curated *Online* streams, plus **Favorites** and **Playlists** tabs.
-- **🌐 Multi-Service Online Streaming**: Aggregates global CC-licensed content from **Jamendo** (multi-strategy search), **Internet Archive**, **Audius Protocol**, and **YouTube (via Piped/Invidious fast proxy pools)** with dynamic host failover — including live radio streams and full album/audiobook playlists.
+- **🌐 Multi-Service Online Streaming**: Aggregates global CC-licensed content and previews from **Audius Protocol**, **Jamendo**, **Internet Archive**, **Global Radio Browser**, **iTunes Search API**, and **Deezer API** with metadata enrichment from **MusicBrainz**.
+- **🎤 Spotify-Style Real-Time Synced Lyrics**:
+  - Live synced lyrics preview card directly inside the full-screen player.
+  - Expanded full-screen view featuring dynamic mood ambient gradients and auto-scrolling synced lines.
+  - Active line spring-scaling highlight, dimmed context lines, and **Tap-to-Seek** (click any line to jump playback directly to that timestamp).
+  - Integrated bottom mini-playback bar and one-tap lyrics sharing.
 - **🗣️ Music Language Selection**: Multi-select language filters (Hindi, English, Punjabi, Tamil, Telugu, Spanish, K-Pop, J-Pop, Instrumental) driving stream recommendations.
 - **📁 Full Playlist Management**: Create, rename, delete, add/remove songs, and reorder tracks within playlists, persisted in Room.
 - **⚡ Ultra-Low Playback Latency**: Tuned 250ms buffer load control, OkHttp connection pooling, and parallel stream URL resolution for instant playback startup.
 - **🔁 Smooth Crossfade**: Configurable crossfade between tracks (0.5s–3.0s).
 - **🎚️ Equalizer & Bass Boost**: Real-time AudioFX effects bound to the player's audio session via a system audio session.
-- **📜 Inline Lyrics**: Time-synced lyrics parsing with a full-screen lyrics sheet on the player.
 - **⚙️ Extensive Customization & Settings**:
   - **Theme Selection**: Switch between *Follow System*, *Always Dark*, and *Always Light* themes.
   - **Material You Dynamic Colors**: Adapts theme accent colors to your Android system wallpaper (Android 12+ / API 31+).
   - **Audio Source Mode**: Toggle between *Local Device Only*, *Online Streams Only*, or *Both Combined*.
-  - **Streaming Provider Selection**: Select between *Audius Only*, *YouTube Only*, or *Both Combined*.
+  - **Streaming Provider Selection**: Select between *All Combined*, *Audius Only*, *Jamendo Only*, *Internet Archive*, *Global Radio*, or *iTunes & Deezer Previews*.
   - **Audio Stream Quality**: Choose between *FLAC 24-bit Lossless*, *320 kbps High*, *128 kbps Standard*, or *Adaptive (Auto)*.
   - **Network & Data Controls**: Enforce *Wi-Fi Only Streaming*, *Wi-Fi Only Downloads*, or allow *High Quality over Mobile Data*.
   - **In-App Update Engine**: Checks GitHub Releases for new updates, downloads the APK in-app, launches the package installer, and shows a post-update changelog.

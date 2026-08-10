@@ -199,6 +199,10 @@ class PlayerViewModel @Inject constructor(
         playbackManager.seekTo(fraction)
     }
 
+    fun seekToPosition(positionMs: Long) {
+        playbackManager.seekToPosition(positionMs)
+    }
+
     fun toggleShuffle() {
         playbackManager.toggleShuffle()
     }

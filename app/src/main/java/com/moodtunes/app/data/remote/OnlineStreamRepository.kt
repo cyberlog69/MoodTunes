@@ -17,6 +17,8 @@ import timber.log.Timber
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
+import com.moodtunes.app.data.remote.api.iTunesApiService
+import com.moodtunes.app.data.remote.api.DeezerApiService
 
 /**
  * Handles global & Indian ISP (Jio, Airtel, Vi, BSNL, ACT) ultra-low-latency music streaming
@@ -33,7 +35,10 @@ import javax.inject.Singleton
  * - SECURITY FIX (S10): No printStackTrace() in production; debug logging only.
  */
 @Singleton
-class OnlineStreamRepository @Inject constructor() {
+class OnlineStreamRepository @Inject constructor(
+    private val iTunesApi: iTunesApiService,
+    private val deezerApi: DeezerApiService
+) {
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(5, TimeUnit.SECONDS)
@@ -53,18 +58,7 @@ class OnlineStreamRepository @Inject constructor() {
         "https://discovery-provider.audius.co"
     )
 
-    // ─── Piped (YouTube) API Fast Proxy Instances Pool (Updated) ──────────────
-    // Note: Piped instances are community-run and change frequently.
-    // We use a larger pool with longer timeouts for better reliability.
-    private val pipedInstances = listOf(
-        "https://pipedapi.kavin.rocks",
-        "https://pipedapi.tokhmi.xyz",
-        "https://api.piped.privacydev.net",
-        "https://pipedapi.moomoo.me",
-        "https://pipedapi.adminforge.de",
-        "https://piped-api.lunar.icu",
-        "https://pipedapi.reallyaweso.me"
-    )
+    // Removed Piped instances
 
     // SECURITY FIX (S8): @Volatile prevents stale cache reads across threads
     @Volatile private var activeAudiusHost: String? = null
@@ -160,126 +154,53 @@ class OnlineStreamRepository @Inject constructor() {
         songs
     }
 
-    /**
-     * Searches YouTube audio tracks via Piped instances pool with fast stream resolution.
-     * Uses an expanded pool of instances for better reliability.
-     */
-    suspend fun getYouTubeAudioTracksByMood(
-        mood: MoodType,
-        language: com.moodtunes.app.data.local.preferences.MusicLanguage = com.moodtunes.app.data.local.preferences.MusicLanguage.ALL,
-        limit: Int = 6
-    ): List<Song> = withContext(Dispatchers.IO) {
-        val songs = mutableListOf<Song>()
-        val langPrefix = if (language != com.moodtunes.app.data.local.preferences.MusicLanguage.ALL) "${language.searchQueryPrefix} " else ""
-        val query = "$langPrefix${mood.displayName} music"
-
-        for (pipedBase in pipedInstances) {
-            try {
-                val url = "$pipedBase/search?q=${Uri.encode(query)}&filter=music"
-                val request = Request.Builder()
-                    .url(url)
-                    .header("User-Agent", USER_AGENT)
-                    .header("Accept", "application/json")
-                    .build()
-
-                client.newCall(request).execute().use { response ->
-                    if (response.isSuccessful) {
-                        val body = response.body?.string() ?: return@use
-                        val json = JSONObject(body)
-                        val items = json.optJSONArray("items") ?: JSONArray()
-
-                        for (i in 0 until items.length().coerceAtMost(limit)) {
-                            val item = items.getJSONObject(i)
-                            val type = item.optString("type")
-                            if (type == "stream" || type == "music") {
-                                val urlPath = item.optString("url", "")
-                                val videoId = urlPath.replace("/watch?v=", "")
-                                val title = item.optString("title", "YouTube Track")
-                                val uploaderName = item.optString("uploaderName", "YouTube Music")
-                                val thumbnail = item.optString("thumbnail", "")
-                                val duration = item.optLong("duration", 200) * 1000L
-
-                                if (videoId.isNotEmpty()) {
-                                    val streamUrl = "$pipedBase/streams/$videoId"
-
-                                    songs.add(
-                                        Song(
-                                            id = videoId.hashCode().toLong() and 0x7FFFFFFF,
-                                            title = title,
-                                            artist = uploaderName,
-                                            album = "YouTube Stream",
-                                            duration = duration,
-                                            uri = Uri.parse(streamUrl),
-                                            albumArtUri = if (thumbnail.isNotEmpty()) Uri.parse(thumbnail) else null,
-                                            genre = mood.displayName,
-                                            audioFormat = AudioFormat.STREAM,
-                                            isStream = true,
-                                            moodTags = listOf(mood)
-                                        )
-                                    )
-                                }
-                            }
-                        }
-                        if (songs.isNotEmpty()) return@withContext songs
-                    }
-                }
-            } catch (e: Exception) {
-                Timber.w(e, "Piped instance failed: $pipedBase")
-            }
-        }
-
-        songs
+    /** Fetches 30-second iTunes preview tracks matching a query and language. */
+    suspend fun getITunesPreviewTracks(
+        languages: Set<com.moodtunes.app.data.local.preferences.MusicLanguage> = setOf(com.moodtunes.app.data.local.preferences.MusicLanguage.ALL),
+        categoryQuery: String = "Top Hits",
+        limit: Int = 10
+    ): List<Song> {
+        val selectedLangs = languages.filter { it != com.moodtunes.app.data.local.preferences.MusicLanguage.ALL }
+        val langPrefix = if (selectedLangs.isNotEmpty()) selectedLangs.first().searchQueryPrefix + " " else ""
+        val query = "$langPrefix$categoryQuery".trim()
+        return runCatching { iTunesApi.searchTracks(query, limit) }.getOrDefault(emptyList())
     }
 
-    /**
-     * Resolves direct audio stream URL in parallel to avoid playback delay when selected.
-     * SECURITY FIX (S4): Validates resolved URL must use https:// scheme.
-     */
-    suspend fun resolveDirectStreamUrl(streamUrl: String): String = withContext(Dispatchers.IO) {
-        if (!streamUrl.contains("/streams/")) return@withContext streamUrl
-
-        try {
-            val request = Request.Builder()
-                .url(streamUrl)
-                .header("User-Agent", USER_AGENT)
-                .build()
-
-            client.newCall(request).execute().use { response ->
-                if (response.isSuccessful) {
-                    val body = response.body?.string() ?: return@withContext streamUrl
-                    val json = JSONObject(body)
-                    val audioStreams = json.optJSONArray("audioStreams") ?: JSONArray()
-                    if (audioStreams.length() > 0) {
-                        val firstStream = audioStreams.getJSONObject(0)
-                        val directUrl = firstStream.optString("url")
-                        // SECURITY FIX (S4): Only accept https:// URLs from proxy responses
-                        if (directUrl.startsWith("https://")) {
-                            return@withContext directUrl
-                        }
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Timber.w(e, "Stream URL resolution failed")
-        }
-
-        streamUrl
+    /** Fetches 30-second Deezer preview tracks matching a query and language. */
+    suspend fun getDeezerPreviewTracks(
+        languages: Set<com.moodtunes.app.data.local.preferences.MusicLanguage> = setOf(com.moodtunes.app.data.local.preferences.MusicLanguage.ALL),
+        categoryQuery: String = "Top Hits",
+        limit: Int = 10
+    ): List<Song> {
+        val selectedLangs = languages.filter { it != com.moodtunes.app.data.local.preferences.MusicLanguage.ALL }
+        val langPrefix = if (selectedLangs.isNotEmpty()) selectedLangs.first().searchQueryPrefix + " " else ""
+        val query = "$langPrefix$categoryQuery".trim()
+        return runCatching { deezerApi.searchTracks(query, limit) }.getOrDefault(emptyList())
     }
 
-    /** Parallel fetching of Audius, Internet Archive, and YouTube online tracks for a mood and language */
+    /** Fetches trending tracks from Deezer charts. */
+    suspend fun getDeezerChartTracks(limit: Int = 10): List<Song> {
+        return runCatching { deezerApi.getChartTracks(limit) }.getOrDefault(emptyList())
+    }
+
+
+
+    /** Parallel fetching of Audius, Internet Archive, iTunes, and Deezer online tracks for a mood and language */
     suspend fun fetchAllOnlineTracksForMood(
         mood: MoodType,
         language: com.moodtunes.app.data.local.preferences.MusicLanguage = com.moodtunes.app.data.local.preferences.MusicLanguage.ALL
     ): List<Song> = coroutineScope {
         val audiusDeferred = async { runCatching { getAudiusTracksByMood(mood, language) }.getOrDefault(emptyList()) }
         val archiveDeferred = async { runCatching { getInternetArchiveTracksByMood(mood, language) }.getOrDefault(emptyList()) }
-        val ytDeferred = async { runCatching { getYouTubeAudioTracksByMood(mood, language) }.getOrDefault(emptyList()) }
+        val iTunesDeferred = async { runCatching { iTunesApi.searchTracks("${mood.displayName} music", 6) }.getOrDefault(emptyList()) }
+        val deezerDeferred = async { runCatching { deezerApi.searchTracks("${mood.displayName} music", 6) }.getOrDefault(emptyList()) }
 
         val audiusResult = audiusDeferred.await()
         val archiveResult = archiveDeferred.await()
-        val ytResult = ytDeferred.await()
+        val iTunesResult = iTunesDeferred.await()
+        val deezerResult = deezerDeferred.await()
 
-        (audiusResult + archiveResult + ytResult).distinctBy { it.id }
+        (audiusResult + archiveResult + iTunesResult + deezerResult).distinctBy { it.id }
     }
 
     /**
@@ -605,6 +526,8 @@ class OnlineStreamRepository @Inject constructor() {
         val jamendoDeferred = async { runCatching { getJamendoTracks(languages, categoryQuery, limit = 8) }.getOrDefault(emptyList()) }
         val archiveDeferred = async { runCatching { getInternetArchiveTracks(languages, categoryQuery, limit = 8) }.getOrDefault(emptyList()) }
         val radioDeferred = async { runCatching { getGlobalInternetRadioStations(languages, categoryQuery, limit = 5) }.getOrDefault(emptyList()) }
+        val iTunesDeferred = async { runCatching { iTunesApi.searchTracks(categoryQuery, limit = 6) }.getOrDefault(emptyList()) }
+        val deezerDeferred = async { runCatching { deezerApi.searchTracks(categoryQuery, limit = 6) }.getOrDefault(emptyList()) }
 
         val songs = mutableListOf<Song>()
         val selectedLangs = languages.filter { it != com.moodtunes.app.data.local.preferences.MusicLanguage.ALL }
@@ -661,66 +584,23 @@ class OnlineStreamRepository @Inject constructor() {
                 Timber.w(e, "General Audius query failed: $q")
             }
 
-            // 2. Try Piped (YouTube) — best effort, non-blocking
-            for (pipedBase in pipedInstances) {
-                try {
-                    val ytUrl = "$pipedBase/search?q=${Uri.encode(q)}&filter=music"
-                    val request = Request.Builder()
-                        .url(ytUrl)
-                        .header("User-Agent", USER_AGENT)
-                        .header("Accept", "application/json")
-                        .build()
-                    client.newCall(request).execute().use { response ->
-                        if (response.isSuccessful) {
-                            val body = response.body?.string()
-                            if (body != null) {
-                                val json = JSONObject(body)
-                                val items = json.optJSONArray("items") ?: JSONArray()
-                                for (i in 0 until items.length().coerceAtMost(limit / 2)) {
-                                    val item = items.getJSONObject(i)
-                                    val type = item.optString("type")
-                                    if (type == "stream" || type == "music") {
-                                        val urlPath = item.optString("url", "")
-                                        val videoId = urlPath.replace("/watch?v=", "")
-                                        val title = item.optString("title", "YouTube Track")
-                                        val uploaderName = item.optString("uploaderName", "YouTube Music")
-                                        val thumbnail = item.optString("thumbnail", "")
-                                        val duration = item.optLong("duration", 200) * 1000L
-
-                                        if (videoId.isNotEmpty()) {
-                                            val streamUrl = "$pipedBase/streams/$videoId"
-                                            songs.add(
-                                                Song(
-                                                    id = videoId.hashCode().toLong() and 0x7FFFFFFF,
-                                                    title = title,
-                                                    artist = uploaderName,
-                                                    album = "Online Stream",
-                                                    duration = duration,
-                                                    uri = Uri.parse(streamUrl),
-                                                    albumArtUri = if (thumbnail.isNotEmpty()) Uri.parse(thumbnail) else null,
-                                                    genre = categoryQuery,
-                                                    audioFormat = AudioFormat.STREAM,
-                                                    isStream = true
-                                                )
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } catch (e: Exception) {
-                    Timber.w(e, "Piped instance failed for general query $q at $pipedBase")
-                }
-                if (songs.size >= limit / 2) break
-            }
+            // Piped (YouTube) has been removed
         }
 
         val jamendoTracks = jamendoDeferred.await()
         val archiveTracks = archiveDeferred.await()
         val radioStations = radioDeferred.await()
+        val iTunesTracks = iTunesDeferred.await()
+        val deezerTracks = deezerDeferred.await()
 
-        (songs + jamendoTracks + archiveTracks + radioStations).distinctBy { it.id }
+        (songs + jamendoTracks + archiveTracks + radioStations + iTunesTracks + deezerTracks).distinctBy { it.id }
+    }
+
+    /**
+     * Resolves direct audio stream URL.
+     */
+    suspend fun resolveDirectStreamUrl(streamUrl: String): String = withContext(Dispatchers.IO) {
+        streamUrl
     }
 
     companion object {

@@ -340,6 +340,16 @@ class PlaybackManager @Inject constructor(
         _sleepTimerRemainingMs.value = null
     }
 
+    fun updateFavorite(songId: Long, isFavorite: Boolean) {
+        val current = _currentSong.value
+        if (current?.id == songId) {
+            _currentSong.value = current.copy(isFavorite = isFavorite)
+        }
+        _playlist.value = _playlist.value.map {
+            if (it.id == songId) it.copy(isFavorite = isFavorite) else it
+        }
+    }
+
     // ── Crossfade ────────────────────────────────────────────────────────────
     fun setCrossfadeEnabled(enabled: Boolean) {
         playbackPreferencesRepository.crossfadeEnabled = enabled

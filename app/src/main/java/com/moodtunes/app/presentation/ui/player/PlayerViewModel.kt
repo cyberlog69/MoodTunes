@@ -282,8 +282,14 @@ class PlayerViewModel @Inject constructor(
     fun seekToPosition(positionMs: Long) = playbackManager.seekToPosition(positionMs)
 
     fun toggleShuffle() = playbackManager.toggleShuffle()
-    fun cycleRepeatMode() = playbackManager.cycleRepeatMode()
+    fun toggleRepeat() = playbackManager.toggleRepeat()
+    fun cycleRepeatMode() = playbackManager.toggleRepeat()
     fun toggleSmartShuffle() = playbackManager.toggleSmartShuffle()
+
+    fun toggleFavorite() {
+        val songId = uiState.value.currentSong?.id ?: return
+        toggleFavorite(songId)
+    }
 
     fun toggleFavorite(songId: Long) {
         viewModelScope.launch {

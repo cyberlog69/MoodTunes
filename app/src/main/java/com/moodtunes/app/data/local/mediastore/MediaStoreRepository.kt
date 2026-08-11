@@ -20,8 +20,8 @@ import javax.inject.Singleton
 
 /**
  * Queries the device's MediaStore to retrieve local FLAC, ALAC, WAV, AAC, and MP3 audio files.
- * Integrates OnlineStreamRepository to fetch live, ISP-unrestricted Audius and YouTube streaming tracks.
- * Respects user settings for Local vs Stream audio modes & Audius vs YouTube streaming providers.
+ * Integrates OnlineStreamRepository to fetch live JioSaavn, Audius, Jamendo, and Global Radio streams.
+ * Respects user settings for Local vs Stream audio modes & selected streaming providers.
  */
 @Singleton
 class MediaStoreRepository @Inject constructor(
@@ -29,11 +29,12 @@ class MediaStoreRepository @Inject constructor(
     private val onlineStreamRepository: OnlineStreamRepository,
     private val userPreferencesRepository: UserPreferencesRepository
 ) {
-    // COPYRIGHT FIX (C1): Removed hardcoded Zeno.fm commercial radio URLs.
-    // Zeno.fm hosts copyrighted broadcast radio that the app is not licensed to relay.
-    // All online tracks are now sourced exclusively from:
-    //   - Audius: decentralised protocol with CC-licensed, royalty-free artist uploads
-    //   - YouTube via Piped: user-initiated streaming (same as browser playback)
+    // All online tracks are sourced from:
+    //   - JioSaavn: Indian regional, traditional, classical and Bollywood catalogue
+    //   - Audius: decentralised protocol with CC-licensed indie artist uploads
+    //   - Jamendo: royalty-free Creative Commons tracks (320kbps MP3)
+    //   - Global Radio Browser: 35,000+ legal community & public radio stations
+    //   - Navidrome / Subsonic: user's self-hosted legally owned music library
 
     /** Fetches audio files according to user's selected AudioSourceMode */
     suspend fun getAllSongs(): List<Song> = withContext(Dispatchers.IO) {

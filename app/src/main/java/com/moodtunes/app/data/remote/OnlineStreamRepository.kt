@@ -480,8 +480,6 @@ class OnlineStreamRepository @Inject constructor(
             } catch (e: Exception) {
                 Timber.w(e, "General Audius query failed: $q")
             }
-
-            // Piped (YouTube) has been removed
         }
 
         val saavnTracks = saavnDeferred.await()

@@ -887,7 +887,7 @@ fun SettingsScreen(
                                                 )
                                                 Spacer(Modifier.height(4.dp))
                                                 Text(
-                                                    text = "• In-App Update Engine: Auto-downloads and installs updates directly within MoodTunes\n• Post-Update Welcome Window displaying changelog and version info\n• Multi-Service Music Streaming Aggregator (Jamendo + Audius + YouTube)\n• 24/7 Global Internet Radio Streams (35,000+ stations)",
+                                                    text = "• In-App Update Engine: Auto-downloads and installs updates directly within MoodTunes\n• Post-Update Welcome Window displaying changelog and version info\n• JioSaavn Integration: 16+ Indian regional languages, classical ragas & Bollywood\n• ListenBrainz Scrobbler & Navidrome Self-Hosted Lossless Music Server\n• 24/7 Global Internet Radio Streams (35,000+ stations)",
                                                     style = MaterialTheme.typography.bodySmall,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )

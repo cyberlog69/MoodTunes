@@ -13,6 +13,7 @@ import com.moodtunes.app.domain.usecase.GetFavoriteSongsUseCase
 import com.moodtunes.app.domain.usecase.GetMostPlayedUseCase
 import com.moodtunes.app.domain.usecase.GetPlaylistsUseCase
 import com.moodtunes.app.domain.usecase.ToggleFavoriteUseCase
+import com.moodtunes.app.data.local.mediastore.TagEditorManager
 import com.moodtunes.app.data.remote.api.SubsonicApiService
 import com.moodtunes.app.service.PlaybackManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -74,7 +75,7 @@ class LibraryViewModel @Inject constructor(
     private val onlineStreamRepository: OnlineStreamRepository,
     private val subsonicApiService: SubsonicApiService,
     private val userPreferencesRepository: UserPreferencesRepository,
-    private val tagEditorManager: com.moodtunes.app.data.local.mediastore.TagEditorManager
+    private val tagEditorManager: TagEditorManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LibraryUiState())

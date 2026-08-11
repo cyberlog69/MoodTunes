@@ -73,141 +73,204 @@ class PlayerViewModel @Inject constructor(
     private val audioOutputMonitor: AudioOutputMonitor
 ) : ViewModel() {
 
-    private val _lyrics = MutableStateFlow<List<LyricsLine>>(emptyList())
-    private val _isLyricsLoading = MutableStateFlow(false)
-    private val _castMessage = MutableStateFlow<String?>(null)
-
-    // Combine playback, effects, visualizer and casting states
-    private val playbackCoreState = combine(
-        playbackManager.playlist,
-        playbackManager.currentSong,
-        playbackManager.isPlaying,
-        playbackManager.currentPositionMs,
-        playbackManager.durationMs,
-        playbackManager.currentMood,
-        playbackManager.isShuffleEnabled,
-        playbackManager.repeatMode
-    ) { playlist, song, isPlaying, pos, dur, mood, shuffle, repeatModeInt ->
-        val index = playlist.indexOfFirst { it.id == song?.id }.coerceAtLeast(0)
-        val repeatMode = when (repeatModeInt) {
-            Player.REPEAT_MODE_ONE -> RepeatMode.ONE
-            Player.REPEAT_MODE_ALL -> RepeatMode.ALL
-            else -> RepeatMode.OFF
-        }
-        PlaybackCore(playlist, index, song, isPlaying, pos, dur, mood, shuffle, repeatMode)
-    }
-
-    private val effectsState = combine(
-        audioEffectsManager.isEqualizerEnabled,
-        audioEffectsManager.isBassBoostEnabled,
-        audioEffectsManager.bassBoostStrength,
-        audioEffectsManager.isVirtualizerEnabled,
-        audioEffectsManager.virtualizerStrength,
-        audioEffectsManager.reverbPreset,
-        audioEffectsManager.bandLevels,
-        audioEffectsManager.bandFrequencies,
-        audioEffectsManager.presets
-    ) { eqEn, bbEn, bbStr, virtEn, virtStr, rev, levels, freqs, presets ->
-        EffectsState(eqEn, bbEn, bbStr, virtEn, virtStr, rev, levels, freqs, presets)
-    }
-
-    val uiState: StateFlow<PlayerUiState> = combine(
-        playbackCoreState,
-        effectsState,
-        visualizerManager.currentMode,
-        visualizerManager.fftBands,
-        playbackManager.isSkipSilenceEnabled,
-        playbackManager.playbackSpeed,
-        playbackManager.isSmartShuffleEnabled,
-        playbackManager.isCrossfadeEnabled,
-        playbackManager.crossfadeDurationMs,
-        playbackManager.sleepTimerRemainingMs,
-        _lyrics,
-        _isLyricsLoading,
-        castPlaybackManager.isCasting,
-        castPlaybackManager.castDeviceName,
-        audioOutputMonitor.output,
-        _castMessage,
-        playbackManager.playbackError
-    ) { args ->
-        val core = args[0] as PlaybackCore
-        val fx = args[1] as EffectsState
-        val vizMode = args[2] as VisualizerMode
-        val bands = args[3] as FloatArray
-        val skipSilence = args[4] as Boolean
-        val speed = args[5] as Float
-        val smartShuffle = args[6] as Boolean
-        val crossfade = args[7] as Boolean
-        val crossfadeDur = args[8] as Int
-        val sleepRemaining = args[9] as Long?
-        @Suppress("UNCHECKED_CAST")
-        val lyrics = args[10] as List<LyricsLine>
-        val lyricsLoading = args[11] as Boolean
-        val casting = args[12] as Boolean
-        val castDevice = args[13] as String?
-        val output = args[14] as AudioOutputInfo?
-        val message = args[15] as String?
-        val playbackError = args[16] as PlaybackError?
-
-        PlayerUiState(
-            songs = core.playlist,
-            currentSongIndex = core.index,
-            currentSong = core.song,
-            isPlaying = core.isPlaying,
-            currentPositionMs = core.pos,
-            durationMs = core.dur,
-            isShuffleEnabled = core.shuffle,
-            repeatMode = core.repeatMode,
-            selectedMood = core.mood,
-            playbackSpeed = speed,
-            isSmartShuffleEnabled = smartShuffle,
-            isCrossfadeEnabled = crossfade,
-            crossfadeDurationMs = crossfadeDur,
-            sleepTimerRemainingMs = sleepRemaining,
-            isEqualizerEnabled = fx.eqEnabled,
-            isBassBoostEnabled = fx.bassEnabled,
-            bassBoostStrength = fx.bassStrength,
-            isVirtualizerEnabled = fx.virtEnabled,
-            virtualizerStrength = fx.virtStrength,
-            reverbPreset = fx.reverbPreset,
-            isSkipSilenceEnabled = skipSilence,
-            visualizerMode = vizMode,
-            fftBands = bands,
-            equalizerLevels = fx.levels,
-            equalizerFrequencies = fx.freqs,
-            equalizerPresets = fx.presets,
-            lyrics = lyrics,
-            isLyricsLoading = lyricsLoading,
-            isCasting = casting,
-            castDeviceName = castDevice,
-            audioOutput = output,
-            castMessage = message,
-            playbackError = playbackError
-        )
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = PlayerUiState()
-    )
+    private val _uiState = MutableStateFlow(PlayerUiState())
+    val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
 
     init {
+        // Core playback state collections
         viewModelScope.launch {
-            playbackManager.currentSong
-                .collectLatest { song ->
-                    if (song == null) {
-                        _lyrics.value = emptyList()
-                        return@collectLatest
-                    }
-                    _isLyricsLoading.value = true
-                    _lyrics.value = lyricsRepository.getLyrics(song)
-                    _isLyricsLoading.value = false
+            playbackManager.playlist.collectLatest { list ->
+                _uiState.update { current ->
+                    val idx = list.indexOfFirst { it.id == current.currentSong?.id }.coerceAtLeast(0)
+                    current.copy(songs = list, currentSongIndex = idx)
                 }
+            }
         }
 
-        // Trigger visualizer procedural updates when playing
+        viewModelScope.launch {
+            playbackManager.currentSong.collectLatest { song ->
+                _uiState.update { current ->
+                    val idx = current.songs.indexOfFirst { it.id == song?.id }.coerceAtLeast(0)
+                    current.copy(currentSong = song, currentSongIndex = idx)
+                }
+                if (song == null) {
+                    _uiState.update { it.copy(lyrics = emptyList(), isLyricsLoading = false) }
+                } else {
+                    _uiState.update { it.copy(isLyricsLoading = true) }
+                    val loaded = lyricsRepository.getLyrics(song)
+                    _uiState.update { it.copy(lyrics = loaded, isLyricsLoading = false) }
+                }
+            }
+        }
+
         viewModelScope.launch {
             playbackManager.isPlaying.collectLatest { playing ->
+                _uiState.update { it.copy(isPlaying = playing) }
                 visualizerManager.startProceduralFallback(playing)
+            }
+        }
+
+        viewModelScope.launch {
+            playbackManager.currentPositionMs.collectLatest { pos ->
+                _uiState.update { it.copy(currentPositionMs = pos) }
+            }
+        }
+
+        viewModelScope.launch {
+            playbackManager.durationMs.collectLatest { dur ->
+                _uiState.update { it.copy(durationMs = dur) }
+            }
+        }
+
+        viewModelScope.launch {
+            playbackManager.currentMood.collectLatest { mood ->
+                _uiState.update { it.copy(selectedMood = mood) }
+            }
+        }
+
+        viewModelScope.launch {
+            playbackManager.isShuffleEnabled.collectLatest { shuffle ->
+                _uiState.update { it.copy(isShuffleEnabled = shuffle) }
+            }
+        }
+
+        viewModelScope.launch {
+            playbackManager.repeatMode.collectLatest { modeInt ->
+                val mode = when (modeInt) {
+                    Player.REPEAT_MODE_ONE -> RepeatMode.ONE
+                    Player.REPEAT_MODE_ALL -> RepeatMode.ALL
+                    else -> RepeatMode.OFF
+                }
+                _uiState.update { it.copy(repeatMode = mode) }
+            }
+        }
+
+        viewModelScope.launch {
+            playbackManager.playbackSpeed.collectLatest { speed ->
+                _uiState.update { it.copy(playbackSpeed = speed) }
+            }
+        }
+
+        viewModelScope.launch {
+            playbackManager.isSmartShuffleEnabled.collectLatest { ss ->
+                _uiState.update { it.copy(isSmartShuffleEnabled = ss) }
+            }
+        }
+
+        viewModelScope.launch {
+            playbackManager.isCrossfadeEnabled.collectLatest { cf ->
+                _uiState.update { it.copy(isCrossfadeEnabled = cf) }
+            }
+        }
+
+        viewModelScope.launch {
+            playbackManager.crossfadeDurationMs.collectLatest { dur ->
+                _uiState.update { it.copy(crossfadeDurationMs = dur) }
+            }
+        }
+
+        viewModelScope.launch {
+            playbackManager.sleepTimerRemainingMs.collectLatest { sleep ->
+                _uiState.update { it.copy(sleepTimerRemainingMs = sleep) }
+            }
+        }
+
+        viewModelScope.launch {
+            playbackManager.isSkipSilenceEnabled.collectLatest { skip ->
+                _uiState.update { it.copy(isSkipSilenceEnabled = skip) }
+            }
+        }
+
+        viewModelScope.launch {
+            playbackManager.playbackError.collectLatest { err ->
+                _uiState.update { it.copy(playbackError = err) }
+            }
+        }
+
+        // Audio effects collections
+        viewModelScope.launch {
+            audioEffectsManager.isEqualizerEnabled.collectLatest { eq ->
+                _uiState.update { it.copy(isEqualizerEnabled = eq) }
+            }
+        }
+
+        viewModelScope.launch {
+            audioEffectsManager.isBassBoostEnabled.collectLatest { bb ->
+                _uiState.update { it.copy(isBassBoostEnabled = bb) }
+            }
+        }
+
+        viewModelScope.launch {
+            audioEffectsManager.bassBoostStrength.collectLatest { str ->
+                _uiState.update { it.copy(bassBoostStrength = str) }
+            }
+        }
+
+        viewModelScope.launch {
+            audioEffectsManager.isVirtualizerEnabled.collectLatest { virt ->
+                _uiState.update { it.copy(isVirtualizerEnabled = virt) }
+            }
+        }
+
+        viewModelScope.launch {
+            audioEffectsManager.virtualizerStrength.collectLatest { str ->
+                _uiState.update { it.copy(virtualizerStrength = str) }
+            }
+        }
+
+        viewModelScope.launch {
+            audioEffectsManager.reverbPreset.collectLatest { rev ->
+                _uiState.update { it.copy(reverbPreset = rev) }
+            }
+        }
+
+        viewModelScope.launch {
+            audioEffectsManager.bandLevels.collectLatest { levels ->
+                _uiState.update { it.copy(equalizerLevels = levels) }
+            }
+        }
+
+        viewModelScope.launch {
+            audioEffectsManager.bandFrequencies.collectLatest { freqs ->
+                _uiState.update { it.copy(equalizerFrequencies = freqs) }
+            }
+        }
+
+        viewModelScope.launch {
+            audioEffectsManager.presets.collectLatest { presets ->
+                _uiState.update { it.copy(equalizerPresets = presets) }
+            }
+        }
+
+        // Visualizer collections
+        viewModelScope.launch {
+            visualizerManager.currentMode.collectLatest { mode ->
+                _uiState.update { it.copy(visualizerMode = mode) }
+            }
+        }
+
+        viewModelScope.launch {
+            visualizerManager.fftBands.collectLatest { bands ->
+                _uiState.update { it.copy(fftBands = bands) }
+            }
+        }
+
+        // Casting and Audio Output
+        viewModelScope.launch {
+            castPlaybackManager.isCasting.collectLatest { casting ->
+                _uiState.update { it.copy(isCasting = casting) }
+            }
+        }
+
+        viewModelScope.launch {
+            castPlaybackManager.castDeviceName.collectLatest { name ->
+                _uiState.update { it.copy(castDeviceName = name) }
+            }
+        }
+
+        viewModelScope.launch {
+            audioOutputMonitor.output.collectLatest { output ->
+                _uiState.update { it.copy(audioOutput = output) }
             }
         }
     }
@@ -216,6 +279,7 @@ class PlayerViewModel @Inject constructor(
     fun skipNext() = playbackManager.skipNext()
     fun skipPrevious() = playbackManager.skipPrevious()
     fun seekTo(fraction: Float) = playbackManager.seekTo(fraction)
+    fun seekToPosition(positionMs: Long) = playbackManager.seekToPosition(positionMs)
 
     fun toggleShuffle() = playbackManager.toggleShuffle()
     fun cycleRepeatMode() = playbackManager.cycleRepeatMode()
@@ -272,48 +336,24 @@ class PlayerViewModel @Inject constructor(
         if (state.isCasting) {
             castPlaybackManager.disconnect()
             playbackManager.play()
-            _castMessage.value = "Stopped casting"
+            _uiState.update { it.copy(castMessage = "Stopped casting") }
             return
         }
         val song = state.currentSong ?: return
         if (!song.isStream) {
-            _castMessage.value = "Only online streams can be cast"
+            _uiState.update { it.copy(castMessage = "Only online streams can be cast") }
             return
         }
         val started = castPlaybackManager.castQueue(state.songs, state.currentSongIndex)
         if (started) {
             playbackManager.pause()
-            _castMessage.value = "Casting to ${castPlaybackManager.castDeviceName.value ?: "Chromecast"}"
+            _uiState.update { it.copy(castMessage = "Casting to ${castPlaybackManager.castDeviceName.value ?: "Chromecast"}") }
         } else {
-            _castMessage.value = "No Chromecast device connected"
+            _uiState.update { it.copy(castMessage = "No Chromecast device connected") }
         }
     }
 
     fun clearCastMessage() {
-        _castMessage.value = null
+        _uiState.update { it.copy(castMessage = null) }
     }
-
-    private data class PlaybackCore(
-        val playlist: List<Song>,
-        val index: Int,
-        val song: Song?,
-        val isPlaying: Boolean,
-        val pos: Long,
-        val dur: Long,
-        val mood: MoodType?,
-        val shuffle: Boolean,
-        val repeatMode: RepeatMode
-    )
-
-    private data class EffectsState(
-        val eqEnabled: Boolean,
-        val bassEnabled: Boolean,
-        val bassStrength: Short,
-        val virtEnabled: Boolean,
-        val virtStrength: Short,
-        val reverbPreset: ReverbPreset,
-        val levels: List<Float>,
-        val freqs: List<Int>,
-        val presets: List<String>
-    )
 }

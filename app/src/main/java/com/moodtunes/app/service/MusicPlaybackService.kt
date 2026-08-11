@@ -60,6 +60,7 @@ class MusicPlaybackService : MediaLibraryService() {
     @Inject lateinit var playlistRepository: IPlaylistRepository
     @Inject lateinit var onlineStreamRepository: OnlineStreamRepository
     @Inject lateinit var audioEffectsManager: AudioEffectsManager
+    @Inject lateinit var playbackPreferencesRepository: PlaybackPreferencesRepository
 
     private var mediaSession: MediaLibraryService.MediaLibrarySession? = null
     private val callbackScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -139,6 +140,9 @@ class MusicPlaybackService : MediaLibraryService() {
             .setLoadControl(loadControl)
             .setMediaSourceFactory(mediaSourceFactory)
             .build()
+        runCatching {
+            player.skipSilenceEnabled = playbackPreferencesRepository.skipSilenceEnabled
+        }
         player.addListener(object : Player.Listener {
             override fun onPlayerStateChanged(playWhenReady: Boolean, playbackState: Int) {
                 if (playbackState == Player.STATE_READY) attachEffectsWhenReady()

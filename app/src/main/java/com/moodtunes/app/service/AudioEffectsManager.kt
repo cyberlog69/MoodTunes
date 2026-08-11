@@ -2,6 +2,8 @@ package com.moodtunes.app.service
 
 import android.media.audiofx.BassBoost
 import android.media.audiofx.Equalizer
+import android.media.audiofx.PresetReverb
+import android.media.audiofx.Virtualizer
 import com.moodtunes.app.data.local.preferences.PlaybackPreferencesRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -10,11 +12,25 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Wraps the platform AudioFX equalizer + bass boost and binds it to the audio
- * session owned by the active ExoPlayer (see [PlaybackManager.ensureAudioEffectsAttached]).
- *
- * Band levels are exposed as normalized floats in the range [-1f, 1f] where 0f
- * is a flat response. All state is persisted via [PlaybackPreferencesRepository].
+ * Reverb preset descriptor for user-friendly UI display and audio engine mapping.
+ */
+enum class ReverbPreset(val id: Short, val displayName: String, val icon: String) {
+    NONE(PresetReverb.PRESET_NONE, "Off", "🔇"),
+    SMALL_ROOM(PresetReverb.PRESET_SMALLROOM, "Studio Room", "🎙️"),
+    MEDIUM_ROOM(PresetReverb.PRESET_MEDIUMROOM, "Live Room", "🏠"),
+    LARGE_ROOM(PresetReverb.PRESET_LARGEROOM, "Concert Hall", "🏛️"),
+    MEDIUM_HALL(PresetReverb.PRESET_MEDIUMHALL, "Auditorium", "🎭"),
+    LARGE_HALL(PresetReverb.PRESET_LARGEHALL, "Cathedral", "⛪"),
+    PLATE(PresetReverb.PRESET_PLATE, "Plate Reverb", "✨");
+
+    companion object {
+        fun fromId(id: Short): ReverbPreset = entries.firstOrNull { it.id == id } ?: NONE
+    }
+}
+
+/**
+ * Wraps platform AudioFX (Equalizer, BassBoost, 3D Virtualizer, PresetReverb)
+ * and binds them to the active ExoPlayer audio session.
  */
 @Singleton
 class AudioEffectsManager @Inject constructor(
@@ -22,6 +38,8 @@ class AudioEffectsManager @Inject constructor(
 ) {
     private var equalizer: Equalizer? = null
     private var bassBoost: BassBoost? = null
+    private var virtualizer: Virtualizer? = null
+    private var presetReverb: PresetReverb? = null
     private var attachedSessionId: Int = -1
 
     private val _isEqualizerEnabled = MutableStateFlow(playbackPreferencesRepository.equalizerEnabled)
@@ -33,6 +51,15 @@ class AudioEffectsManager @Inject constructor(
     private val _bassBoostStrength = MutableStateFlow(playbackPreferencesRepository.bassBoostStrength)
     val bassBoostStrength: StateFlow<Short> = _bassBoostStrength.asStateFlow()
 
+    private val _isVirtualizerEnabled = MutableStateFlow(playbackPreferencesRepository.virtualizerEnabled)
+    val isVirtualizerEnabled: StateFlow<Boolean> = _isVirtualizerEnabled.asStateFlow()
+
+    private val _virtualizerStrength = MutableStateFlow(playbackPreferencesRepository.virtualizerStrength)
+    val virtualizerStrength: StateFlow<Short> = _virtualizerStrength.asStateFlow()
+
+    private val _reverbPreset = MutableStateFlow(ReverbPreset.fromId(playbackPreferencesRepository.reverbPreset))
+    val reverbPreset: StateFlow<ReverbPreset> = _reverbPreset.asStateFlow()
+
     private val _bandLevels = MutableStateFlow<List<Float>>(emptyList())
     val bandLevels: StateFlow<List<Float>> = _bandLevels.asStateFlow()
 
@@ -42,7 +69,7 @@ class AudioEffectsManager @Inject constructor(
     private val _presets = MutableStateFlow<List<String>>(emptyList())
     val presets: StateFlow<List<String>> = _presets.asStateFlow()
 
-    /** @return true when the Equalizer was successfully bound to the session. */
+    /** @return true when AudioFX was successfully bound to the session. */
     fun attach(audioSessionId: Int): Boolean {
         if (audioSessionId <= 0) return false
         if (attachedSessionId == audioSessionId && equalizer != null) return true
@@ -57,11 +84,20 @@ class AudioEffectsManager @Inject constructor(
             _presets.value = (0 until eq.numberOfPresets.toInt()).map { preset -> eq.getPresetName(preset.toShort()) }
             equalizer = eq
 
-            val bb = BassBoost(0, audioSessionId)
-            bassBoost = bb
+            runCatching {
+                bassBoost = BassBoost(0, audioSessionId)
+            }
+            runCatching {
+                virtualizer = Virtualizer(0, audioSessionId)
+            }
+            runCatching {
+                presetReverb = PresetReverb(0, audioSessionId)
+            }
 
             applyEqualizer()
             applyBassBoost()
+            applyVirtualizer()
+            applyReverb()
             true
         }.getOrElse {
             release()
@@ -72,30 +108,20 @@ class AudioEffectsManager @Inject constructor(
     fun release() {
         runCatching { equalizer?.release() }
         runCatching { bassBoost?.release() }
+        runCatching { virtualizer?.release() }
+        runCatching { presetReverb?.release() }
         equalizer = null
         bassBoost = null
+        virtualizer = null
+        presetReverb = null
         attachedSessionId = -1
     }
 
+    // ── Equalizer ────────────────────────────────────────────────────────────
     fun toggleEqualizer(enabled: Boolean) {
         playbackPreferencesRepository.equalizerEnabled = enabled
         _isEqualizerEnabled.value = enabled
         applyEqualizer()
-    }
-
-    fun toggleBassBoost(enabled: Boolean) {
-        playbackPreferencesRepository.bassBoostEnabled = enabled
-        _isBassBoostEnabled.value = enabled
-        applyBassBoost()
-    }
-
-    fun setBassBoostStrength(strength: Short) {
-        val normalized = strength.coerceIn(0, 1000)
-        playbackPreferencesRepository.bassBoostStrength = normalized
-        _bassBoostStrength.value = normalized
-        runCatching {
-            bassBoost?.setStrength(if (_isBassBoostEnabled.value) normalized else 0)
-        }
     }
 
     fun setBandLevel(bandIndex: Int, normalized: Float) {
@@ -138,6 +164,42 @@ class AudioEffectsManager @Inject constructor(
         }
     }
 
+    // ── Bass Boost ───────────────────────────────────────────────────────────
+    fun toggleBassBoost(enabled: Boolean) {
+        playbackPreferencesRepository.bassBoostEnabled = enabled
+        _isBassBoostEnabled.value = enabled
+        applyBassBoost()
+    }
+
+    fun setBassBoostStrength(strength: Short) {
+        val normalized = strength.coerceIn(0, 1000)
+        playbackPreferencesRepository.bassBoostStrength = normalized
+        _bassBoostStrength.value = normalized
+        applyBassBoost()
+    }
+
+    // ── 3D Virtualizer (Spatial Audio) ───────────────────────────────────────
+    fun toggleVirtualizer(enabled: Boolean) {
+        playbackPreferencesRepository.virtualizerEnabled = enabled
+        _isVirtualizerEnabled.value = enabled
+        applyVirtualizer()
+    }
+
+    fun setVirtualizerStrength(strength: Short) {
+        val normalized = strength.coerceIn(0, 1000)
+        playbackPreferencesRepository.virtualizerStrength = normalized
+        _virtualizerStrength.value = normalized
+        applyVirtualizer()
+    }
+
+    // ── Reverb Presets ───────────────────────────────────────────────────────
+    fun setReverbPreset(preset: ReverbPreset) {
+        playbackPreferencesRepository.reverbPreset = preset.id
+        _reverbPreset.value = preset
+        applyReverb()
+    }
+
+    // ── Private Appliers ─────────────────────────────────────────────────────
     private fun applyEqualizer() {
         val eq = equalizer ?: return
         if (!_isEqualizerEnabled.value) {
@@ -157,6 +219,30 @@ class AudioEffectsManager @Inject constructor(
 
     private fun applyBassBoost() {
         val bb = bassBoost ?: return
-        runCatching { bb.setStrength(if (_isBassBoostEnabled.value) _bassBoostStrength.value else 0) }
+        runCatching {
+            bb.enabled = _isBassBoostEnabled.value
+            if (_isBassBoostEnabled.value) {
+                bb.setStrength(_bassBoostStrength.value)
+            }
+        }
+    }
+
+    private fun applyVirtualizer() {
+        val virt = virtualizer ?: return
+        runCatching {
+            virt.enabled = _isVirtualizerEnabled.value
+            if (_isVirtualizerEnabled.value) {
+                virt.setStrength(_virtualizerStrength.value)
+            }
+        }
+    }
+
+    private fun applyReverb() {
+        val rev = presetReverb ?: return
+        val current = _reverbPreset.value
+        runCatching {
+            rev.enabled = current != ReverbPreset.NONE
+            rev.preset = current.id
+        }
     }
 }

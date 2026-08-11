@@ -14,6 +14,9 @@ import com.moodtunes.app.platform.CastPlaybackManager
 import com.moodtunes.app.service.AudioEffectsManager
 import com.moodtunes.app.service.PlaybackError
 import com.moodtunes.app.service.PlaybackManager
+import com.moodtunes.app.service.ReverbPreset
+import com.moodtunes.app.service.VisualizerManager
+import com.moodtunes.app.service.VisualizerMode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -37,6 +40,12 @@ data class PlayerUiState(
     val isEqualizerEnabled: Boolean = false,
     val isBassBoostEnabled: Boolean = false,
     val bassBoostStrength: Short = 0,
+    val isVirtualizerEnabled: Boolean = false,
+    val virtualizerStrength: Short = 0,
+    val reverbPreset: ReverbPreset = ReverbPreset.NONE,
+    val isSkipSilenceEnabled: Boolean = false,
+    val visualizerMode: VisualizerMode = VisualizerMode.BARS,
+    val fftBands: FloatArray = FloatArray(32) { 0f },
     val equalizerLevels: List<Float> = emptyList(),
     val equalizerFrequencies: List<Int> = emptyList(),
     val equalizerPresets: List<String> = emptyList(),
@@ -57,6 +66,7 @@ enum class RepeatMode { OFF, ONE, ALL }
 class PlayerViewModel @Inject constructor(
     private val playbackManager: PlaybackManager,
     private val audioEffectsManager: AudioEffectsManager,
+    private val visualizerManager: VisualizerManager,
     private val toggleFavoriteUseCase: ToggleFavoriteUseCase,
     private val lyricsRepository: LyricsRepository,
     private val castPlaybackManager: CastPlaybackManager,
@@ -67,7 +77,8 @@ class PlayerViewModel @Inject constructor(
     private val _isLyricsLoading = MutableStateFlow(false)
     private val _castMessage = MutableStateFlow<String?>(null)
 
-    val uiState: StateFlow<PlayerUiState> = combine(
+    // Combine playback, effects, visualizer and casting states
+    private val playbackCoreState = combine(
         playbackManager.playlist,
         playbackManager.currentSong,
         playbackManager.isPlaying,
@@ -75,18 +86,42 @@ class PlayerViewModel @Inject constructor(
         playbackManager.durationMs,
         playbackManager.currentMood,
         playbackManager.isShuffleEnabled,
-        playbackManager.repeatMode,
+        playbackManager.repeatMode
+    ) { playlist, song, isPlaying, pos, dur, mood, shuffle, repeatModeInt ->
+        val index = playlist.indexOfFirst { it.id == song?.id }.coerceAtLeast(0)
+        val repeatMode = when (repeatModeInt) {
+            Player.REPEAT_MODE_ONE -> RepeatMode.ONE
+            Player.REPEAT_MODE_ALL -> RepeatMode.ALL
+            else -> RepeatMode.OFF
+        }
+        PlaybackCore(playlist, index, song, isPlaying, pos, dur, mood, shuffle, repeatMode)
+    }
+
+    private val effectsState = combine(
+        audioEffectsManager.isEqualizerEnabled,
+        audioEffectsManager.isBassBoostEnabled,
+        audioEffectsManager.bassBoostStrength,
+        audioEffectsManager.isVirtualizerEnabled,
+        audioEffectsManager.virtualizerStrength,
+        audioEffectsManager.reverbPreset,
+        audioEffectsManager.bandLevels,
+        audioEffectsManager.bandFrequencies,
+        audioEffectsManager.presets
+    ) { eqEn, bbEn, bbStr, virtEn, virtStr, rev, levels, freqs, presets ->
+        EffectsState(eqEn, bbEn, bbStr, virtEn, virtStr, rev, levels, freqs, presets)
+    }
+
+    val uiState: StateFlow<PlayerUiState> = combine(
+        playbackCoreState,
+        effectsState,
+        visualizerManager.currentMode,
+        visualizerManager.fftBands,
+        playbackManager.isSkipSilenceEnabled,
         playbackManager.playbackSpeed,
         playbackManager.isSmartShuffleEnabled,
         playbackManager.isCrossfadeEnabled,
         playbackManager.crossfadeDurationMs,
         playbackManager.sleepTimerRemainingMs,
-        audioEffectsManager.isEqualizerEnabled,
-        audioEffectsManager.isBassBoostEnabled,
-        audioEffectsManager.bassBoostStrength,
-        audioEffectsManager.bandLevels,
-        audioEffectsManager.bandFrequencies,
-        audioEffectsManager.presets,
         _lyrics,
         _isLyricsLoading,
         castPlaybackManager.isCasting,
@@ -95,65 +130,52 @@ class PlayerViewModel @Inject constructor(
         _castMessage,
         playbackManager.playbackError
     ) { args ->
+        val core = args[0] as PlaybackCore
+        val fx = args[1] as EffectsState
+        val vizMode = args[2] as VisualizerMode
+        val bands = args[3] as FloatArray
+        val skipSilence = args[4] as Boolean
+        val speed = args[5] as Float
+        val smartShuffle = args[6] as Boolean
+        val crossfade = args[7] as Boolean
+        val crossfadeDur = args[8] as Int
+        val sleepRemaining = args[9] as Long?
         @Suppress("UNCHECKED_CAST")
-        val playlist = args[0] as List<Song>
-        val song = args[1] as? Song
-        val isPlaying = args[2] as Boolean
-        val pos = args[3] as Long
-        val dur = args[4] as Long
-        val mood = args[5] as? MoodType
-        val shuffle = args[6] as Boolean
-        val repeatModeInt = args[7] as Int
-        val speed = args[8] as Float
-        val smartShuffle = args[9] as Boolean
-        val crossfade = args[10] as Boolean
-        val crossfadeDur = args[11] as Int
-        val sleepRemaining = args[12] as Long?
-        val eqEnabled = args[13] as Boolean
-        val bassEnabled = args[14] as Boolean
-        val bassStrength = args[15] as Short
-        @Suppress("UNCHECKED_CAST")
-        val eqLevels = args[16] as List<Float>
-        @Suppress("UNCHECKED_CAST")
-        val eqFreqs = args[17] as List<Int>
-        @Suppress("UNCHECKED_CAST")
-        val eqPresets = args[18] as List<String>
-        @Suppress("UNCHECKED_CAST")
-        val lyrics = args[19] as List<LyricsLine>
-        val lyricsLoading = args[20] as Boolean
-        val casting = args[21] as Boolean
-        val castDevice = args[22] as String?
-        val output = args[23] as AudioOutputInfo?
-        val message = args[24] as String?
-        val playbackError = args[25] as PlaybackError?
+        val lyrics = args[10] as List<LyricsLine>
+        val lyricsLoading = args[11] as Boolean
+        val casting = args[12] as Boolean
+        val castDevice = args[13] as String?
+        val output = args[14] as AudioOutputInfo?
+        val message = args[15] as String?
+        val playbackError = args[16] as PlaybackError?
 
-        val index = playlist.indexOfFirst { it.id == song?.id }.coerceAtLeast(0)
-        val repeatMode = when (repeatModeInt) {
-            Player.REPEAT_MODE_ONE -> RepeatMode.ONE
-            Player.REPEAT_MODE_ALL -> RepeatMode.ALL
-            else -> RepeatMode.OFF
-        }
         PlayerUiState(
-            songs = playlist,
-            currentSongIndex = index,
-            currentSong = song,
-            isPlaying = isPlaying,
-            currentPositionMs = pos,
-            durationMs = dur,
-            isShuffleEnabled = shuffle,
-            repeatMode = repeatMode,
-            selectedMood = mood,
+            songs = core.playlist,
+            currentSongIndex = core.index,
+            currentSong = core.song,
+            isPlaying = core.isPlaying,
+            currentPositionMs = core.pos,
+            durationMs = core.dur,
+            isShuffleEnabled = core.shuffle,
+            repeatMode = core.repeatMode,
+            selectedMood = core.mood,
             playbackSpeed = speed,
             isSmartShuffleEnabled = smartShuffle,
             isCrossfadeEnabled = crossfade,
             crossfadeDurationMs = crossfadeDur,
             sleepTimerRemainingMs = sleepRemaining,
-            isEqualizerEnabled = eqEnabled,
-            isBassBoostEnabled = bassEnabled,
-            bassBoostStrength = bassStrength,
-            equalizerLevels = eqLevels,
-            equalizerFrequencies = eqFreqs,
-            equalizerPresets = eqPresets,
+            isEqualizerEnabled = fx.eqEnabled,
+            isBassBoostEnabled = fx.bassEnabled,
+            bassBoostStrength = fx.bassStrength,
+            isVirtualizerEnabled = fx.virtEnabled,
+            virtualizerStrength = fx.virtStrength,
+            reverbPreset = fx.reverbPreset,
+            isSkipSilenceEnabled = skipSilence,
+            visualizerMode = vizMode,
+            fftBands = bands,
+            equalizerLevels = fx.levels,
+            equalizerFrequencies = fx.freqs,
+            equalizerPresets = fx.presets,
             lyrics = lyrics,
             isLyricsLoading = lyricsLoading,
             isCasting = casting,
@@ -181,134 +203,70 @@ class PlayerViewModel @Inject constructor(
                     _isLyricsLoading.value = false
                 }
         }
-    }
 
-    fun playPause() {
-        playbackManager.playPause()
-    }
-
-    fun skipNext() {
-        playbackManager.skipNext()
-    }
-
-    fun skipPrevious() {
-        playbackManager.skipPrevious()
-    }
-
-    fun seekTo(fraction: Float) {
-        playbackManager.seekTo(fraction)
-    }
-
-    fun seekToPosition(positionMs: Long) {
-        playbackManager.seekToPosition(positionMs)
-    }
-
-    fun toggleShuffle() {
-        playbackManager.toggleShuffle()
-    }
-
-    fun toggleRepeat() {
-        playbackManager.toggleRepeat()
-    }
-
-    fun toggleSmartShuffle() {
-        playbackManager.toggleSmartShuffle()
-    }
-
-    fun toggleFavorite() {
-        val song = uiState.value.currentSong ?: return
+        // Trigger visualizer procedural updates when playing
         viewModelScope.launch {
-            toggleFavoriteUseCase(song.id)
+            playbackManager.isPlaying.collectLatest { playing ->
+                visualizerManager.startProceduralFallback(playing)
+            }
         }
     }
 
-    // ── Playback speed ───────────────────────────────────────────────────────
-    fun setPlaybackSpeed(speed: Float) {
-        playbackManager.setPlaybackSpeed(speed)
+    fun playPause() = playbackManager.playPause()
+    fun skipNext() = playbackManager.skipNext()
+    fun skipPrevious() = playbackManager.skipPrevious()
+    fun seekTo(fraction: Float) = playbackManager.seekTo(fraction)
+
+    fun toggleShuffle() = playbackManager.toggleShuffle()
+    fun cycleRepeatMode() = playbackManager.cycleRepeatMode()
+    fun toggleSmartShuffle() = playbackManager.toggleSmartShuffle()
+
+    fun toggleFavorite(songId: Long) {
+        viewModelScope.launch {
+            val isFav = toggleFavoriteUseCase(songId)
+            playbackManager.updateFavorite(songId, isFav)
+        }
     }
 
-    // ── Sleep timer ──────────────────────────────────────────────────────────
-    fun startSleepTimer(minutes: Int) {
-        playbackManager.startSleepTimer(minutes)
-    }
+    fun setPlaybackSpeed(speed: Float) = playbackManager.setPlaybackSpeed(speed)
+    fun setPlaybackPitch(pitch: Float) = playbackManager.setPlaybackPitch(pitch)
 
-    fun cancelSleepTimer() {
-        playbackManager.cancelSleepTimer()
-    }
+    fun startSleepTimer(minutes: Int) = playbackManager.startSleepTimer(minutes)
+    fun cancelSleepTimer() = playbackManager.cancelSleepTimer()
 
-    // ── Crossfade ────────────────────────────────────────────────────────────
-    fun setCrossfadeEnabled(enabled: Boolean) {
-        playbackManager.setCrossfadeEnabled(enabled)
-    }
+    fun setCrossfadeEnabled(enabled: Boolean) = playbackManager.setCrossfadeEnabled(enabled)
+    fun setCrossfadeDurationMs(durationMs: Int) = playbackManager.setCrossfadeDurationMs(durationMs)
+    fun setSkipSilenceEnabled(enabled: Boolean) = playbackManager.setSkipSilenceEnabled(enabled)
 
-    fun setCrossfadeDurationMs(durationMs: Int) {
-        playbackManager.setCrossfadeDurationMs(durationMs)
-    }
+    // ── Visualizer Controls ──────────────────────────────────────────────────
+    fun cycleVisualizerMode() = visualizerManager.cycleMode()
+    fun setVisualizerMode(mode: VisualizerMode) = visualizerManager.setMode(mode)
 
-    // ── Queue editor ─────────────────────────────────────────────────────────
-    fun removeFromQueue(index: Int) {
-        playbackManager.removeFromQueue(index)
-    }
+    // ── Queue Editor ─────────────────────────────────────────────────────────
+    fun removeFromQueue(index: Int) = playbackManager.removeFromQueue(index)
+    fun moveQueueItem(fromIndex: Int, toIndex: Int) = playbackManager.moveQueueItem(fromIndex, toIndex)
+    fun playSongAtIndex(index: Int) = playbackManager.playSongAtIndex(index)
+    fun addToQueue(song: Song) = playbackManager.addToQueue(song)
+    fun playNext(song: Song) = playbackManager.playNext(song)
+    fun clearQueue(keepCurrent: Boolean = true) = playbackManager.clearQueue(keepCurrent)
+    fun shuffleQueue() = playbackManager.shuffleQueue()
 
-    fun moveQueueItem(fromIndex: Int, toIndex: Int) {
-        playbackManager.moveQueueItem(fromIndex, toIndex)
-    }
+    // ── Equalizer, Bass Boost, 3D Virtualizer & Reverb ──────────────────────
+    fun toggleEqualizer(enabled: Boolean) = playbackManager.toggleEqualizer(enabled)
+    fun toggleBassBoost(enabled: Boolean) = playbackManager.toggleBassBoost(enabled)
+    fun setBassBoostStrength(strength: Short) = playbackManager.setBassBoostStrength(strength)
+    fun toggleVirtualizer(enabled: Boolean) = playbackManager.toggleVirtualizer(enabled)
+    fun setVirtualizerStrength(strength: Short) = playbackManager.setVirtualizerStrength(strength)
+    fun setReverbPreset(preset: ReverbPreset) = playbackManager.setReverbPreset(preset)
+    fun setBandLevel(bandIndex: Int, normalized: Float) = playbackManager.setBandLevel(bandIndex, normalized)
+    fun resetEqualizer() = playbackManager.resetEqualizer()
+    fun applyEqualizerPreset(presetIndex: Int) = playbackManager.applyEqualizerPreset(presetIndex)
 
-    fun playSongAtIndex(index: Int) {
-        playbackManager.playSongAtIndex(index)
-    }
+    // ── Playback Error Recovery ──────────────────────────────────────────────
+    fun retryPlayback() = playbackManager.retryPlayback()
+    fun skipOnError() = playbackManager.skipOnError()
 
-    fun addToQueue(song: Song) {
-        playbackManager.addToQueue(song)
-    }
-
-    fun playNext(song: Song) {
-        playbackManager.playNext(song)
-    }
-
-    fun clearQueue(keepCurrent: Boolean = true) {
-        playbackManager.clearQueue(keepCurrent)
-    }
-
-    fun shuffleQueue() {
-        playbackManager.shuffleQueue()
-    }
-
-    // ── Equalizer & bass boost ───────────────────────────────────────────────
-    fun toggleEqualizer(enabled: Boolean) {
-        playbackManager.toggleEqualizer(enabled)
-    }
-
-    fun toggleBassBoost(enabled: Boolean) {
-        playbackManager.toggleBassBoost(enabled)
-    }
-
-    fun setBassBoostStrength(strength: Short) {
-        playbackManager.setBassBoostStrength(strength)
-    }
-
-    fun setBandLevel(bandIndex: Int, normalized: Float) {
-        playbackManager.setBandLevel(bandIndex, normalized)
-    }
-
-    fun resetEqualizer() {
-        playbackManager.resetEqualizer()
-    }
-
-    fun applyEqualizerPreset(presetIndex: Int) {
-        playbackManager.applyEqualizerPreset(presetIndex)
-    }
-
-    // ── Playback error recovery ───────────────────────────────────────────────
-    fun retryPlayback() {
-        playbackManager.retryPlayback()
-    }
-
-    fun skipOnError() {
-        playbackManager.skipOnError()
-    }
-
-    // ── Casting ───────────────────────────────────────────────────────────────
+    // ── Casting ──────────────────────────────────────────────────────────────
     fun onCastClicked() {
         val state = uiState.value
         if (state.isCasting) {
@@ -334,4 +292,28 @@ class PlayerViewModel @Inject constructor(
     fun clearCastMessage() {
         _castMessage.value = null
     }
+
+    private data class PlaybackCore(
+        val playlist: List<Song>,
+        val index: Int,
+        val song: Song?,
+        val isPlaying: Boolean,
+        val pos: Long,
+        val dur: Long,
+        val mood: MoodType?,
+        val shuffle: Boolean,
+        val repeatMode: RepeatMode
+    )
+
+    private data class EffectsState(
+        val eqEnabled: Boolean,
+        val bassEnabled: Boolean,
+        val bassStrength: Short,
+        val virtEnabled: Boolean,
+        val virtStrength: Short,
+        val reverbPreset: ReverbPreset,
+        val levels: List<Float>,
+        val freqs: List<Int>,
+        val presets: List<String>
+    )
 }

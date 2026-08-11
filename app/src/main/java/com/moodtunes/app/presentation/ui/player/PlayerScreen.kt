@@ -147,6 +147,20 @@ fun PlayerScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     // Share the current song
+                    // Visualizer Mode Cycle Button
+                    IconButton(onClick = { viewModel.cycleVisualizerMode() }) {
+                        Icon(
+                            imageVector = when (uiState.visualizerMode) {
+                                com.moodtunes.app.service.VisualizerMode.OFF -> Icons.Rounded.GraphicEq
+                                com.moodtunes.app.service.VisualizerMode.BARS -> Icons.Rounded.Equalizer
+                                com.moodtunes.app.service.VisualizerMode.PULSE_AURA -> Icons.Rounded.Grain
+                                com.moodtunes.app.service.VisualizerMode.PARTICLES -> Icons.Rounded.AutoAwesome
+                            },
+                            contentDescription = "Visualizer: ${uiState.visualizerMode.title}",
+                            tint = if (uiState.visualizerMode != com.moodtunes.app.service.VisualizerMode.OFF) White else White.copy(alpha = 0.5f)
+                        )
+                    }
+
                     val shareContext = LocalContext.current
                     IconButton(onClick = {
                         song?.let { shareSong(shareContext, it) }
@@ -203,77 +217,94 @@ fun PlayerScreen(
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(12.dp))
 
-            // ─── Album Art (Vinyl Disc) ──────────────────────────────────────
+            // ─── Visualizer & Vinyl Turntable ────────────────────────────────
             Box(
                 modifier = Modifier
-                    .size(260.dp)
-                    .clip(CircleShape)
-                    .background(
-                        Brush.radialGradient(
-                            colors = listOf(
-                                Color(0xFF2A2A3A),
-                                Color(0xFF0A0A0F)
-                            )
-                        )
-                    )
-                    .rotate(rotation),
+                    .size(310.dp),
                 contentAlignment = Alignment.Center
             ) {
-                // Vinyl grooves
+                // Live Reactive Canvas Visualizer
+                com.moodtunes.app.presentation.ui.components.AudioVisualizerView(
+                    mode = uiState.visualizerMode,
+                    fftBands = uiState.fftBands,
+                    primaryColor = animatedGradientStart,
+                    secondaryColor = animatedGradientEnd,
+                    turntableDiameter = 250.dp,
+                    modifier = Modifier.fillMaxSize()
+                )
+
+                // Vinyl Disc
                 Box(
                     modifier = Modifier
-                        .fillMaxSize()
+                        .size(250.dp)
                         .clip(CircleShape)
                         .background(
                             Brush.radialGradient(
                                 colors = listOf(
-                                    Color.Transparent,
-                                    Color(0x15FFFFFF),
-                                    Color.Transparent,
-                                    Color(0x10FFFFFF),
-                                    Color.Transparent
+                                    Color(0xFF2A2A3A),
+                                    Color(0xFF0A0A0F)
                                 )
                             )
                         )
-                )
-
-                // Album art in center
-                Box(
-                    modifier = Modifier
-                        .size(130.dp)
-                        .clip(CircleShape)
-                        .background(SurfaceVariant),
+                        .rotate(if (uiState.isPlaying) rotation else 0f),
                     contentAlignment = Alignment.Center
                 ) {
-                    AsyncImage(
-                        model = song?.albumArtUri,
-                        contentDescription = "Album Art",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop,
-                        onError = {}
+                    // Vinyl grooves
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(CircleShape)
+                            .background(
+                                Brush.radialGradient(
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        Color(0x15FFFFFF),
+                                        Color.Transparent,
+                                        Color(0x10FFFFFF),
+                                        Color.Transparent
+                                    )
+                                )
+                            )
                     )
-                    if (song?.albumArtUri == null) {
-                        Icon(
-                            imageVector = Icons.Rounded.MusicNote,
-                            contentDescription = null,
-                            tint = OnSurfaceVariant,
-                            modifier = Modifier.size(48.dp)
-                        )
-                    }
-                }
 
-                // Center hole
-                Box(
-                    modifier = Modifier
-                        .size(16.dp)
-                        .clip(CircleShape)
-                        .background(Background)
-                )
+                    // Album art in center
+                    Box(
+                        modifier = Modifier
+                            .size(125.dp)
+                            .clip(CircleShape)
+                            .background(SurfaceVariant),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AsyncImage(
+                            model = song?.albumArtUri,
+                            contentDescription = "Album Art",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop,
+                            onError = {}
+                        )
+                        if (song?.albumArtUri == null) {
+                            Icon(
+                                imageVector = Icons.Rounded.MusicNote,
+                                contentDescription = null,
+                                tint = OnSurfaceVariant,
+                                modifier = Modifier.size(48.dp)
+                            )
+                        }
+                    }
+
+                    // Center hole
+                    Box(
+                        modifier = Modifier
+                            .size(16.dp)
+                            .clip(CircleShape)
+                            .background(Background)
+                    )
+                }
             }
 
-            Spacer(Modifier.height(28.dp))
+            Spacer(Modifier.height(24.dp))
 
             // ─── Song Info ───────────────────────────────────────────────────
             Row(

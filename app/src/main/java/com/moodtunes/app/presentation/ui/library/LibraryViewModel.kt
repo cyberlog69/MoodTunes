@@ -73,7 +73,8 @@ class LibraryViewModel @Inject constructor(
     private val playbackManager: PlaybackManager,
     private val onlineStreamRepository: OnlineStreamRepository,
     private val subsonicApiService: SubsonicApiService,
-    private val userPreferencesRepository: UserPreferencesRepository
+    private val userPreferencesRepository: UserPreferencesRepository,
+    private val tagEditorManager: com.moodtunes.app.data.local.mediastore.TagEditorManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LibraryUiState())
@@ -287,6 +288,15 @@ class LibraryViewModel @Inject constructor(
 
     fun addToQueue(song: Song) {
         playbackManager.addToQueue(song)
+    }
+
+    fun updateSongTags(song: Song, title: String, artist: String, album: String, genre: String?, artUri: Uri?) {
+        viewModelScope.launch {
+            val result = tagEditorManager.saveSongTags(song, title, artist, album, genre, artUri)
+            if (result.isSuccess) {
+                loadSongs()
+            }
+        }
     }
 
     fun onSongSelected(song: Song) {

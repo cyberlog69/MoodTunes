@@ -53,6 +53,24 @@ class MusicRepositoryImpl @Inject constructor(
     override fun getMostPlayed(limit: Int): Flow<List<Song>> =
         songDao.getMostPlayed(limit).map { entities -> entities.map { it.toDomain() } }
 
+    override suspend fun updateSongTags(
+        songId: Long,
+        title: String,
+        artist: String,
+        album: String,
+        genre: String?,
+        albumArtUri: Uri?
+    ) {
+        songDao.updateSongTags(
+            songId = songId,
+            title = title,
+            artist = artist,
+            album = album,
+            genre = genre,
+            albumArtUri = albumArtUri?.toString()
+        )
+    }
+
     /** Loads persisted rows for the given songs and overlays DB-only state. */
     private suspend fun mergeDbStats(songs: List<Song>): List<Song> {
         if (songs.isEmpty()) return songs

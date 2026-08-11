@@ -95,12 +95,20 @@ fun PlayerBottomSheet(
                 isEqualizerEnabled = uiState.isEqualizerEnabled,
                 isBassBoostEnabled = uiState.isBassBoostEnabled,
                 bassBoostStrength = uiState.bassBoostStrength,
+                isVirtualizerEnabled = uiState.isVirtualizerEnabled,
+                virtualizerStrength = uiState.virtualizerStrength,
+                reverbPreset = uiState.reverbPreset,
+                isSkipSilenceEnabled = uiState.isSkipSilenceEnabled,
                 bandLevels = uiState.equalizerLevels,
                 bandFrequencies = uiState.equalizerFrequencies,
                 presets = uiState.equalizerPresets,
                 onToggleEqualizer = viewModel::toggleEqualizer,
                 onToggleBassBoost = viewModel::toggleBassBoost,
                 onBassBoostStrength = viewModel::setBassBoostStrength,
+                onToggleVirtualizer = viewModel::toggleVirtualizer,
+                onVirtualizerStrength = viewModel::setVirtualizerStrength,
+                onReverbPreset = viewModel::setReverbPreset,
+                onToggleSkipSilence = viewModel::setSkipSilenceEnabled,
                 onBandLevel = viewModel::setBandLevel,
                 onReset = viewModel::resetEqualizer,
                 onPreset = viewModel::applyEqualizerPreset
@@ -819,20 +827,28 @@ private fun EqualizerSheetContent(
     isEqualizerEnabled: Boolean,
     isBassBoostEnabled: Boolean,
     bassBoostStrength: Short,
+    isVirtualizerEnabled: Boolean,
+    virtualizerStrength: Short,
+    reverbPreset: com.moodtunes.app.service.ReverbPreset,
+    isSkipSilenceEnabled: Boolean,
     bandLevels: List<Float>,
     bandFrequencies: List<Int>,
     presets: List<String>,
     onToggleEqualizer: (Boolean) -> Unit,
     onToggleBassBoost: (Boolean) -> Unit,
     onBassBoostStrength: (Short) -> Unit,
+    onToggleVirtualizer: (Boolean) -> Unit,
+    onVirtualizerStrength: (Short) -> Unit,
+    onReverbPreset: (com.moodtunes.app.service.ReverbPreset) -> Unit,
+    onToggleSkipSilence: (Boolean) -> Unit,
     onBandLevel: (Int, Float) -> Unit,
     onReset: () -> Unit,
     onPreset: (Int) -> Unit
 ) {
     SheetHeader(
         icon = Icons.Rounded.Equalizer,
-        title = "Equalizer",
-        subtitle = "10-band audio equalizer & bass boost"
+        title = "Audio FX & Acoustics",
+        subtitle = "10-band equalizer, 3D spatial virtualizer & reverb acoustics"
     )
     Column(
         modifier = Modifier
@@ -840,7 +856,7 @@ private fun EqualizerSheetContent(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp)
     ) {
-        // Equalizer enable
+        // ── 1. Equalizer Section ──
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
@@ -927,15 +943,15 @@ private fun EqualizerSheetContent(
             }
         }
 
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
 
-        // Bass boost
+        // ── 2. Bass Boost ──
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                Icons.Rounded.GraphicEq,
+                Icons.Rounded.SurroundSound,
                 contentDescription = null,
                 tint = if (isBassBoostEnabled) MaterialTheme.colorScheme.primary
                 else MaterialTheme.colorScheme.onSurfaceVariant
@@ -972,7 +988,134 @@ private fun EqualizerSheetContent(
                 )
             }
         }
-        Spacer(Modifier.height(8.dp))
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+
+        // ── 3. 3D Spatial Virtualizer ──
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Rounded.Headphones,
+                contentDescription = null,
+                tint = if (isVirtualizerEnabled) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "3D Spatial Virtualizer",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Expands acoustic soundstage on headphones",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Switch(
+                checked = isVirtualizerEnabled,
+                onCheckedChange = onToggleVirtualizer
+            )
+        }
+        if (isVirtualizerEnabled) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Slider(
+                    value = virtualizerStrength.toInt().toFloat(),
+                    onValueChange = { onVirtualizerStrength(it.toInt().toShort()) },
+                    valueRange = 0f..1000f,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    text = "${(virtualizerStrength.toInt() / 10)}%",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.End,
+                    modifier = Modifier.width(48.dp)
+                )
+            }
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+
+        // ── 4. Reverb & Acoustic Environment ──
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Rounded.SpatialAudioOff,
+                contentDescription = null,
+                tint = if (reverbPreset != com.moodtunes.app.service.ReverbPreset.NONE) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Reverb & Room Acoustics",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Simulates studio, concert hall, or cathedral acoustics",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        LazyRow(
+            contentPadding = PaddingValues(vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            itemsIndexed(com.moodtunes.app.service.ReverbPreset.entries) { _, preset ->
+                val isSelected = reverbPreset == preset
+                FilterChip(
+                    selected = isSelected,
+                    onClick = { onReverbPreset(preset) },
+                    label = { Text("${preset.icon} ${preset.displayName}") },
+                    shape = RoundedCornerShape(12.dp)
+                )
+            }
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+
+        // ── 5. Silence Trimming ──
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Rounded.ContentCut,
+                contentDescription = null,
+                tint = if (isSkipSilenceEnabled) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Skip Silence (Smart Gapless)",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Automatically trims dead silence between songs",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Switch(
+                checked = isSkipSilenceEnabled,
+                onCheckedChange = onToggleSkipSilence
+            )
+        }
+        Spacer(Modifier.height(16.dp))
     }
 }
 

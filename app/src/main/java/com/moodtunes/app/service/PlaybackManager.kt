@@ -95,6 +95,9 @@ class PlaybackManager @Inject constructor(
     private val _smartShuffleEnabled = MutableStateFlow(false)
     val isSmartShuffleEnabled: StateFlow<Boolean> = _smartShuffleEnabled.asStateFlow()
 
+    private val _isSkipSilenceEnabled = MutableStateFlow(playbackPreferencesRepository.skipSilenceEnabled)
+    val isSkipSilenceEnabled: StateFlow<Boolean> = _isSkipSilenceEnabled.asStateFlow()
+
     private val _playbackError = MutableStateFlow<PlaybackError?>(null)
     val playbackError: StateFlow<PlaybackError?> = _playbackError.asStateFlow()
 
@@ -344,6 +347,11 @@ class PlaybackManager @Inject constructor(
         if (!enabled) mediaController?.volume = 1f
     }
 
+    fun setSkipSilenceEnabled(enabled: Boolean) {
+        playbackPreferencesRepository.skipSilenceEnabled = enabled
+        _isSkipSilenceEnabled.value = enabled
+    }
+
     fun setCrossfadeDurationMs(durationMs: Int) {
         val clamped = durationMs.coerceIn(0, 10_000)
         playbackPreferencesRepository.crossfadeDurationMs = clamped
@@ -482,10 +490,13 @@ class PlaybackManager @Inject constructor(
         playSongs(newPlaylist, 0, _currentMood.value)
     }
 
-    // ── Equalizer & bass boost ───────────────────────────────────────────────
+    // ── Equalizer, Bass Boost, 3D Virtualizer & Reverb ──────────────────────
     fun toggleEqualizer(enabled: Boolean) = audioEffectsManager.toggleEqualizer(enabled)
     fun toggleBassBoost(enabled: Boolean) = audioEffectsManager.toggleBassBoost(enabled)
     fun setBassBoostStrength(strength: Short) = audioEffectsManager.setBassBoostStrength(strength)
+    fun toggleVirtualizer(enabled: Boolean) = audioEffectsManager.toggleVirtualizer(enabled)
+    fun setVirtualizerStrength(strength: Short) = audioEffectsManager.setVirtualizerStrength(strength)
+    fun setReverbPreset(preset: ReverbPreset) = audioEffectsManager.setReverbPreset(preset)
     fun setBandLevel(bandIndex: Int, normalized: Float) = audioEffectsManager.setBandLevel(bandIndex, normalized)
     fun resetEqualizer() = audioEffectsManager.resetEqualizer()
     fun applyEqualizerPreset(presetIndex: Int) = audioEffectsManager.applyPreset(presetIndex)

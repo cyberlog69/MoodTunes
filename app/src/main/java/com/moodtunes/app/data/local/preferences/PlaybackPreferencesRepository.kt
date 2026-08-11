@@ -7,9 +7,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Persists playback-related settings (speed, crossfade, equalizer) that should
- * survive app restarts. Independent from [UserPreferencesRepository] so playback
- * state stays isolated from the user-facing settings screen.
+ * Persists playback-related settings (speed, crossfade, equalizer, audio effects, visualizer)
+ * that should survive app restarts.
  */
 @Singleton
 class PlaybackPreferencesRepository @Inject constructor(
@@ -58,6 +57,36 @@ class PlaybackPreferencesRepository @Inject constructor(
         get() = prefs.getInt("bass_boost_strength", 0).toShort()
         set(value) {
             prefs.edit().putInt("bass_boost_strength", value.toInt()).apply()
+        }
+
+    var virtualizerEnabled: Boolean
+        get() = prefs.getBoolean("virtualizer_enabled", false)
+        set(value) {
+            prefs.edit().putBoolean("virtualizer_enabled", value).apply()
+        }
+
+    var virtualizerStrength: Short
+        get() = prefs.getInt("virtualizer_strength", 0).toShort()
+        set(value) {
+            prefs.edit().putInt("virtualizer_strength", value.toInt()).apply()
+        }
+
+    var reverbPreset: Short
+        get() = prefs.getInt("reverb_preset", 0).toShort()
+        set(value) {
+            prefs.edit().putInt("reverb_preset", value.toInt()).apply()
+        }
+
+    var skipSilenceEnabled: Boolean
+        get() = prefs.getBoolean("skip_silence_enabled", false)
+        set(value) {
+            prefs.edit().putBoolean("skip_silence_enabled", value).apply()
+        }
+
+    var visualizerMode: Int
+        get() = prefs.getInt("visualizer_mode", 1) // 0: OFF, 1: BARS, 2: PULSE_AURA, 3: PARTICLES
+        set(value) {
+            prefs.edit().putInt("visualizer_mode", value).apply()
         }
 
     fun saveEqualizerLevels(levels: List<Float>) {

@@ -28,4 +28,7 @@ interface IMusicRepository {
 
     /** Returns most-played songs, highest play count first. */
     fun getMostPlayed(limit: Int = 50): Flow<List<Song>>
+
+    /** Updates user-edited ID3 metadata and album art for a local song. */
+    suspend fun updateSongTags(songId: Long, title: String, artist: String, album: String, genre: String?, albumArtUri: Uri?)
 }

@@ -47,13 +47,27 @@ fun SongActionBottomSheet(
     onAddToQueue: () -> Unit = {},
     onToggleFavorite: () -> Unit = {},
     onAddToPlaylist: (playlistId: Long) -> Unit = {},
-    onCreatePlaylist: (name: String) -> Unit = {}
+    onCreatePlaylist: (name: String) -> Unit = {},
+    onSaveTags: ((Song, String, String, String, String?, Uri?) -> Unit)? = null
 ) {
     if (song == null) return
 
     val context = LocalContext.current
     var showDetailsDialog by remember { mutableStateOf(false) }
     var showPlaylistDialog by remember { mutableStateOf(false) }
+    var showTagEditorDialog by remember { mutableStateOf(false) }
+
+    if (showTagEditorDialog && onSaveTags != null) {
+        TagEditorDialog(
+            song = song,
+            onSave = { title, artist, album, genre, artUri ->
+                onSaveTags(song, title, artist, album, genre, artUri)
+                showTagEditorDialog = false
+                onDismiss()
+            },
+            onDismiss = { showTagEditorDialog = false }
+        )
+    }
 
     if (showDetailsDialog) {
         SongDetailsDialog(song = song, onDismiss = { showDetailsDialog = false })
@@ -224,6 +238,17 @@ fun SongActionBottomSheet(
             )
 
             if (!song.isStream) {
+                if (onSaveTags != null) {
+                    ActionItem(
+                        icon = Icons.Rounded.EditNote,
+                        title = "Edit Tags & Artwork",
+                        subtitle = "Modify title, artist, album & cover art",
+                        onClick = {
+                            showTagEditorDialog = true
+                        }
+                    )
+                }
+
                 ActionItem(
                     icon = Icons.Rounded.NotificationsActive,
                     title = "Set as Ringtone",

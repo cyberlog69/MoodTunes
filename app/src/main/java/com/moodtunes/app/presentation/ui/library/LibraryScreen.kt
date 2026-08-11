@@ -87,6 +87,9 @@ fun LibraryScreen(
             selectedSongForAction?.let { song ->
                 viewModel.onCreatePlaylist(name, song)
             }
+        },
+        onSaveTags = { song, title, artist, album, genre, artUri ->
+            viewModel.updateSongTags(song, title, artist, album, genre, artUri)
         }
     )
 

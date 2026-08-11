@@ -37,6 +37,9 @@ interface SongDao {
     @Query("UPDATE songs SET isFavorite = :isFavorite WHERE id = :songId")
     suspend fun updateFavoriteStatus(songId: Long, isFavorite: Boolean)
 
+    @Query("UPDATE songs SET title = :title, artist = :artist, album = :album, genre = :genre, albumArtUriString = :albumArtUri WHERE id = :songId")
+    suspend fun updateSongTags(songId: Long, title: String, artist: String, album: String, genre: String?, albumArtUri: String?)
+
     @Query(
         """SELECT * FROM songs WHERE 
         LOWER(title) LIKE '%' || LOWER(:query) || '%' OR 

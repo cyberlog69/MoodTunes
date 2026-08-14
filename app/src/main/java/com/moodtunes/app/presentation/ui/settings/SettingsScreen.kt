@@ -123,6 +123,11 @@ fun SettingsScreen(
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
+                // ─── App Brand Hero Card ────────────────────────────────────────
+                com.moodtunes.app.presentation.ui.components.MoodTunesHeroCard(
+                    versionName = com.moodtunes.app.BuildConfig.VERSION_NAME
+                )
+
                 // ─── SECTION 1: Theme & Appearance ─────────────────────────────
                 SettingsSectionHeader(title = "Theme & Appearance", icon = Icons.Rounded.Palette)
 

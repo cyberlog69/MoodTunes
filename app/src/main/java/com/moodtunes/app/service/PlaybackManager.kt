@@ -188,7 +188,7 @@ class PlaybackManager @Inject constructor(
 
             // Pre-resolve stream URLs asynchronously for instant low-latency playback
             val targetSong = effectiveSongs.getOrNull(effectiveStart)
-            val resolvedUri = if (targetSong != null && targetSong.isStream && targetSong.uri.toString().contains("/streams/")) {
+            val resolvedUri = if (targetSong != null && targetSong.isStream) {
                 val direct = onlineStreamRepository.resolveDirectStreamUrl(targetSong.uri.toString())
                 Uri.parse(direct)
             } else {
@@ -543,6 +543,32 @@ class PlaybackManager @Inject constructor(
                     if (prefs.isListenBrainzScrobblingEnabled && prefs.listenBrainzToken.isNotBlank()) {
                         scope.launch {
                             listenBrainzService.submitPlayingNow(prefs.listenBrainzToken, current)
+                        }
+                    }
+
+                    // Pre-resolve next stream track in the queue for seamless playback transitions
+                    val nextIndex = index + 1
+                    val nextSong = _playlist.value.getOrNull(nextIndex)
+                    if (nextSong != null && nextSong.isStream) {
+                        scope.launch {
+                            val direct = onlineStreamRepository.resolveDirectStreamUrl(nextSong.uri.toString())
+                            if (direct.isNotBlank() && direct != nextSong.uri.toString()) {
+                                val nextItem = MediaItem.Builder()
+                                    .setUri(Uri.parse(direct))
+                                    .setMediaId(nextSong.id.toString())
+                                    .setMediaMetadata(
+                                        MediaMetadata.Builder()
+                                            .setTitle(nextSong.title)
+                                            .setArtist(nextSong.artist)
+                                            .setAlbumTitle(nextSong.album)
+                                            .setArtworkUri(nextSong.albumArtUri)
+                                            .build()
+                                    )
+                                    .build()
+                                if (controller.mediaItemCount > nextIndex) {
+                                    controller.replaceMediaItem(nextIndex, nextItem)
+                                }
+                            }
                         }
                     }
                 }

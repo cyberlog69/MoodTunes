@@ -6,7 +6,6 @@ import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
 import com.moodtunes.app.data.local.preferences.AudioSourceMode
-import com.moodtunes.app.data.local.preferences.StreamingProvider
 import com.moodtunes.app.data.local.preferences.UserPreferencesRepository
 import com.moodtunes.app.data.remote.OnlineStreamRepository
 import com.moodtunes.app.domain.model.AudioFormat
@@ -148,7 +147,7 @@ class MediaStoreRepository @Inject constructor(
     }
 
     /**
-     * Filters songs matching mood. Respects AudioSourceMode and StreamingProvider preferences.
+     * Filters songs matching mood. Respects AudioSourceMode preferences and streams from YouTube Music.
      */
     suspend fun getSongsByMood(mood: MoodType): List<Song> = withContext(Dispatchers.IO) {
         val settings = userPreferencesRepository.settings.value
@@ -171,75 +170,12 @@ class MediaStoreRepository @Inject constructor(
             return@withContext resultList
         }
 
-        // 2. Online streams according to StreamingProvider setting
-        val provider = settings.streamingProvider
-
-        when (provider) {
-            StreamingProvider.ALL_COMBINED -> {
-                try {
-                    val tracks = onlineStreamRepository.fetchAllOnlineTracksForMood(mood, settings.preferredLanguage)
-                    resultList.addAll(tracks)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
-            StreamingProvider.JIOSAAVN_REGIONAL -> {
-                try {
-                    val saavnTracks = onlineStreamRepository.getJioSaavnTracksByMood(mood, settings.preferredLanguage, limit = 16)
-                    resultList.addAll(saavnTracks)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
-            StreamingProvider.AUDIUS_ONLY -> {
-                try {
-                    val audiusTracks = onlineStreamRepository.getAudiusTracksByMood(mood, settings.preferredLanguage, limit = 10)
-                    resultList.addAll(audiusTracks)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
-            StreamingProvider.ITUNES_DEEZER -> {
-                try {
-                    val itunesTracks = onlineStreamRepository.getITunesPreviewTracks(
-                        languages = setOf(settings.preferredLanguage),
-                        categoryQuery = "${mood.displayName} music",
-                        limit = 8
-                    )
-                    val deezerTracks = onlineStreamRepository.getDeezerPreviewTracks(
-                        languages = setOf(settings.preferredLanguage),
-                        categoryQuery = "${mood.displayName} music",
-                        limit = 8
-                    )
-                    resultList.addAll((itunesTracks + deezerTracks).distinctBy { it.id })
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
-            StreamingProvider.JAMENDO_ONLY -> {
-                try {
-                    val jamendoTracks = onlineStreamRepository.getJamendoTracks(
-                        languages = setOf(settings.preferredLanguage),
-                        categoryQuery = mood.displayName,
-                        limit = 12
-                    )
-                    resultList.addAll(jamendoTracks)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
-            StreamingProvider.INTERNET_RADIO -> {
-                try {
-                    val radioTracks = onlineStreamRepository.getGlobalInternetRadioStations(
-                        languages = setOf(settings.preferredLanguage),
-                        categoryQuery = mood.displayName,
-                        limit = 12
-                    )
-                    resultList.addAll(radioTracks)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
+        // 2. Online streams from YouTube Music
+        try {
+            val tracks = onlineStreamRepository.getSongsByMood(mood, limit = 20)
+            resultList.addAll(tracks)
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
 
         resultList

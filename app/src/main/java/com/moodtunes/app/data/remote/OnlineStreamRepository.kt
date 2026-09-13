@@ -1,505 +1,78 @@
 package com.moodtunes.app.data.remote
 
-import android.net.Uri
-import com.moodtunes.app.domain.model.AudioFormat
+import com.moodtunes.app.data.local.preferences.MusicLanguage
+import com.moodtunes.app.data.remote.api.YouTubeMusicApiService
 import com.moodtunes.app.domain.model.MoodType
 import com.moodtunes.app.domain.model.Song
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
-import okhttp3.ConnectionPool
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import org.json.JSONArray
-import org.json.JSONObject
 import timber.log.Timber
-import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
-import com.moodtunes.app.data.remote.api.iTunesApiService
-import com.moodtunes.app.data.remote.api.DeezerApiService
-import com.moodtunes.app.data.remote.api.JioSaavnApiService
 
 /**
- * Handles global & Indian regional/traditional ultra-low-latency music streaming
- * using parallel host failover pools across:
- *   - JioSaavn (16+ Indian regional languages, classical, folk, Bollywood)
- *   - Audius Protocol (decentralized royalty-free music)
- *   - Jamendo (Creative Commons 320kbps MP3s)
- *   - Radio Browser (35,000+ live global internet radio stations)
- *   - iTunes & Deezer Previews
+ * Modern online streaming repository powered purely by YouTube Music (InnerTube).
+ * Provides free, full-length streaming tracks, trending charts, mood discovery,
+ * and high-fidelity Opus/AAC stream resolution.
  */
 @Singleton
 class OnlineStreamRepository @Inject constructor(
-    private val iTunesApi: iTunesApiService,
-    private val deezerApi: DeezerApiService,
-    private val jioSaavnApi: JioSaavnApiService
+    private val youTubeMusicApi: YouTubeMusicApiService
 ) {
 
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(5, TimeUnit.SECONDS)
-        .readTimeout(8, TimeUnit.SECONDS)
-        .connectionPool(ConnectionPool(10, 5, TimeUnit.MINUTES))
-        .followRedirects(true)
-        .followSslRedirects(true)
-        .build()
-
-    // ─── Audius Host Discovery Pool (Updated 2026) ─────────────────────────────
-    private val defaultAudiusHosts = listOf(
-        "https://discoveryprovider.audius.co",
-        "https://audius-dp.trendigo.com",
-        "https://dn1.audius.co",
-        "https://dn2.audius.co",
-        "https://dn3.audius.co",
-        "https://discovery-provider.audius.co"
-    )
-
-    // Removed Piped instances
-
-    // SECURITY FIX (S8): @Volatile prevents stale cache reads across threads
-    @Volatile private var activeAudiusHost: String? = null
-
     /**
-     * Resolves active Audius discovery provider host.
+     * Resolves the playable direct HTTPS audio streaming URL for a given YouTube Music song or URL.
      */
-    private suspend fun getAudiusHost(): String = withContext(Dispatchers.IO) {
-        activeAudiusHost?.let { return@withContext it }
-
-        for (host in defaultAudiusHosts) {
-            try {
-                val request = Request.Builder()
-                    .url("$host/v1/tracks/trending?app_name=MoodTunes&limit=1")
-                    .header("User-Agent", USER_AGENT)
-                    .build()
-                client.newCall(request).execute().use { resp ->
-                    if (resp.isSuccessful) {
-                        activeAudiusHost = host
-                        return@withContext host
-                    }
-                }
-            } catch (e: Exception) {
-                Timber.w(e, "Audius host failed: $host")
-            }
+    suspend fun resolveDirectStreamUrl(targetUrlOrVideoId: String): String = withContext(Dispatchers.IO) {
+        val resolved = youTubeMusicApi.resolveStreamUrl(targetUrlOrVideoId)
+        if (!resolved.isNullOrBlank()) {
+            resolved
+        } else {
+            Timber.w("Failed to resolve YouTube Music direct stream URL for: $targetUrlOrVideoId")
+            targetUrlOrVideoId
         }
-
-        defaultAudiusHosts.first()
     }
 
     /**
-     * Searches Audius tracks by mood keyword and language preference.
-     * Audius is a decentralised, royalty-free streaming protocol — legally safe to use.
+     * Searches YouTube Music for full-length tracks matching [query].
      */
-    suspend fun getAudiusTracksByMood(
-        mood: MoodType,
-        language: com.moodtunes.app.data.local.preferences.MusicLanguage = com.moodtunes.app.data.local.preferences.MusicLanguage.ALL,
-        limit: Int = 8
-    ): List<Song> = withContext(Dispatchers.IO) {
-        val host = getAudiusHost()
-        val songs = mutableListOf<Song>()
-        val keyword = mood.keywords.firstOrNull() ?: mood.displayName
-        val langPrefix = if (language != com.moodtunes.app.data.local.preferences.MusicLanguage.ALL) "${language.searchQueryPrefix} " else ""
-        val searchQuery = "$langPrefix$keyword"
-
-        try {
-            val url = "$host/v1/tracks/search?query=${Uri.encode(searchQuery)}&app_name=MoodTunes&limit=$limit"
-            val request = Request.Builder()
-                .url(url)
-                .header("User-Agent", USER_AGENT)
-                .build()
-
-            client.newCall(request).execute().use { response ->
-                if (response.isSuccessful) {
-                    val body = response.body?.string() ?: return@withContext emptyList()
-                    val json = JSONObject(body)
-                    val data = json.getJSONArray("data")
-
-                    for (i in 0 until data.length()) {
-                        val track = data.getJSONObject(i)
-                        val trackId = track.getString("id")
-                        val title = track.optString("title", "Unknown Track")
-                        val userObj = track.optJSONObject("user")
-                        val artist = userObj?.optString("name") ?: "Audius Artist"
-                        val duration = track.optLong("duration", 180) * 1000L
-                        val artworkObj = track.optJSONObject("artwork")
-                        val artUri = artworkObj?.optString("480x480")
-                            ?: artworkObj?.optString("150x150")
-
-                        val streamUrl = "$host/v1/tracks/$trackId/stream?app_name=MoodTunes"
-
-                        songs.add(
-                            Song(
-                                id = trackId.hashCode().toLong() and 0x7FFFFFFF,
-                                title = title,
-                                artist = artist,
-                                album = "Audius Stream",
-                                duration = duration,
-                                uri = Uri.parse(streamUrl),
-                                albumArtUri = artUri?.let { Uri.parse(it) },
-                                genre = mood.displayName,
-                                audioFormat = AudioFormat.STREAM,
-                                isStream = true,
-                                moodTags = listOf(mood)
-                            )
-                        )
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Timber.w(e, "Audius search failed for mood ${mood.displayName}")
-        }
-        songs
+    suspend fun searchSongs(query: String, limit: Int = 20): List<Song> = withContext(Dispatchers.IO) {
+        youTubeMusicApi.searchSongs(query, limit)
     }
 
-    /** Fetches 30-second iTunes preview tracks matching a query and language. */
-    suspend fun getITunesPreviewTracks(
-        languages: Set<com.moodtunes.app.data.local.preferences.MusicLanguage> = setOf(com.moodtunes.app.data.local.preferences.MusicLanguage.ALL),
-        categoryQuery: String = "Top Hits",
-        limit: Int = 10
-    ): List<Song> {
-        val selectedLangs = languages.filter { it != com.moodtunes.app.data.local.preferences.MusicLanguage.ALL }
-        val langPrefix = if (selectedLangs.isNotEmpty()) selectedLangs.first().searchQueryPrefix + " " else ""
-        val query = "$langPrefix$categoryQuery".trim()
-        return runCatching { iTunesApi.searchTracks(query, limit) }.getOrDefault(emptyList())
+    /**
+     * Fetches curated songs matching the given [mood].
+     */
+    suspend fun getSongsByMood(mood: MoodType, limit: Int = 20): List<Song> = withContext(Dispatchers.IO) {
+        youTubeMusicApi.getSongsByMood(mood, limit)
     }
 
-    /** Fetches 30-second Deezer preview tracks matching a query and language. */
-    suspend fun getDeezerPreviewTracks(
-        languages: Set<com.moodtunes.app.data.local.preferences.MusicLanguage> = setOf(com.moodtunes.app.data.local.preferences.MusicLanguage.ALL),
-        categoryQuery: String = "Top Hits",
-        limit: Int = 10
-    ): List<Song> {
-        val selectedLangs = languages.filter { it != com.moodtunes.app.data.local.preferences.MusicLanguage.ALL }
-        val langPrefix = if (selectedLangs.isNotEmpty()) selectedLangs.first().searchQueryPrefix + " " else ""
-        val query = "$langPrefix$categoryQuery".trim()
-        return runCatching { deezerApi.searchTracks(query, limit) }.getOrDefault(emptyList())
-    }
-
-    /** Fetches trending tracks from Deezer charts. */
-    suspend fun getDeezerChartTracks(limit: Int = 10): List<Song> {
-        return runCatching { deezerApi.getChartTracks(limit) }.getOrDefault(emptyList())
-    }
-
-
-
-    /** Parallel fetching of JioSaavn, Audius, iTunes, and Deezer online tracks for a mood and language */
+    /**
+     * Backward-compatible alias for fetching all online tracks matching a mood.
+     */
     suspend fun fetchAllOnlineTracksForMood(
         mood: MoodType,
-        language: com.moodtunes.app.data.local.preferences.MusicLanguage = com.moodtunes.app.data.local.preferences.MusicLanguage.ALL
-    ): List<Song> = coroutineScope {
-        val saavnDeferred = async {
-            val langPrefix = if (language != com.moodtunes.app.data.local.preferences.MusicLanguage.ALL) language.searchQueryPrefix else ""
-            runCatching { jioSaavnApi.getSongsByMood(mood, langPrefix, limit = 12) }.getOrDefault(emptyList())
-        }
-        val audiusDeferred = async { runCatching { getAudiusTracksByMood(mood, language) }.getOrDefault(emptyList()) }
-        val iTunesDeferred = async { runCatching { iTunesApi.searchTracks("${mood.displayName} music", 6) }.getOrDefault(emptyList()) }
-        val deezerDeferred = async { runCatching { deezerApi.searchTracks("${mood.displayName} music", 6) }.getOrDefault(emptyList()) }
-
-        val saavnResult = saavnDeferred.await()
-        val audiusResult = audiusDeferred.await()
-        val iTunesResult = iTunesDeferred.await()
-        val deezerResult = deezerDeferred.await()
-
-        (saavnResult + audiusResult + iTunesResult + deezerResult).distinctBy { it.id }
-    }
-
-    /**
-     * Searches Jamendo Music API for 320 kbps MP3 tracks.
-     * FIXED: Now uses `tags` + `fuzzytags` parameters for better results.
-     * 100% legal, royalty-free Creative Commons independent music.
-     */
-    suspend fun getJamendoTracks(
-        languages: Set<com.moodtunes.app.data.local.preferences.MusicLanguage> = setOf(com.moodtunes.app.data.local.preferences.MusicLanguage.ALL),
-        categoryQuery: String = "Top Hits",
-        limit: Int = 10
+        language: MusicLanguage = MusicLanguage.ALL,
+        limit: Int = 20
     ): List<Song> = withContext(Dispatchers.IO) {
-        val songs = mutableListOf<Song>()
-        val selectedLangs = languages.filter { it != com.moodtunes.app.data.local.preferences.MusicLanguage.ALL }
-
-        // Build multiple search strategies for better results
-        val searchStrategies = mutableListOf<String>()
-
-        // Strategy 1: tag-based (most reliable on Jamendo)
-        val cleanCategory = categoryQuery.replace(" ", "+").lowercase()
-        searchStrategies.add(
-            "https://api.jamendo.com/v3.0/tracks/?client_id=56d30c95&format=json&hasimage=true" +
-            "&limit=$limit&audioformat=mp32&order=popularity_total" +
-            "&tags=${Uri.encode(cleanCategory)}"
-        )
-
-        // Strategy 2: fuzzytags (fuzzy match on tags)
-        searchStrategies.add(
-            "https://api.jamendo.com/v3.0/tracks/?client_id=56d30c95&format=json&hasimage=true" +
-            "&limit=$limit&audioformat=mp32&order=popularity_week" +
-            "&fuzzytags=${Uri.encode(cleanCategory)}"
-        )
-
-        // Strategy 3: search (broadest but least precise)
-        val langPrefix = if (selectedLangs.isNotEmpty()) selectedLangs.first().searchQueryPrefix + " " else ""
-        val nameQuery = "$langPrefix$categoryQuery".trim()
-        searchStrategies.add(
-            "https://api.jamendo.com/v3.0/tracks/?client_id=56d30c95&format=json&hasimage=true" +
-            "&limit=$limit&audioformat=mp32&order=popularity_total" +
-            "&search=${Uri.encode(nameQuery)}"
-        )
-
-        // Strategy 4: trending fallback — no filter, just top tracks
-        searchStrategies.add(
-            "https://api.jamendo.com/v3.0/tracks/?client_id=56d30c95&format=json&hasimage=true" +
-            "&limit=$limit&audioformat=mp32&order=popularity_week"
-        )
-
-        for (strategyUrl in searchStrategies) {
-            if (songs.size >= limit) break
-            try {
-                val request = Request.Builder().url(strategyUrl).header("User-Agent", USER_AGENT).build()
-                client.newCall(request).execute().use { response ->
-                    if (response.isSuccessful) {
-                        val body = response.body?.string()
-                        if (body != null) {
-                            val json = JSONObject(body)
-                            val results = json.optJSONArray("results") ?: JSONArray()
-                            for (i in 0 until results.length()) {
-                                val track = results.getJSONObject(i)
-                                val id = track.optString("id", "")
-                                val name = track.optString("name", "Jamendo Track")
-                                val artist = track.optString("artist_name", "Jamendo Artist")
-                                val album = track.optString("album_name", "Jamendo Indie")
-                                val audioUrl = track.optString("audio", "")
-                                val image = track.optString("image", "")
-                                val duration = track.optLong("duration", 180) * 1000L
-
-                                if (audioUrl.startsWith("https://")) {
-                                    songs.add(
-                                        Song(
-                                            id = id.hashCode().toLong() and 0x7FFFFFFF,
-                                            title = name,
-                                            artist = artist,
-                                            album = album,
-                                            duration = duration,
-                                            uri = Uri.parse(audioUrl),
-                                            albumArtUri = if (image.isNotEmpty()) Uri.parse(image) else null,
-                                            genre = categoryQuery,
-                                            audioFormat = AudioFormat.STREAM,
-                                            isStream = true
-                                        )
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-                if (songs.size >= 3) break
-            } catch (e: Exception) {
-                Timber.w(e, "Jamendo strategy failed: $strategyUrl")
-            }
-        }
-
-        songs.distinctBy { it.id }
+        getSongsByMood(mood, limit)
     }
 
     /**
-     * Searches JioSaavn for full-length Indian regional (Tamil, Telugu, Hindi, Punjabi, Malayalam,
-     * Kannada, Bhojpuri, Bengali, Marathi, Gujarati), traditional, classical, and Bollywood tracks.
-     */
-    suspend fun getJioSaavnTracksByMood(
-        mood: MoodType,
-        language: com.moodtunes.app.data.local.preferences.MusicLanguage = com.moodtunes.app.data.local.preferences.MusicLanguage.ALL,
-        limit: Int = 14
-    ): List<Song> = withContext(Dispatchers.IO) {
-        val langPrefix = if (language != com.moodtunes.app.data.local.preferences.MusicLanguage.ALL) language.searchQueryPrefix else ""
-        runCatching { jioSaavnApi.getSongsByMood(mood, langPrefix, limit) }.getOrDefault(emptyList())
-    }
-
-    /**
-     * Searches JioSaavn for trending regional, classical, and traditional songs.
-     */
-    suspend fun getJioSaavnTracks(
-        languages: Set<com.moodtunes.app.data.local.preferences.MusicLanguage> = setOf(com.moodtunes.app.data.local.preferences.MusicLanguage.ALL),
-        categoryQuery: String = "Top Hits",
-        limit: Int = 16
-    ): List<Song> = withContext(Dispatchers.IO) {
-        val selectedLangs = languages.filter { it != com.moodtunes.app.data.local.preferences.MusicLanguage.ALL }
-        val lang = if (selectedLangs.isNotEmpty()) selectedLangs.first().displayName else ""
-        runCatching { jioSaavnApi.getRegionalTracks(lang, categoryQuery, limit) }.getOrDefault(emptyList())
-    }
-
-    /**
-     * Direct song search on JioSaavn.
-     */
-    suspend fun searchJioSaavn(query: String, limit: Int = 20): List<Song> = withContext(Dispatchers.IO) {
-        runCatching { jioSaavnApi.searchSongs(query, limit) }.getOrDefault(emptyList())
-    }
-
-    /**
-     * Fetches live 24/7 global internet radio stations via Radio Browser API.
-     * Supports language filtering (Hindi, English, Punjabi, Spanish, Tamil, Telugu, K-Pop, etc.).
-     */
-    suspend fun getGlobalInternetRadioStations(
-        languages: Set<com.moodtunes.app.data.local.preferences.MusicLanguage> = setOf(com.moodtunes.app.data.local.preferences.MusicLanguage.ALL),
-        categoryQuery: String = "Top Hits",
-        limit: Int = 12
-    ): List<Song> = withContext(Dispatchers.IO) {
-        val songs = mutableListOf<Song>()
-        val selectedLangs = languages.filter { it != com.moodtunes.app.data.local.preferences.MusicLanguage.ALL }
-        val primaryLang = if (selectedLangs.isNotEmpty()) selectedLangs.first().displayName.lowercase() else ""
-
-        val radioBrowserHosts = listOf(
-            "https://de1.api.radio-browser.info",
-            "https://at1.api.radio-browser.info",
-            "https://nl1.api.radio-browser.info"
-        )
-
-        val endpoints = mutableListOf<String>()
-        val baseHost = radioBrowserHosts.first()
-
-        if (primaryLang.isNotEmpty()) {
-            endpoints.add("$baseHost/json/stations/search?language=${Uri.encode(primaryLang)}&order=clickcount&reverse=true&limit=$limit")
-        }
-        endpoints.add("$baseHost/json/stations/search?tag=${Uri.encode(categoryQuery)}&order=clickcount&reverse=true&limit=$limit")
-        endpoints.add("$baseHost/json/stations/search?name=${Uri.encode(categoryQuery)}&order=votes&reverse=true&limit=$limit")
-        // Fallback: just top stations by click
-        endpoints.add("$baseHost/json/stations?order=clickcount&reverse=true&limit=$limit")
-
-        for (url in endpoints) {
-            try {
-                val request = Request.Builder().url(url).header("User-Agent", USER_AGENT).build()
-                client.newCall(request).execute().use { response ->
-                    if (response.isSuccessful) {
-                        val body = response.body?.string()
-                        if (body != null) {
-                            val stations = JSONArray(body)
-                            for (i in 0 until stations.length()) {
-                                val st = stations.getJSONObject(i)
-                                val name = st.optString("name", "Live Radio").trim()
-                                val streamUrl = st.optString("url_resolved", st.optString("url", ""))
-                                val favicon = st.optString("favicon", "")
-                                val codec = st.optString("codec", "MP3")
-                                val bitrate = st.optInt("bitrate", 128)
-                                val country = st.optString("country", "Global")
-
-                                if (streamUrl.startsWith("http://") || streamUrl.startsWith("https://")) {
-                                    songs.add(
-                                        Song(
-                                            id = (name + streamUrl).hashCode().toLong() and 0x7FFFFFFF,
-                                            title = "📻 $name",
-                                            artist = "$country • $codec ${bitrate}kbps",
-                                            album = "Live Internet Radio 24/7",
-                                            duration = 0L,
-                                            uri = Uri.parse(streamUrl),
-                                            albumArtUri = if (favicon.startsWith("http")) Uri.parse(favicon) else null,
-                                            genre = "Live Radio",
-                                            audioFormat = AudioFormat.STREAM,
-                                            isStream = true
-                                        )
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-                if (songs.isNotEmpty()) break
-            } catch (e: Exception) {
-                Timber.w(e, "Radio Browser endpoint failed: $url")
-            }
-        }
-
-        songs.distinctBy { it.uri.toString() }
-    }
-
-    /**
-     * Fetches general music & radio streams combining Audius, Jamendo, Internet Archive and Radio Browser.
-     * Used by the Songs Hub.
+     * Fetches trending category and chart songs.
      */
     suspend fun getGeneralTrendingSongs(
-        languages: Set<com.moodtunes.app.data.local.preferences.MusicLanguage> = setOf(com.moodtunes.app.data.local.preferences.MusicLanguage.ALL),
-        categoryQuery: String = "Top Hits",
-        limit: Int = 14
-    ): List<Song> = coroutineScope {
-        if (categoryQuery.contains("Radio") || categoryQuery.contains("📻")) {
-            return@coroutineScope getGlobalInternetRadioStations(languages, categoryQuery, limit)
-        }
-
-        val saavnDeferred = async { runCatching { getJioSaavnTracks(languages, categoryQuery, limit = 10) }.getOrDefault(emptyList()) }
-        val jamendoDeferred = async { runCatching { getJamendoTracks(languages, categoryQuery, limit = 8) }.getOrDefault(emptyList()) }
-        val radioDeferred = async { runCatching { getGlobalInternetRadioStations(languages, categoryQuery, limit = 5) }.getOrDefault(emptyList()) }
-        val iTunesDeferred = async { runCatching { iTunesApi.searchTracks(categoryQuery, limit = 6) }.getOrDefault(emptyList()) }
-        val deezerDeferred = async { runCatching { deezerApi.searchTracks(categoryQuery, limit = 6) }.getOrDefault(emptyList()) }
-
-        val songs = mutableListOf<Song>()
-        val selectedLangs = languages.filter { it != com.moodtunes.app.data.local.preferences.MusicLanguage.ALL }
-
-        val queries = if (selectedLangs.isNotEmpty()) {
-            selectedLangs.map { "${it.searchQueryPrefix} $categoryQuery" }
-        } else {
-            listOf("Top $categoryQuery", "Trending Hits", "Popular Music")
-        }
-
-        val host = getAudiusHost()
-
-        for (q in queries) {
-            // 1. Search Audius
-            try {
-                val audiusUrl = "$host/v1/tracks/search?query=${Uri.encode(q)}&app_name=MoodTunes&limit=${limit / 2}"
-                val request = Request.Builder().url(audiusUrl).header("User-Agent", USER_AGENT).build()
-                client.newCall(request).execute().use { response ->
-                    if (response.isSuccessful) {
-                        val body = response.body?.string()
-                        if (body != null) {
-                            val json = JSONObject(body)
-                            val data = json.getJSONArray("data")
-                            for (i in 0 until data.length()) {
-                                val track = data.getJSONObject(i)
-                                val trackId = track.getString("id")
-                                val title = track.optString("title", "Unknown Track")
-                                val userObj = track.optJSONObject("user")
-                                val artist = userObj?.optString("name") ?: "Audius Artist"
-                                val duration = track.optLong("duration", 180) * 1000L
-                                val artworkObj = track.optJSONObject("artwork")
-                                val artUri = artworkObj?.optString("480x480") ?: artworkObj?.optString("150x150")
-                                val streamUrl = "$host/v1/tracks/$trackId/stream?app_name=MoodTunes"
-
-                                songs.add(
-                                    Song(
-                                        id = trackId.hashCode().toLong() and 0x7FFFFFFF,
-                                        title = title,
-                                        artist = artist,
-                                        album = "Online Stream",
-                                        duration = duration,
-                                        uri = Uri.parse(streamUrl),
-                                        albumArtUri = artUri?.let { Uri.parse(it) },
-                                        genre = categoryQuery,
-                                        audioFormat = AudioFormat.STREAM,
-                                        isStream = true
-                                    )
-                                )
-                            }
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                Timber.w(e, "General Audius query failed: $q")
-            }
-        }
-
-        val saavnTracks = saavnDeferred.await()
-        val jamendoTracks = jamendoDeferred.await()
-        val radioStations = radioDeferred.await()
-        val iTunesTracks = iTunesDeferred.await()
-        val deezerTracks = deezerDeferred.await()
-
-        (saavnTracks + songs + jamendoTracks + radioStations + iTunesTracks + deezerTracks).distinctBy { it.id }
+        languages: Set<MusicLanguage> = emptySet(),
+        category: String = "Top Hits",
+        limit: Int = 20
+    ): List<Song> = withContext(Dispatchers.IO) {
+        youTubeMusicApi.getTrendingSongs(category, limit)
     }
 
     /**
-     * Resolves direct audio stream URL.
+     * Fetches continuous radio queue recommendations for a given [videoId].
      */
-    suspend fun resolveDirectStreamUrl(streamUrl: String): String = withContext(Dispatchers.IO) {
-        streamUrl
-    }
-
-    companion object {
-        // COPYRIGHT FIX (C3): Honest, transparent User-Agent — no browser impersonation
-        private const val USER_AGENT = "MoodTunes/1.0 (Android; Music Player App)"
+    suspend fun getRadioQueue(videoId: String, limit: Int = 20): List<Song> = withContext(Dispatchers.IO) {
+        youTubeMusicApi.getRadioQueue(videoId, limit)
     }
 }

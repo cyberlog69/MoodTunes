@@ -679,12 +679,12 @@ private fun OnlineStreamsContent(
                         Spacer(Modifier.width(16.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Online Streaming",
+                                text = "YouTube Music Streams",
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                             Text(
-                                text = "Curated online streams based on your language preferences set in Settings.",
+                                text = "100% full-song streaming with global catalog and curated charts.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                             )
@@ -703,16 +703,16 @@ private fun OnlineStreamsContent(
             item {
                 val categories = listOf(
                     "Top Hits",
-                    "🇮🇳 Regional & Folk",
-                    "Carnatic & Classical",
-                    "📻 Live Radio",
-                    "Sufi & Ghazal",
-                    "Bollywood Hits",
                     "Trending Pop",
+                    "New Releases",
+                    "Bollywood Hits",
                     "Acoustic & Chill",
                     "Dance Party",
                     "Lo-Fi Beats",
-                    "Rock Hits"
+                    "Rock Hits",
+                    "Hip-Hop",
+                    "Workout",
+                    "Sleep"
                 )
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),

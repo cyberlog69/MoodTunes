@@ -28,14 +28,6 @@ enum class AudioSourceMode(val displayName: String) {
     STREAM_ONLY("Online Stream Only")
 }
 
-enum class StreamingProvider(val displayName: String) {
-    ALL_COMBINED("🌟 All Services Combined (Recommended)"),
-    JIOSAAVN_REGIONAL("🇮🇳 JioSaavn Regional & Traditional"),
-    AUDIUS_ONLY("🎵 Audius Only"),
-    ITUNES_DEEZER("🍏 iTunes & Deezer Previews"),
-    JAMENDO_ONLY("🎸 Jamendo Indie Only"),
-    INTERNET_RADIO("📻 Global Internet Radio Only")
-}
 
 enum class MusicLanguage(
     val displayName: String,
@@ -62,7 +54,6 @@ data class AppUserSettings(
     val wifiOnlyDownloads: Boolean = true,
     val mobileDataHighQuality: Boolean = true,
     val audioSourceMode: AudioSourceMode = AudioSourceMode.BOTH,
-    val streamingProvider: StreamingProvider = StreamingProvider.ALL_COMBINED,
     val preferredLanguages: Set<MusicLanguage> = setOf(MusicLanguage.ALL),
     // 🧠 ListenBrainz
     val listenBrainzToken: String = "",
@@ -92,9 +83,6 @@ class UserPreferencesRepository @Inject constructor(
         val modeStr = prefs.getString("dark_mode", DarkModeOption.DARK.name) ?: DarkModeOption.DARK.name
         val qualityStr = prefs.getString("stream_quality", StreamQuality.LOSSLESS.name) ?: StreamQuality.LOSSLESS.name
         val sourceStr = prefs.getString("audio_source_mode", AudioSourceMode.BOTH.name) ?: AudioSourceMode.BOTH.name
-        val providerStr = prefs.getString("streaming_provider", StreamingProvider.ALL_COMBINED.name) ?: StreamingProvider.ALL_COMBINED.name
-
-        val providerEnum = runCatching { StreamingProvider.valueOf(providerStr) }.getOrElse { StreamingProvider.ALL_COMBINED }
         
         val rawLangs = prefs.getString("preferred_languages", prefs.getString("preferred_language", MusicLanguage.ALL.name)) 
             ?: MusicLanguage.ALL.name
@@ -111,7 +99,6 @@ class UserPreferencesRepository @Inject constructor(
             wifiOnlyDownloads = prefs.getBoolean("wifi_only_downloads", true),
             mobileDataHighQuality = prefs.getBoolean("mobile_data_hq", true),
             audioSourceMode = runCatching { AudioSourceMode.valueOf(sourceStr) }.getOrDefault(AudioSourceMode.BOTH),
-            streamingProvider = providerEnum,
             preferredLanguages = parsedLangs,
             listenBrainzToken = prefs.getString("listenbrainz_token", "") ?: "",
             listenBrainzUsername = prefs.getString("listenbrainz_username", "") ?: "",
@@ -158,10 +145,6 @@ class UserPreferencesRepository @Inject constructor(
         _settings.value = _settings.value.copy(audioSourceMode = mode)
     }
 
-    fun updateStreamingProvider(provider: StreamingProvider) {
-        prefs.edit().putString("streaming_provider", provider.name).apply()
-        _settings.value = _settings.value.copy(streamingProvider = provider)
-    }
 
     fun togglePreferredLanguage(language: MusicLanguage) {
         val currentSet = _settings.value.preferredLanguages.toMutableSet()

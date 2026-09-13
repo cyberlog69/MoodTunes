@@ -25,7 +25,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.moodtunes.app.data.local.preferences.AudioSourceMode
 import com.moodtunes.app.data.local.preferences.DarkModeOption
 import com.moodtunes.app.data.local.preferences.StreamQuality
-import com.moodtunes.app.data.local.preferences.StreamingProvider
 import com.moodtunes.app.presentation.ui.theme.*
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -231,34 +230,33 @@ fun SettingsScreen(
                         if (settings.audioSourceMode != AudioSourceMode.LOCAL_ONLY) {
                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
-                            Text(
-                                text = "Online Streaming Provider",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = "Select whether to fetch streams from JioSaavn regional/traditional, Audius, iTunes & Deezer previews, Jamendo, Global Internet Radio, or all combined.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                StreamingProvider.entries.forEach { provider ->
-                                    val isSelected = settings.streamingProvider == provider
-                                    FilterChip(
-                                        selected = isSelected,
-                                        onClick = { viewModel.onStreamingProviderChanged(provider) },
-                                        label = { Text(provider.displayName, style = MaterialTheme.typography.labelMedium) },
-                                        leadingIcon = if (isSelected) {
-                                            { Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                                        } else null,
-                                        colors = FilterChipDefaults.filterChipColors(
-                                            selectedContainerColor = MaterialTheme.colorScheme.secondary,
-                                            selectedLabelColor = MaterialTheme.colorScheme.onSecondary,
-                                            containerColor = MaterialTheme.colorScheme.surface,
-                                            labelColor = MaterialTheme.colorScheme.onSurfaceVariant
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(
+                                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                                        RoundedCornerShape(16.dp)
+                                    )
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Rounded.PlayCircle,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(36.dp)
+                                )
+                                Spacer(Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "YouTube Music Engine",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                    Text(
+                                        text = "High-fidelity Opus/AAC full-song streaming with global catalog, charts, and instant discovery.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                                     )
                                 }
                             }
@@ -892,7 +890,7 @@ fun SettingsScreen(
                                                 )
                                                 Spacer(Modifier.height(4.dp))
                                                 Text(
-                                                    text = "• In-App Update Engine: Auto-downloads and installs updates directly within MoodTunes\n• Post-Update Welcome Window displaying changelog and version info\n• JioSaavn Integration: 16+ Indian regional languages, classical ragas & Bollywood\n• ListenBrainz Scrobbler & Navidrome Self-Hosted Lossless Music Server\n• 24/7 Global Internet Radio Streams (35,000+ stations)",
+                                                    text = "• YouTube Music Engine: 100% full-song streaming with global catalog, charts & auto-radio\n• Live FFT Audio Visualizer: Neon Bars, Pulse Aura, Cosmic Particles\n• 3D Spatial Virtualizer & Reverb Room Acoustics\n• Material Design 3 Themed Icons & Modern Branding\n• On-Device ID3 Tag & Cover Art Editor\n• ListenBrainz Scrobbler & Navidrome Lossless Server Support",
                                                     style = MaterialTheme.typography.bodySmall,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )

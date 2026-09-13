@@ -202,10 +202,9 @@ class SearchViewModel @Inject constructor(
         val preferredLangs = settings.preferredLanguages
 
         val onlineDeferred = async {
-            onlineStreamRepository.getGeneralTrendingSongs(
-                languages = preferredLangs,
-                categoryQuery = query,
-                limit = 16
+            onlineStreamRepository.searchSongs(
+                query = query,
+                limit = 20
             )
         }
 

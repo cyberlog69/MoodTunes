@@ -11,7 +11,6 @@ import com.moodtunes.app.data.local.preferences.AudioSourceMode
 import com.moodtunes.app.data.local.preferences.DarkModeOption
 import com.moodtunes.app.data.local.preferences.MusicLanguage
 import com.moodtunes.app.data.local.preferences.StreamQuality
-import com.moodtunes.app.data.local.preferences.StreamingProvider
 import com.moodtunes.app.data.local.preferences.UserPreferencesRepository
 import com.moodtunes.app.data.remote.AppUpdateManager
 import com.moodtunes.app.data.remote.UpdateCheckResult
@@ -101,9 +100,6 @@ class SettingsViewModel @Inject constructor(
         preferencesRepository.updateAudioSourceMode(mode)
     }
 
-    fun onStreamingProviderChanged(provider: StreamingProvider) {
-        preferencesRepository.updateStreamingProvider(provider)
-    }
 
     fun onTogglePreferredLanguage(language: MusicLanguage) {
         preferencesRepository.togglePreferredLanguage(language)

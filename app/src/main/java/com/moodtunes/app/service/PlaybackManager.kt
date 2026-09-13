@@ -190,9 +190,18 @@ class PlaybackManager @Inject constructor(
             val targetSong = effectiveSongs.getOrNull(effectiveStart)
             val resolvedUri = if (targetSong != null && targetSong.isStream) {
                 val direct = onlineStreamRepository.resolveDirectStreamUrl(targetSong.uri.toString())
-                Uri.parse(direct)
+                if (direct.isNotBlank() && direct.startsWith("http") && !direct.contains("youtube.com/watch")) {
+                    Uri.parse(direct)
+                } else {
+                    null
+                }
             } else {
                 targetSong?.uri
+            }
+
+            if (targetSong != null && targetSong.isStream && resolvedUri == null) {
+                _playbackError.value = PlaybackError("Stream is temporarily unavailable. Please try another track.", isRetryable = true)
+                return@launch
             }
 
             val mediaItems = effectiveSongs.mapIndexed { index, song ->
@@ -780,5 +789,5 @@ class PlaybackManager @Inject constructor(
 /** Describes a recoverable or terminal playback failure surfaced to the UI. */
 data class PlaybackError(
     val message: String,
-    val isRetryable: Boolean
+    val isRetryable: Boolean = false
 )

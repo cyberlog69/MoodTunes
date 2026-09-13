@@ -147,9 +147,44 @@ class YouTubeMusicApiService @Inject constructor() {
         searchSongs(query, limit)
     }
 
+    @Volatile
+    private var cachedVisitorData: String? = null
+    @Volatile
+    private var visitorDataExpiry: Long = 0L
+
+    private suspend fun getVisitorData(): String = withContext(Dispatchers.IO) {
+        val now = System.currentTimeMillis()
+        val current = cachedVisitorData
+        if (!current.isNullOrBlank() && now < visitorDataExpiry) {
+            return@withContext current
+        }
+
+        val fetched = runCatching {
+            val request = Request.Builder()
+                .url("https://www.youtube.com/")
+                .addHeader("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15")
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@use null
+                val html = response.body?.string() ?: return@use null
+                val regex = Regex("\"visitorData\"\\s*:\\s*\"([^\"]+)\"")
+                regex.find(html)?.groupValues?.get(1)
+            }
+        }.getOrNull()
+
+        if (!fetched.isNullOrBlank()) {
+            cachedVisitorData = fetched
+            visitorDataExpiry = now + TimeUnit.HOURS.toMillis(24)
+            fetched
+        } else {
+            "CgtkVVRkcGZsUDFoOCiFiJrVBjIKCgJJThIEGgAgMGLfAgrcAjIxLllUPUR4a0VFR1NPOUpUM2NBeHNVcXBGb0doYW9obkM5OE9DSTFzOTQwSU5JZmZLYUVZSDRBc215czg5Y0hXUXlHeGFMazZYVHJVNE9ZUGFwOE9lRnRLT3RhZ0hFYzFRcllTSGdheGdGWmxuYjgzai1TamhoNmw4T19nTWFqWWhiV2tMbUQ5VUZGR3YwWWlhcGVfaE12Q0R0bWlsUU8zX25NMklud0lXNUpFRUVxblhfQ1JJSmVMLTFvUmdQM1J5MnNrZlpwcGthV2laRlFBRGs5MDRGeTVyYmRRRjd4SmFSWEJZS3pLWlBnMDBlS3JhazU4V1pUbXNkUHdaQWVrS3FJeWdGakZuTk1qMU1Hc014VE1nNDNpWnRkUmY1a0VKV2dEZHJpcE1ualR2ajlDT0lIa1c0cldzWkotcEY2UVZoc2hFVExWRlhnX25zZ0dxUzFGQi10SUk4QQ%3D%3D"
+        }
+    }
+
     /**
      * Resolves the direct, un-throttled HTTPS audio streaming URL (Opus/AAC) for a [videoId].
-     * First checks in-memory cache, then queries InnerTube Player endpoint.
+     * First checks in-memory cache, then queries InnerTube Player endpoint with VISIONOS client.
      */
     suspend fun resolveStreamUrl(videoId: String): String? = withContext(Dispatchers.IO) {
         val cleanId = extractVideoId(videoId)
@@ -162,16 +197,18 @@ class YouTubeMusicApiService @Inject constructor() {
             return@withContext cached.first
         }
 
-        // 2. Query InnerTube Player API using ANDROID_MUSIC client context
-        var streamUrl = fetchStreamWithClient(cleanId, isAndroid = true)
+        // 2. Query InnerTube Player API using VISIONOS client with visitorData
+        val vData = getVisitorData()
+        var streamUrl = fetchVisionOsStream(cleanId, vData)
 
-        // 3. Fallback to iOS client context if Android context fails
+        // Fallback: If cached visitorData failed, refresh visitorData and retry once
         if (streamUrl.isNullOrBlank()) {
-            streamUrl = fetchStreamWithClient(cleanId, isAndroid = false)
+            cachedVisitorData = null
+            val freshVData = getVisitorData()
+            streamUrl = fetchVisionOsStream(cleanId, freshVData)
         }
 
         if (!streamUrl.isNullOrBlank()) {
-            // Default stream expiration is ~5 hours; cache for 4 hours
             val ttl = now + TimeUnit.HOURS.toMillis(4)
             streamCache[cleanId] = Pair(streamUrl, ttl)
         }
@@ -179,33 +216,48 @@ class YouTubeMusicApiService @Inject constructor() {
         streamUrl
     }
 
-    private fun fetchStreamWithClient(videoId: String, isAndroid: Boolean): String? {
+    private fun fetchVisionOsStream(videoId: String, visitorData: String): String? {
         return runCatching {
+            val clientObj = JSONObject().apply {
+                put("clientName", "VISIONOS")
+                put("clientVersion", "1.02")
+                put("deviceMake", "Apple")
+                put("deviceModel", "RealityDevice17,1")
+                put("userAgent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15")
+                put("osName", "visionOS")
+                put("osVersion", "26.5.23O471")
+                put("visitorData", visitorData)
+                put("hl", "en")
+                put("gl", "US")
+            }
+
             val bodyJson = JSONObject().apply {
-                put("context", if (isAndroid) createAndroidContext() else createIosContext())
+                put("context", JSONObject().apply { put("client", clientObj) })
                 put("videoId", videoId)
             }
 
             val request = Request.Builder()
-                .url("$BASE_URL/player")
-                .apply {
-                    if (isAndroid) {
-                        addHeader("User-Agent", "com.google.android.apps.youtube.music/$ANDROID_CLIENT_VERSION (Linux; U; Android 14) gzip")
-                        addHeader("X-YouTube-Client-Name", "21")
-                        addHeader("X-YouTube-Client-Version", ANDROID_CLIENT_VERSION)
-                    } else {
-                        addHeader("User-Agent", "com.google.ios.youtubemusic/$IOS_CLIENT_VERSION (iPhone16,2; U; CPU iOS 17_5_1 like Mac OS X)")
-                        addHeader("X-YouTube-Client-Name", "5")
-                        addHeader("X-YouTube-Client-Version", IOS_CLIENT_VERSION)
-                    }
-                }
+                .url("https://www.youtube.com/youtubei/v1/player")
+                .addHeader("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15")
+                .addHeader("X-YouTube-Client-Name", "101")
+                .addHeader("X-YouTube-Client-Version", "1.02")
+                .addHeader("Origin", "https://www.youtube.com")
+                .addHeader("X-Goog-Visitor-Id", visitorData)
                 .post(bodyJson.toString().toRequestBody(jsonMediaType))
                 .build()
 
             client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return null
+                if (!response.isSuccessful) {
+                    Timber.w("VISIONOS player returned HTTP ${response.code}")
+                    return null
+                }
                 val responseStr = response.body?.string() ?: return null
                 val root = JSONObject(responseStr)
+                val status = root.optJSONObject("playabilityStatus")?.optString("status")
+                if (status != "OK") {
+                    Timber.w("VISIONOS player status: $status")
+                    return null
+                }
                 val streamingData = root.optJSONObject("streamingData") ?: return null
                 val adaptiveFormats = streamingData.optJSONArray("adaptiveFormats") ?: return null
 

@@ -74,21 +74,28 @@ fun PlayerBottomSheet(
                 durationMs = uiState.durationMs,
                 isPlaying = uiState.isPlaying,
                 isLoading = uiState.isLyricsLoading,
+                isTranslated = uiState.isLyricsTranslated,
+                isTranslating = uiState.isTranslatingLyrics,
                 songTitle = uiState.currentSong?.title,
                 songArtist = uiState.currentSong?.artist,
                 selectedMood = uiState.selectedMood,
                 onSeekToLine = { timeMs -> viewModel.seekToPosition(timeMs) },
+                onToggleTranslation = viewModel::toggleLyricsTranslation,
                 onPlayPause = viewModel::playPause,
                 onSkipNext = viewModel::skipNext,
                 onDismiss = onDismiss
             )
             PlayerSheet.SPEED -> SpeedSheetContent(
                 speed = uiState.playbackSpeed,
-                onSpeedSelected = viewModel::setPlaybackSpeed
+                pitch = uiState.playbackPitch,
+                onSpeedSelected = viewModel::setPlaybackSpeed,
+                onPitchSelected = viewModel::setPlaybackPitch
             )
             PlayerSheet.SLEEP_TIMER -> SleepTimerSheetContent(
                 remainingMs = uiState.sleepTimerRemainingMs,
+                pauseWhenSongEnds = uiState.pauseWhenSongEnds,
                 onStart = viewModel::startSleepTimer,
+                onPauseWhenSongEnds = viewModel::enablePauseWhenSongEnds,
                 onCancel = viewModel::cancelSleepTimer
             )
             PlayerSheet.EQUALIZER -> EqualizerSheetContent(
@@ -368,6 +375,7 @@ private fun QueueSheetContent(
 
 // ─── Synced lyrics (Spotify-Style UI) ───────────────────────────────────────
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun LyricsSheetContent(
     lyrics: List<LyricsLine>,
@@ -375,10 +383,13 @@ private fun LyricsSheetContent(
     durationMs: Long,
     isPlaying: Boolean,
     isLoading: Boolean,
+    isTranslated: Boolean,
+    isTranslating: Boolean,
     songTitle: String?,
     songArtist: String?,
     selectedMood: MoodType?,
     onSeekToLine: (Long) -> Unit,
+    onToggleTranslation: () -> Unit,
     onPlayPause: () -> Unit,
     onSkipNext: () -> Unit,
     onDismiss: () -> Unit
@@ -481,26 +492,55 @@ private fun LyricsSheetContent(
                     }
                 }
 
-                // Share Lyrics Button
-                IconButton(
-                    onClick = {
-                        if (lyrics.isNotEmpty()) {
-                            val fullLyrics = lyrics.joinToString("\n") { it.text }
-                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                type = "text/plain"
-                                putExtra(Intent.EXTRA_SUBJECT, "Lyrics: $songTitle by $songArtist")
-                                putExtra(Intent.EXTRA_TEXT, "🎵 \"$songTitle\" by $songArtist\n\n$fullLyrics\n\nShared from MoodTunes")
-                            }
-                            context.startActivity(Intent.createChooser(shareIntent, "Share Lyrics"))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Translation Button
+                    IconButton(
+                        onClick = onToggleTranslation,
+                        enabled = lyrics.isNotEmpty() && !isTranslating
+                    ) {
+                        if (isTranslating) {
+                            CircularProgressIndicator(
+                                color = White,
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(
+                                Icons.Rounded.Translate,
+                                contentDescription = "Translate lyrics",
+                                tint = if (isTranslated) MaterialTheme.colorScheme.primary else White.copy(alpha = 0.85f),
+                                modifier = Modifier.size(22.dp)
+                            )
                         }
                     }
-                ) {
-                    Icon(
-                        Icons.Rounded.Share,
-                        contentDescription = "Share lyrics",
-                        tint = White.copy(alpha = 0.85f),
-                        modifier = Modifier.size(22.dp)
-                    )
+
+                    // Share Lyrics Button
+                    IconButton(
+                        onClick = {
+                            if (lyrics.isNotEmpty()) {
+                                val fullLyrics = lyrics.joinToString("\n") {
+                                    if (isTranslated && !it.translation.isNullOrBlank()) {
+                                        "${it.text}\n(${it.translation})"
+                                    } else {
+                                        it.text
+                                    }
+                                }
+                                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(Intent.EXTRA_SUBJECT, "Lyrics: $songTitle by $songArtist")
+                                    putExtra(Intent.EXTRA_TEXT, "🎵 \"$songTitle\" by $songArtist\n\n$fullLyrics\n\nShared from MoodTunes")
+                                }
+                                context.startActivity(Intent.createChooser(shareIntent, "Share Lyrics"))
+                            }
+                        }
+                    ) {
+                        Icon(
+                            Icons.Rounded.Share,
+                            contentDescription = "Share lyrics",
+                            tint = White.copy(alpha = 0.85f),
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
                 }
             }
 
@@ -611,7 +651,7 @@ private fun LyricsSheetContent(
                                     label = "lyricScale"
                                 )
 
-                                Box(
+                                Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clip(RoundedCornerShape(12.dp))
@@ -620,26 +660,87 @@ private fun LyricsSheetContent(
                                         }
                                         .padding(vertical = 4.dp, horizontal = 6.dp)
                                 ) {
-                                    Text(
-                                        text = line.text,
-                                        style = if (isCurrent)
-                                            MaterialTheme.typography.headlineSmall
-                                        else
-                                            MaterialTheme.typography.titleLarge,
-                                        color = White.copy(alpha = animatedAlpha),
-                                        fontWeight = if (isCurrent)
-                                            androidx.compose.ui.text.font.FontWeight.ExtraBold
-                                        else
-                                            androidx.compose.ui.text.font.FontWeight.Bold,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .graphicsLayer {
-                                                scaleX = animatedScale
-                                                scaleY = animatedScale
-                                                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f)
-                                            },
-                                        textAlign = TextAlign.Start
-                                    )
+                                    if (isCurrent && line.words.isNotEmpty()) {
+                                        FlowRow(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .graphicsLayer {
+                                                    scaleX = animatedScale
+                                                    scaleY = animatedScale
+                                                    transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f)
+                                                },
+                                            horizontalArrangement = Arrangement.Start,
+                                            verticalArrangement = Arrangement.Center
+                                        ) {
+                                            line.words.forEach { word ->
+                                                val isWordActive = currentPositionMs in word.startMs..word.endMs
+                                                val isWordPast = currentPositionMs > word.endMs
+                                                val wordAlpha by animateFloatAsState(
+                                                    targetValue = when {
+                                                        isWordActive -> 1f
+                                                        isWordPast -> 0.95f
+                                                        else -> 0.40f
+                                                    },
+                                                    animationSpec = tween(150),
+                                                    label = "wordAlpha"
+                                                )
+                                                val wordScale by animateFloatAsState(
+                                                    targetValue = if (isWordActive) 1.08f else 1f,
+                                                    animationSpec = spring(
+                                                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                        stiffness = Spring.StiffnessMedium
+                                                    ),
+                                                    label = "wordScale"
+                                                )
+                                                Text(
+                                                    text = word.text + " ",
+                                                    style = MaterialTheme.typography.headlineSmall,
+                                                    color = if (isWordActive) White else White.copy(alpha = wordAlpha),
+                                                    fontWeight = if (isWordActive)
+                                                        androidx.compose.ui.text.font.FontWeight.ExtraBold
+                                                    else
+                                                        androidx.compose.ui.text.font.FontWeight.Bold,
+                                                    modifier = Modifier.graphicsLayer {
+                                                        scaleX = wordScale
+                                                        scaleY = wordScale
+                                                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f)
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    } else {
+                                        Text(
+                                            text = line.text,
+                                            style = if (isCurrent)
+                                                MaterialTheme.typography.headlineSmall
+                                            else
+                                                MaterialTheme.typography.titleLarge,
+                                            color = White.copy(alpha = animatedAlpha),
+                                            fontWeight = if (isCurrent)
+                                                androidx.compose.ui.text.font.FontWeight.ExtraBold
+                                            else
+                                                androidx.compose.ui.text.font.FontWeight.Bold,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .graphicsLayer {
+                                                    scaleX = animatedScale
+                                                    scaleY = animatedScale
+                                                    transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f)
+                                                },
+                                            textAlign = TextAlign.Start
+                                        )
+                                    }
+
+                                    if (isTranslated && !line.translation.isNullOrBlank()) {
+                                        Spacer(Modifier.height(4.dp))
+                                        Text(
+                                            text = line.translation!!,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = if (isCurrent) White.copy(alpha = 0.9f) else White.copy(alpha = 0.5f),
+                                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -732,15 +833,17 @@ private fun LyricsSheetContent(
     }
 }
 
-// ─── Playback speed ──────────────────────────────────────────────────────────
+// ─── Playback speed & pitch ──────────────────────────────────────────────────
 
 @Composable
 private fun SpeedSheetContent(
     speed: Float,
-    onSpeedSelected: (Float) -> Unit
+    pitch: Float,
+    onSpeedSelected: (Float) -> Unit,
+    onPitchSelected: (Float) -> Unit
 ) {
     val options = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
-    SheetHeader(icon = Icons.Rounded.Speed, title = "Playback Speed", subtitle = "Change playback speed")
+    SheetHeader(icon = Icons.Rounded.Speed, title = "Speed & Pitch", subtitle = "Change playback tempo and vocal pitch")
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -756,11 +859,12 @@ private fun SpeedSheetContent(
                         if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                         else Color.Transparent
                     )
-                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                    .clickable { onSpeedSelected(option) }
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = if (option == 1f) "Normal" else "${formatSpeed(option)}×",
+                    text = if (option == 1f) "Normal (1.0×)" else "${formatSpeed(option)}×",
                     style = MaterialTheme.typography.bodyLarge,
                     color = if (isSelected) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.onSurface,
@@ -775,6 +879,44 @@ private fun SpeedSheetContent(
                 }
             }
         }
+
+        Spacer(Modifier.height(16.dp))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+        Spacer(Modifier.height(16.dp))
+
+        // Pitch Adjustment (0.8x - 1.2x)
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    text = "Vocal Pitch",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "${String.format("%.2f", pitch)}× ${if (pitch == 1f) "(Natural)" else ""}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            if (pitch != 1f) {
+                TextButton(onClick = { onPitchSelected(1f) }) {
+                    Text("Reset")
+                }
+            }
+        }
+
+        Slider(
+            value = pitch,
+            onValueChange = onPitchSelected,
+            valueRange = 0.8f..1.2f,
+            steps = 8,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)
+        )
     }
 }
 
@@ -783,35 +925,104 @@ private fun SpeedSheetContent(
 @Composable
 private fun SleepTimerSheetContent(
     remainingMs: Long?,
+    pauseWhenSongEnds: Boolean,
     onStart: (Int) -> Unit,
+    onPauseWhenSongEnds: () -> Unit,
     onCancel: () -> Unit
 ) {
-    val options = listOf(10, 15, 20, 30, 45, 60, 90)
-    SheetHeader(icon = Icons.Rounded.Bedtime, title = "Sleep Timer", subtitle = "Auto-pause after a set time")
-    if (remainingMs != null) {
-        Row(
+    val options = listOf(15, 30, 45, 60, 90)
+    SheetHeader(
+        icon = Icons.Rounded.Bedtime,
+        title = "Sleep Timer",
+        subtitle = "Auto-pause after a set time or at track end"
+    )
+
+    if (pauseWhenSongEnds) {
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(horizontal = 20.dp, vertical = 8.dp)
         ) {
-            Text(
-                text = "⏳ Stopping in ${formatRemaining(remainingMs)}",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.weight(1f)
-            )
-            TextButton(onClick = onCancel) { Text("Cancel") }
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.Rounded.HourglassBottom,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "Stopping at the end of this track",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(onClick = onCancel) { Text("Cancel") }
+            }
+        }
+    } else if (remainingMs != null) {
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 8.dp)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.Rounded.Bedtime,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "Stopping in ${formatRemaining(remainingMs)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(onClick = onCancel) { Text("Cancel") }
+            }
         }
     }
+
     LazyRow(
         contentPadding = PaddingValues(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier.padding(vertical = 8.dp)
     ) {
+        item {
+            FilterChip(
+                selected = pauseWhenSongEnds,
+                onClick = {
+                    if (pauseWhenSongEnds) onCancel() else onPauseWhenSongEnds()
+                },
+                label = { Text("End of this track") },
+                leadingIcon = {
+                    Icon(
+                        Icons.Rounded.HourglassBottom,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                },
+                shape = RoundedCornerShape(12.dp)
+            )
+        }
+
         itemsIndexed(options) { _, minutes ->
             FilterChip(
-                selected = remainingMs != null,
+                selected = false,
                 onClick = { onStart(minutes) },
                 label = { Text("$minutes min") },
                 shape = RoundedCornerShape(12.dp)

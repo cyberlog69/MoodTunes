@@ -443,7 +443,7 @@ fun PlayerScreen(
                 PlayerToolButton(
                     icon = Icons.Rounded.Speed,
                     label = "${formatSpeedLabel(uiState.playbackSpeed)}×",
-                    active = uiState.playbackSpeed != 1f,
+                    active = uiState.playbackSpeed != 1f || uiState.playbackPitch != 1f,
                     onClick = { activeSheet = PlayerSheet.SPEED }
                 )
                 PlayerToolButton(
@@ -455,7 +455,7 @@ fun PlayerScreen(
                 PlayerToolButton(
                     icon = Icons.Rounded.Bedtime,
                     label = "Sleep",
-                    active = uiState.sleepTimerRemainingMs != null,
+                    active = uiState.sleepTimerRemainingMs != null || uiState.pauseWhenSongEnds,
                     onClick = { activeSheet = PlayerSheet.SLEEP_TIMER }
                 )
                 PlayerToolButton(

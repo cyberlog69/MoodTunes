@@ -3,6 +3,7 @@ package com.moodtunes.app.data.local.lyrics
 import android.content.Context
 import android.provider.MediaStore
 import com.moodtunes.app.data.remote.api.LrclibService
+import com.moodtunes.app.data.remote.api.LyricsTranslationService
 import com.moodtunes.app.domain.model.LyricsLine
 import com.moodtunes.app.domain.model.Song
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -16,7 +17,8 @@ import javax.inject.Singleton
 @Singleton
 class LyricsRepository @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val lrclibService: LrclibService
+    private val lrclibService: LrclibService,
+    private val translationService: LyricsTranslationService
 ) {
     private val cache = mutableMapOf<Long, List<LyricsLine>>()
 
@@ -31,6 +33,20 @@ class LyricsRepository @Inject constructor(
 
         if (lyrics.isNotEmpty()) cache[song.id] = lyrics
         lyrics
+    }
+
+    suspend fun translateLyrics(songId: Long, lyrics: List<LyricsLine>): List<LyricsLine> = withContext(Dispatchers.IO) {
+        if (lyrics.isEmpty()) return@withContext lyrics
+        // If already translated, return cached version
+        if (lyrics.any { it.translation != null }) return@withContext lyrics
+
+        val texts = lyrics.map { it.text }
+        val translations = translationService.translateLines(texts)
+        val translatedLyrics = lyrics.mapIndexed { index, line ->
+            line.copy(translation = translations[index])
+        }
+        cache[songId] = translatedLyrics
+        translatedLyrics
     }
 
     private suspend fun fetchFromLrclib(song: Song): List<LyricsLine>? {

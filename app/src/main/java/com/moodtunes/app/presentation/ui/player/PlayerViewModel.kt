@@ -33,10 +33,12 @@ data class PlayerUiState(
     val repeatMode: RepeatMode = RepeatMode.OFF,
     val selectedMood: MoodType? = null,
     val playbackSpeed: Float = 1f,
+    val playbackPitch: Float = 1f,
     val isSmartShuffleEnabled: Boolean = false,
     val isCrossfadeEnabled: Boolean = false,
     val crossfadeDurationMs: Int = 1500,
     val sleepTimerRemainingMs: Long? = null,
+    val pauseWhenSongEnds: Boolean = false,
     val isEqualizerEnabled: Boolean = false,
     val isBassBoostEnabled: Boolean = false,
     val bassBoostStrength: Short = 0,
@@ -51,6 +53,8 @@ data class PlayerUiState(
     val equalizerPresets: List<String> = emptyList(),
     val lyrics: List<LyricsLine> = emptyList(),
     val isLyricsLoading: Boolean = false,
+    val isLyricsTranslated: Boolean = false,
+    val isTranslatingLyrics: Boolean = false,
     val isCasting: Boolean = false,
     val castDeviceName: String? = null,
     val audioOutput: AudioOutputInfo? = null,
@@ -94,9 +98,9 @@ class PlayerViewModel @Inject constructor(
                     current.copy(currentSong = song, currentSongIndex = idx)
                 }
                 if (song == null) {
-                    _uiState.update { it.copy(lyrics = emptyList(), isLyricsLoading = false) }
+                    _uiState.update { it.copy(lyrics = emptyList(), isLyricsLoading = false, isLyricsTranslated = false, isTranslatingLyrics = false) }
                 } else {
-                    _uiState.update { it.copy(isLyricsLoading = true) }
+                    _uiState.update { it.copy(isLyricsLoading = true, isLyricsTranslated = false, isTranslatingLyrics = false) }
                     val loaded = lyricsRepository.getLyrics(song)
                     _uiState.update { it.copy(lyrics = loaded, isLyricsLoading = false) }
                 }
@@ -152,6 +156,12 @@ class PlayerViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
+            playbackManager.playbackPitch.collectLatest { pitch ->
+                _uiState.update { it.copy(playbackPitch = pitch) }
+            }
+        }
+
+        viewModelScope.launch {
             playbackManager.isSmartShuffleEnabled.collectLatest { ss ->
                 _uiState.update { it.copy(isSmartShuffleEnabled = ss) }
             }
@@ -172,6 +182,12 @@ class PlayerViewModel @Inject constructor(
         viewModelScope.launch {
             playbackManager.sleepTimerRemainingMs.collectLatest { sleep ->
                 _uiState.update { it.copy(sleepTimerRemainingMs = sleep) }
+            }
+        }
+
+        viewModelScope.launch {
+            playbackManager.pauseWhenSongEnds.collectLatest { pauseWhenEnds ->
+                _uiState.update { it.copy(pauseWhenSongEnds = pauseWhenEnds) }
             }
         }
 
@@ -302,7 +318,30 @@ class PlayerViewModel @Inject constructor(
     fun setPlaybackPitch(pitch: Float) = playbackManager.setPlaybackPitch(pitch)
 
     fun startSleepTimer(minutes: Int) = playbackManager.startSleepTimer(minutes)
+    fun enablePauseWhenSongEnds() = playbackManager.enablePauseWhenSongEnds()
     fun cancelSleepTimer() = playbackManager.cancelSleepTimer()
+
+    fun toggleLyricsTranslation() {
+        val state = _uiState.value
+        val song = state.currentSong ?: return
+        if (state.lyrics.isEmpty()) return
+
+        if (state.isLyricsTranslated) {
+            _uiState.update { it.copy(isLyricsTranslated = false) }
+        } else {
+            if (state.lyrics.any { !it.translation.isNullOrBlank() }) {
+                _uiState.update { it.copy(isLyricsTranslated = true) }
+                return
+            }
+            viewModelScope.launch {
+                _uiState.update { it.copy(isTranslatingLyrics = true) }
+                val translated = lyricsRepository.translateLyrics(song.id, state.lyrics)
+                _uiState.update {
+                    it.copy(lyrics = translated, isLyricsTranslated = true, isTranslatingLyrics = false)
+                }
+            }
+        }
+    }
 
     fun setCrossfadeEnabled(enabled: Boolean) = playbackManager.setCrossfadeEnabled(enabled)
     fun setCrossfadeDurationMs(durationMs: Int) = playbackManager.setCrossfadeDurationMs(durationMs)

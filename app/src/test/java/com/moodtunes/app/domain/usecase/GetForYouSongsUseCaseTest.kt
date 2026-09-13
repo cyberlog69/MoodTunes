@@ -52,6 +52,7 @@ class GetForYouSongsUseCaseTest {
         override suspend fun searchSongs(query: String): List<Song> = emptyList()
         override fun getRecentlyPlayed(limit: Int): Flow<List<Song>> = flowOf(mostPlayed)
         override fun getMostPlayed(limit: Int): Flow<List<Song>> = flowOf(mostPlayed)
+        override suspend fun updateSongTags(songId: Long, title: String, artist: String, album: String, genre: String?, albumArtUri: Uri?) = Unit
     }
 
     private class FakeMoodRepository(private val topMood: MoodType?) : IMoodRepository {

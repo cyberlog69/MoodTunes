@@ -77,10 +77,14 @@ class PlaybackPreferencesRepository @Inject constructor(
             prefs.edit().putInt("reverb_preset", value.toInt()).apply()
         }
 
+    private val _skipSilenceFlow = kotlinx.coroutines.flow.MutableStateFlow(prefs.getBoolean("skip_silence_enabled", false))
+    val skipSilenceFlow: kotlinx.coroutines.flow.StateFlow<Boolean> = _skipSilenceFlow
+
     var skipSilenceEnabled: Boolean
         get() = prefs.getBoolean("skip_silence_enabled", false)
         set(value) {
             prefs.edit().putBoolean("skip_silence_enabled", value).apply()
+            _skipSilenceFlow.value = value
         }
 
     var visualizerMode: Int

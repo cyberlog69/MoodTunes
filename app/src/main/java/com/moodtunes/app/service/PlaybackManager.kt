@@ -86,6 +86,9 @@ class PlaybackManager @Inject constructor(
     private val _playbackSpeed = MutableStateFlow(playbackPreferencesRepository.playbackSpeed)
     val playbackSpeed: StateFlow<Float> = _playbackSpeed.asStateFlow()
 
+    private val _playbackPitch = MutableStateFlow(playbackPreferencesRepository.playbackPitch)
+    val playbackPitch: StateFlow<Float> = _playbackPitch.asStateFlow()
+
     private val _isCrossfadeEnabled = MutableStateFlow(playbackPreferencesRepository.crossfadeEnabled)
     val isCrossfadeEnabled: StateFlow<Boolean> = _isCrossfadeEnabled.asStateFlow()
 
@@ -107,6 +110,9 @@ class PlaybackManager @Inject constructor(
 
     private val _sleepTimerRemainingMs = MutableStateFlow<Long?>(null)
     val sleepTimerRemainingMs: StateFlow<Long?> = _sleepTimerRemainingMs.asStateFlow()
+
+    private val _pauseWhenSongEnds = MutableStateFlow(false)
+    val pauseWhenSongEnds: StateFlow<Boolean> = _pauseWhenSongEnds.asStateFlow()
 
     private var progressJob: Job? = null
     private var sleepTimerJob: Job? = null
@@ -315,6 +321,7 @@ class PlaybackManager @Inject constructor(
     fun setPlaybackPitch(pitch: Float) {
         val clamped = pitch.coerceIn(0.5f, 2f)
         playbackPreferencesRepository.playbackPitch = clamped
+        _playbackPitch.value = clamped
         val controller = mediaController ?: return
         controller.setPlaybackParameters(
             PlaybackParameters(controller.playbackParameters.speed, clamped)
@@ -327,6 +334,7 @@ class PlaybackManager @Inject constructor(
             cancelSleepTimer()
             return
         }
+        _pauseWhenSongEnds.value = false
         sleepTimerJob?.cancel()
         val endTime = System.currentTimeMillis() + minutes * 60_000L
         sleepTimerJob = scope.launch {
@@ -343,10 +351,16 @@ class PlaybackManager @Inject constructor(
         }
     }
 
+    fun enablePauseWhenSongEnds() {
+        cancelSleepTimer()
+        _pauseWhenSongEnds.value = true
+    }
+
     fun cancelSleepTimer() {
         sleepTimerJob?.cancel()
         sleepTimerJob = null
         _sleepTimerRemainingMs.value = null
+        _pauseWhenSongEnds.value = false
     }
 
     fun updateFavorite(songId: Long, isFavorite: Boolean) {
@@ -539,6 +553,10 @@ class PlaybackManager @Inject constructor(
             }
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                if (_pauseWhenSongEnds.value && (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO || reason == Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT)) {
+                    _pauseWhenSongEnds.value = false
+                    controller.pause()
+                }
                 currentSongScrobbled = false
                 val index = controller.currentMediaItemIndex
                 val current = _playlist.value.getOrNull(index)
@@ -588,6 +606,10 @@ class PlaybackManager @Inject constructor(
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == Player.STATE_ENDED && _pauseWhenSongEnds.value) {
+                    _pauseWhenSongEnds.value = false
+                    controller.pause()
+                }
                 if (playbackState == Player.STATE_READY) {
                     _durationMs.value = controller.duration.coerceAtLeast(0L)
                     // Playback recovered — reset error state and counters.

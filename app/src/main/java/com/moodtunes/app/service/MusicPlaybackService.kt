@@ -34,6 +34,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import java.io.File
 import javax.inject.Inject
 
@@ -143,6 +144,13 @@ class MusicPlaybackService : MediaLibraryService() {
             .build()
         runCatching {
             player.skipSilenceEnabled = playbackPreferencesRepository.skipSilenceEnabled
+        }
+        callbackScope.launch(Dispatchers.Main) {
+            playbackPreferencesRepository.skipSilenceFlow.collect { enabled ->
+                runCatching {
+                    player.skipSilenceEnabled = enabled
+                }
+            }
         }
         player.addListener(object : Player.Listener {
             override fun onPlayerStateChanged(playWhenReady: Boolean, playbackState: Int) {

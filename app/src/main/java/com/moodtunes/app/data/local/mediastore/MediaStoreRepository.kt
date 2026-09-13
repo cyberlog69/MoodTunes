@@ -19,8 +19,8 @@ import javax.inject.Singleton
 
 /**
  * Queries the device's MediaStore to retrieve local FLAC, ALAC, WAV, AAC, and MP3 audio files.
- * Integrates OnlineStreamRepository to fetch live JioSaavn, Audius, Jamendo, and Global Radio streams.
- * Respects user settings for Local vs Stream audio modes & selected streaming providers.
+ * Integrates OnlineStreamRepository to fetch YouTube Music InnerTube streams and Navidrome libraries.
+ * Respects user settings for Local vs Stream audio modes.
  */
 @Singleton
 class MediaStoreRepository @Inject constructor(
@@ -28,11 +28,8 @@ class MediaStoreRepository @Inject constructor(
     private val onlineStreamRepository: OnlineStreamRepository,
     private val userPreferencesRepository: UserPreferencesRepository
 ) {
-    // All online tracks are sourced from:
-    //   - JioSaavn: Indian regional, traditional, classical and Bollywood catalogue
-    //   - Audius: decentralised protocol with CC-licensed indie artist uploads
-    //   - Jamendo: royalty-free Creative Commons tracks (320kbps MP3)
-    //   - Global Radio Browser: 35,000+ legal community & public radio stations
+    // Online tracks are sourced from:
+    //   - YouTube Music (InnerTube Engine): Global music catalogue with full songs & adaptive audio streams
     //   - Navidrome / Subsonic: user's self-hosted legally owned music library
 
     /** Fetches audio files according to user's selected AudioSourceMode */

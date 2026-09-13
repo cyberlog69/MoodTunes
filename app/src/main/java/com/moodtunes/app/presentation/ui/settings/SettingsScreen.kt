@@ -693,7 +693,6 @@ fun SettingsScreen(
                         ) {
                             Column {
                                 Text("MoodTunes Player", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-                                Text("MoodTunes Player", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
                                 Text("Current Version: v${com.moodtunes.app.BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
 
@@ -906,6 +905,114 @@ fun SettingsScreen(
                                         Text("OK")
                                     }
                                 }
+                            )
+                        }
+                    }
+                }
+
+                // ─── SECTION 7: About MoodTunes ─────────────────────────────────
+                SettingsSectionHeader(title = "About MoodTunes", icon = Icons.Rounded.Info)
+
+                Card(
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            com.moodtunes.app.presentation.ui.components.MoodTunesLogoBadge(size = 40.dp)
+                            Column {
+                                Text(
+                                    text = "MoodTunes",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "Version ${com.moodtunes.app.BuildConfig.VERSION_NAME} (Build ${com.moodtunes.app.BuildConfig.VERSION_CODE})",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        Text(
+                            text = "MoodTunes is a modern, open-source Android music streaming and offline playback player. Powered by the YouTube Music InnerTube engine with unrestricted streaming, 24-bit audiophile DSP, real-time FFT visualizers, 3D spatial acoustics, and on-device ID3 tag editing.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(
+                                text = "✨ Key Features in v${com.moodtunes.app.BuildConfig.VERSION_NAME}",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = "• YouTube Music Engine: 100% full-track streaming & auto-radio\n" +
+                                       "• Live FFT Audio Visualizers: Neon Bars, Pulse Aura, Cosmic Particles\n" +
+                                       "• 3D Spatial Virtualizer & 6 Reverb Environmental Presets\n" +
+                                       "• ID3 Tag Editor: Edit metadata & embed album art directly on-device\n" +
+                                       "• ListenBrainz Scrobbler & Navidrome / Subsonic Client\n" +
+                                       "• Material Design 3 Themed Icons & Dynamic Material You Palette",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                        // GitHub Repository Action
+                        OutlinedButton(
+                            onClick = {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/cyberlog69/MoodTunes"))
+                                context.startActivity(intent)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.OpenInNew,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text("GitHub Repository (cyberlog69/MoodTunes)")
+                        }
+
+                        // Releases & Changelog Action
+                        OutlinedButton(
+                            onClick = {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/cyberlog69/MoodTunes/releases"))
+                                context.startActivity(intent)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.NewReleases,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text("Releases & Full Changelog")
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = "Open-Source under MIT License • Developed by cyberlog69",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                             )
                         }
                     }

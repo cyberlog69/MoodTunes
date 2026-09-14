@@ -2,7 +2,9 @@ package com.moodtunes.app.presentation.ui.history
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -15,10 +17,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.moodtunes.app.domain.model.MoodEntry
@@ -205,15 +210,27 @@ private fun StatCard(
 private fun TopMoodCard(mood: MoodType, modifier: Modifier = Modifier) {
     Card(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+        shape = RoundedCornerShape(26.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+        ),
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+        )
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(
-                    Brush.horizontalGradient(
-                        colors = listOf(mood.gradientStart, mood.gradientEnd)
+                    Brush.radialGradient(
+                        colors = listOf(
+                            mood.gradientStart.copy(alpha = 0.28f),
+                            mood.gradientEnd.copy(alpha = 0.10f),
+                            Color.Transparent
+                        ),
+                        center = Offset(Float.POSITIVE_INFINITY, 0f),
+                        radius = 450f
                     )
                 )
                 .padding(20.dp)
@@ -222,22 +239,51 @@ private fun TopMoodCard(mood: MoodType, modifier: Modifier = Modifier) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Text(mood.emoji, style = MaterialTheme.typography.displaySmall)
-                Column {
+                // Tonal squircle emoji badge
+                Box(
+                    modifier = Modifier
+                        .size(60.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(mood.gradientStart.copy(alpha = 0.18f))
+                        .border(
+                            1.dp,
+                            mood.gradientStart.copy(alpha = 0.40f),
+                            RoundedCornerShape(18.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
                     Text(
-                        "Your Top Mood",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = White.copy(alpha = 0.9f)
+                        mood.emoji,
+                        fontSize = 30.sp
                     )
+                }
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = mood.gradientStart.copy(alpha = 0.15f),
+                        border = BorderStroke(1.dp, mood.gradientStart.copy(alpha = 0.30f))
+                    ) {
+                        Text(
+                            text = "TOP MOOD",
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = mood.gradientStart,
+                            letterSpacing = 1.sp
+                        )
+                    }
+                    Spacer(Modifier.height(6.dp))
                     Text(
                         mood.displayName,
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = White
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
                         mood.description,
                         style = MaterialTheme.typography.bodySmall,
-                        color = White.copy(alpha = 0.8f)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }

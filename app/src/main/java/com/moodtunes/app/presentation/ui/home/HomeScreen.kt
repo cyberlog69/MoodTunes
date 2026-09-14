@@ -8,9 +8,9 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.grid.itemsIndexed
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
@@ -208,7 +209,41 @@ fun HomeScreen(
                 }
             }
 
-            Spacer(Modifier.height(8.dp))
+            // ─── Music Language Filter Chips ────────────────────────────────
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 20.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(top = 6.dp, bottom = 2.dp)
+            ) {
+                items(com.moodtunes.app.data.local.preferences.MusicLanguage.entries.toTypedArray()) { language ->
+                    val isSelected = uiState.selectedLanguage == language
+                    FilterChip(
+                        selected = isSelected,
+                        onClick = { viewModel.onLanguageSelected(language) },
+                        label = {
+                            Text(
+                                text = "${language.flagEmoji} ${language.displayName}",
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                        },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                            labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        ),
+                        border = FilterChipDefaults.filterChipBorder(
+                            enabled = true,
+                            selected = isSelected,
+                            borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+                            selectedBorderColor = MaterialTheme.colorScheme.primary
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(4.dp))
 
             // ─── Mood Grid + Discovery Rails ────────────────────────────────
             LazyVerticalGrid(
@@ -452,7 +487,7 @@ private fun RailCard(
     }
 }
 
-// ─── Mood Card Component ─────────────────────────────────────────────────────
+// ─── Material 3 Mood Card Component ──────────────────────────────────────────
 @Composable
 private fun MoodCard(
     mood: MoodType,
@@ -461,91 +496,175 @@ private fun MoodCard(
     songCount: Int?,
     onClick: () -> Unit
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "moodPulse")
-    val pulse by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = if (isSelected) 1.03f else 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(700, easing = EaseInOut),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulse"
+    val animatedBorderColor by animateColorAsState(
+        targetValue = if (isSelected) mood.gradientStart else mood.gradientStart.copy(alpha = 0.25f),
+        animationSpec = tween(350),
+        label = "moodBorderColor"
     )
 
-    val elevation by animateFloatAsState(
-        targetValue = if (isSelected) 16f else 4f,
-        label = "elevation"
+    val animatedBorderWidth by animateDpAsState(
+        targetValue = if (isSelected) 2.dp else 1.dp,
+        animationSpec = tween(350),
+        label = "moodBorderWidth"
+    )
+
+    val animatedElevation by animateDpAsState(
+        targetValue = if (isSelected) 8.dp else 2.dp,
+        animationSpec = tween(350),
+        label = "moodElevation"
     )
 
     Card(
         onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
-            .height(160.dp)
-            .scale(pulse),
-        shape = RoundedCornerShape(24.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = elevation.dp)
+            .height(156.dp),
+        shape = RoundedCornerShape(26.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+        ),
+        border = BorderStroke(animatedBorderWidth, animatedBorderColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = animatedElevation)
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.linearGradient(
-                        colors = listOf(
-                            mood.gradientStart,
-                            mood.gradientEnd
+        Box(modifier = Modifier.fillMaxSize()) {
+            // Ambient Mood Glow: soft radial aura from top-right corner
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(
+                                mood.gradientStart.copy(alpha = if (isSelected) 0.32f else 0.16f),
+                                mood.gradientEnd.copy(alpha = if (isSelected) 0.14f else 0.05f),
+                                Color.Transparent
+                            ),
+                            center = Offset(300f, 40f),
+                            radius = 450f
                         )
                     )
-                )
-                .padding(16.dp)
-        ) {
+            )
+
+            // Content
             Column(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
+                // Top Row: Tonal Squircle Emoji Container + Status Pill
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = mood.emoji,
-                        style = MaterialTheme.typography.displaySmall
-                    )
-                    if (isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            color = Color.White,
-                            strokeWidth = 2.5.dp
-                        )
-                    } else if (songCount != null) {
-                        Surface(
-                            shape = CircleShape,
-                            color = Color.White.copy(alpha = 0.25f)
-                        ) {
+                    // M3 Squircle Emoji Badge
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = mood.gradientStart.copy(alpha = 0.18f),
+                        border = BorderStroke(1.dp, mood.gradientStart.copy(alpha = 0.30f)),
+                        modifier = Modifier.size(44.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
                             Text(
-                                text = "$songCount songs",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Color.White,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                text = mood.emoji,
+                                fontSize = 22.sp
                             )
+                        }
+                    }
+
+                    // Status: Loading / Active Pill / Song Count
+                    when {
+                        isLoading -> {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                color = mood.gradientStart,
+                                strokeWidth = 2.5.dp
+                            )
+                        }
+                        isSelected -> {
+                            Surface(
+                                shape = CircleShape,
+                                color = mood.gradientStart.copy(alpha = 0.20f),
+                                border = BorderStroke(1.dp, mood.gradientStart.copy(alpha = 0.45f))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.GraphicEq,
+                                        contentDescription = null,
+                                        tint = mood.gradientStart,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                    Text(
+                                        text = "Active",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                        color = mood.gradientStart
+                                    )
+                                }
+                            }
+                        }
+                        songCount != null -> {
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
+                            ) {
+                                Text(
+                                    text = "$songCount",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
                         }
                     }
                 }
 
-                Column {
-                    Text(
-                        text = mood.displayName,
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = Color.White
-                    )
-                    Text(
-                        text = mood.description,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.85f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                // Bottom Row: Mood Info + Play Action Button
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                        Text(
+                            text = mood.displayName,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = mood.description,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    // Tactile M3 Play Button
+                    Surface(
+                        shape = CircleShape,
+                        color = if (isSelected) mood.gradientStart else mood.gradientStart.copy(alpha = 0.15f),
+                        border = BorderStroke(1.dp, if (isSelected) mood.gradientStart else mood.gradientStart.copy(alpha = 0.30f)),
+                        modifier = Modifier.size(34.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = if (isSelected) Icons.Rounded.GraphicEq else Icons.Rounded.PlayArrow,
+                                contentDescription = "Play ${mood.displayName}",
+                                tint = if (isSelected) Color.White else mood.gradientStart,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
                 }
             }
         }

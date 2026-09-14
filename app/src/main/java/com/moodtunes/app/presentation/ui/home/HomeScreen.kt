@@ -9,7 +9,6 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -208,42 +207,6 @@ fun HomeScreen(
                     )
                 }
             }
-
-            // ─── Music Language Filter Chips ────────────────────────────────
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 20.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(top = 6.dp, bottom = 2.dp)
-            ) {
-                items(com.moodtunes.app.data.local.preferences.MusicLanguage.entries.toTypedArray()) { language ->
-                    val isSelected = uiState.selectedLanguage == language
-                    FilterChip(
-                        selected = isSelected,
-                        onClick = { viewModel.onLanguageSelected(language) },
-                        label = {
-                            Text(
-                                text = "${language.flagEmoji} ${language.displayName}",
-                                style = MaterialTheme.typography.labelMedium
-                            )
-                        },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                            labelColor = MaterialTheme.colorScheme.onSurfaceVariant
-                        ),
-                        border = FilterChipDefaults.filterChipBorder(
-                            enabled = true,
-                            selected = isSelected,
-                            borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
-                            selectedBorderColor = MaterialTheme.colorScheme.primary
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(4.dp))
 
             // ─── Mood Grid + Discovery Rails ────────────────────────────────
             LazyVerticalGrid(

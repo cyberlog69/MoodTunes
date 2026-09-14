@@ -119,7 +119,7 @@ class LrclibService @Inject constructor() {
 
         val request = Request.Builder()
             .url(url)
-            .header("User-Agent", "MoodTunes/1.3.0 (Android; Music Player)")
+            .header("User-Agent", "MoodTunes/1.4.0 (Android; Music Player)")
             .build()
 
         return try {
@@ -156,7 +156,7 @@ class LrclibService @Inject constructor() {
 
         val request = Request.Builder()
             .url(url)
-            .header("User-Agent", "MoodTunes/1.3.0 (Android; Music Player)")
+            .header("User-Agent", "MoodTunes/1.4.0 (Android; Music Player)")
             .build()
 
         val results = mutableListOf<LrclibResult>()

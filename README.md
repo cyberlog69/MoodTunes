@@ -6,7 +6,7 @@
 [![Media3](https://img.shields.io/badge/Audio-androidx.media3%20ExoPlayer-FF6F00?style=flat-square)](https://developer.android.com/guide/topics/media/media3)
 [![Hilt](https://img.shields.io/badge/DI-Hilt-00897B?style=flat-square)](https://dagger.dev/hilt/)
 [![Room](https://img.shields.io/badge/Database-Room%202.7-4285F4?style=flat-square)](https://developer.android.com/training/data-storage/room)
-[![Release](https://img.shields.io/badge/Version-v1.3.0-blue?style=flat-square)](https://github.com/cyberlog69/MoodTunes/releases)
+[![Release](https://img.shields.io/badge/Version-v1.4.0-blue?style=flat-square)](https://github.com/cyberlog69/MoodTunes/releases)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
 
 ---

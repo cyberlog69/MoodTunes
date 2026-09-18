@@ -889,7 +889,7 @@ fun SettingsScreen(
                                                 )
                                                 Spacer(Modifier.height(4.dp))
                                                 Text(
-                                                    text = "• YouTube Music Engine: 100% full-song streaming with global catalog, charts & auto-radio\n• Live FFT Audio Visualizer: Neon Bars, Pulse Aura, Cosmic Particles\n• 3D Spatial Virtualizer & Reverb Room Acoustics\n• Material Design 3 Themed Icons & Modern Branding\n• On-Device ID3 Tag & Cover Art Editor\n• ListenBrainz Scrobbler & Navidrome Lossless Server Support",
+                                                    text = "• Offline Song Downloads: Download streams to local MediaStore with offline artwork caching & dedicated Downloads library tab\n• YouTube Music Engine: 100% full-song streaming with global catalog, charts & auto-radio\n• Live FFT Audio Visualizer: Neon Bars, Pulse Aura, Cosmic Particles\n• 3D Spatial Virtualizer & Reverb Room Acoustics\n• Material Design 3 Themed Icons & Modern Branding\n• On-Device ID3 Tag & Cover Art Editor\n• ListenBrainz Scrobbler & Navidrome Lossless Server Support",
                                                     style = MaterialTheme.typography.bodySmall,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
@@ -956,7 +956,8 @@ fun SettingsScreen(
                                 color = MaterialTheme.colorScheme.primary
                             )
                             Text(
-                                text = "• YouTube Music Engine: 100% full-track streaming & auto-radio\n" +
+                                text = "• Offline Song Downloads: Download streams to local MediaStore with offline artwork caching & dedicated Downloads library tab\n" +
+                                       "• YouTube Music Engine: 100% full-track streaming & auto-radio\n" +
                                        "• Live FFT Audio Visualizers: Neon Bars, Pulse Aura, Cosmic Particles\n" +
                                        "• 3D Spatial Virtualizer & 6 Reverb Environmental Presets\n" +
                                        "• ID3 Tag Editor: Edit metadata & embed album art directly on-device\n" +

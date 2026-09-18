@@ -6,7 +6,7 @@
 [![Media3](https://img.shields.io/badge/Audio-androidx.media3%20ExoPlayer-FF6F00?style=flat-square)](https://developer.android.com/guide/topics/media/media3)
 [![Hilt](https://img.shields.io/badge/DI-Hilt-00897B?style=flat-square)](https://dagger.dev/hilt/)
 [![Room](https://img.shields.io/badge/Database-Room%202.7-4285F4?style=flat-square)](https://developer.android.com/training/data-storage/room)
-[![Release](https://img.shields.io/badge/Version-v1.4.0-blue?style=flat-square)](https://github.com/cyberlog69/MoodTunes/releases)
+[![Release](https://img.shields.io/badge/Version-v1.5.0-blue?style=flat-square)](https://github.com/cyberlog69/MoodTunes/releases)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
 
 ---
@@ -20,6 +20,7 @@ MoodTunes curates music tailored precisely to your emotional state. Whether you 
 ### 🌟 Key Vision & Design Philosophy
 - **Emotion-Driven Curation**: Intelligently categorizes tracks into 6 emotional mood profiles using sentiment algorithms and genre classification.
 - **YouTube Music Streaming Engine**: Built with an unthrottled InnerTube client, providing access to full-length tracks, official audio streams (Opus 160 kbps / AAC 130 kbps), automated radio station generation, and global charts.
+- **Offline Song Downloads**: Download streamed tracks into standard Android MediaStore storage (`Music/MoodTunes/`) with offline artwork caching and local Room DB indexing for true zero-network playback.
 - **Bot-Detection Immunity**: Implements hardened `VISIONOS` client context and automated `visitorData` acquisition & caching to bypass YouTube bot blocks and playback restrictions.
 - **Audiophile Grade Fidelity**: Native decoding of 24-bit/32-bit float audio, FLAC Lossless, ALAC (`.m4a`), WAV Hi-Res, AAC, and MP3 formats.
 - **Live FFT Audio Visualizers**: 60 FPS real-time audio visualization using Android Visualizer FFT data rendered on dynamic Compose Canvases (Neon Bars, Pulse Aura, Cosmic Particles).
@@ -32,6 +33,13 @@ MoodTunes curates music tailored precisely to your emotional state. Whether you 
 ## ✨ Features
 
 ### 🎧 Playback & Streaming
+- **⬇️ Offline Song Downloads**:
+  - Download full-length streamed songs (YouTube Music / Subsonic) directly to standard device storage (`Music/MoodTunes/`).
+  - Scoped storage compatible (Android 10+ MediaStore API with legacy fallback).
+  - Real-time Android notification channel (`moodtunes_download_channel`) with percentage progress.
+  - Offline thumbnail/artwork caching into internal storage (`custom_artwork/`).
+  - Instant Room DB indexing (`isStream = false`) for zero-buffer offline playback.
+  - Dedicated download actions in PlayerScreen and SongActionBottomSheet.
 - **🎶 YouTube Music (InnerTube) Engine**:
   - **100% Full-Length Songs**: Unrestricted, full-length music streaming with zero 30-second preview limitations.
   - **High-Bitrate Direct Audio**: Crystal-clear Opus (~160 kbps) and AAC (~130 kbps) direct streams without intermediate transcoders.
@@ -116,7 +124,7 @@ app/src/main/java/com/moodtunes/app/
 ## 📱 Screens Overview
 
 1. **Home Screen**: Dynamic mood cards (*Happy, Sad, Energetic, Calm, Euphoric, Sleep*), top mood statistics banner, recent listening history, and persistent mini-player.
-2. **Songs Hub**: Tabbed library with *Local Device*, *YouTube Music Streams*, *Favorites*, and *Custom Playlists*.
+2. **Songs Hub**: Tabbed library with *Local Device*, *Downloaded*, *YouTube Music Streams*, *Favorites*, and *Custom Playlists*.
 3. **Player Screen**: Immersive full-screen player with rotating vinyl disc animation, live FFT visualizer overlay, 3D reverb acoustic toggles, seek bar, queue drawer, and favorite heart toggle.
 4. **Lyrics Screen**: Synchronized Spotify-style lyrics with tap-to-seek, smooth auto-scroll, dynamic background gradients, and lyrics sharing.
 5. **ID3 Tag Editor**: Edit metadata fields and embed custom cover images directly into local audio files.

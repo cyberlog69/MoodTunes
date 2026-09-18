@@ -46,7 +46,7 @@ class MoodTunesApp : Application() {
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
+            val playbackChannel = NotificationChannel(
                 PLAYBACK_NOTIFICATION_CHANNEL_ID,
                 getString(R.string.notification_channel_name),
                 NotificationManager.IMPORTANCE_LOW
@@ -54,12 +54,24 @@ class MoodTunesApp : Application() {
                 description = getString(R.string.notification_channel_description)
                 setShowBadge(false)
             }
+
+            val downloadChannel = NotificationChannel(
+                DOWNLOAD_NOTIFICATION_CHANNEL_ID,
+                "Song Downloads",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Shows progress of offline song downloads"
+                setShowBadge(false)
+            }
+
             val manager = getSystemService(NotificationManager::class.java)
-            manager.createNotificationChannel(channel)
+            manager.createNotificationChannel(playbackChannel)
+            manager.createNotificationChannel(downloadChannel)
         }
     }
 
     companion object {
         const val PLAYBACK_NOTIFICATION_CHANNEL_ID = "moodtunes_playback_channel"
+        const val DOWNLOAD_NOTIFICATION_CHANNEL_ID = "moodtunes_download_channel"
     }
 }

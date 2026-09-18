@@ -59,7 +59,9 @@ data class PlayerUiState(
     val castDeviceName: String? = null,
     val audioOutput: AudioOutputInfo? = null,
     val castMessage: String? = null,
-    val playbackError: PlaybackError? = null
+    val playbackError: PlaybackError? = null,
+    val isDownloaded: Boolean = false,
+    val downloadProgress: Float? = null
 ) {
     val progress: Float get() = if (durationMs > 0) currentPositionMs / durationMs.toFloat() else 0f
 }
@@ -74,7 +76,8 @@ class PlayerViewModel @Inject constructor(
     private val toggleFavoriteUseCase: ToggleFavoriteUseCase,
     private val lyricsRepository: LyricsRepository,
     private val castPlaybackManager: CastPlaybackManager,
-    private val audioOutputMonitor: AudioOutputMonitor
+    private val audioOutputMonitor: AudioOutputMonitor,
+    private val downloadManager: com.moodtunes.app.data.local.download.SongDownloadManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(PlayerUiState())
@@ -289,6 +292,35 @@ class PlayerViewModel @Inject constructor(
                 _uiState.update { it.copy(audioOutput = output) }
             }
         }
+
+        viewModelScope.launch {
+            combine(
+                playbackManager.currentSong,
+                downloadManager.downloadedSongIds,
+                downloadManager.downloadStates
+            ) { song, downloadedIds, states ->
+                if (song == null) {
+                    false to null
+                } else {
+                    val isDl = downloadedIds.contains(song.id)
+                    val state = states[song.id]
+                    val progress = if (state is com.moodtunes.app.data.local.download.DownloadState.Downloading) state.progress else null
+                    isDl to progress
+                }
+            }.collectLatest { (isDl, prog) ->
+                _uiState.update { it.copy(isDownloaded = isDl, downloadProgress = prog) }
+            }
+        }
+    }
+
+    fun downloadCurrentSong() {
+        val song = uiState.value.currentSong ?: return
+        downloadManager.downloadSong(song)
+    }
+
+    fun deleteCurrentSongDownload() {
+        val song = uiState.value.currentSong ?: return
+        downloadManager.deleteDownloadedSong(song)
     }
 
     fun playPause() = playbackManager.playPause()

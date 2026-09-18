@@ -73,7 +73,8 @@ class SearchViewModel @Inject constructor(
     private val playbackManager: PlaybackManager,
     private val toggleFavoriteUseCase: ToggleFavoriteUseCase,
     private val addSongToPlaylistUseCase: AddSongToPlaylistUseCase,
-    private val createPlaylistUseCase: CreatePlaylistUseCase
+    private val createPlaylistUseCase: CreatePlaylistUseCase,
+    private val downloadManager: com.moodtunes.app.data.local.download.SongDownloadManager
 ) : ViewModel() {
 
     private val _query = MutableStateFlow("")
@@ -297,6 +298,9 @@ class SearchViewModel @Inject constructor(
             }
         }
     }
+
+    fun downloadSong(song: Song) = downloadManager.downloadSong(song)
+    fun isDownloaded(songId: Long): Boolean = downloadManager.isDownloaded(songId)
 
     private data class Tuple5<A, B, C, D, E>(
         val a: A, val b: B, val c: C, val d: D, val e: E

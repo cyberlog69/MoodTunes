@@ -34,6 +34,7 @@ data class LibraryUiState(
     val isLoadingOnline: Boolean = false,
     val isLoadingServer: Boolean = false,
     val allSongs: List<Song> = emptyList(),
+    val downloadedSongs: List<Song> = emptyList(),
     val favoriteSongs: List<Song> = emptyList(),
     val mostPlayed: List<Song> = emptyList(),
     val onlineStreamSongs: List<Song> = emptyList(),
@@ -54,6 +55,7 @@ data class LibraryUiState(
 
 enum class LibraryTab(val label: String) {
     LOCAL("📁 Local"),
+    DOWNLOADS("⬇️ Downloaded"),
     ONLINE_STREAM("🌐 Online"),
     SERVER("🏠 Server"),
     FAVORITES("❤️ Favorites"),
@@ -76,7 +78,8 @@ class LibraryViewModel @Inject constructor(
     private val onlineStreamRepository: OnlineStreamRepository,
     private val subsonicApiService: SubsonicApiService,
     private val userPreferencesRepository: UserPreferencesRepository,
-    private val tagEditorManager: TagEditorManager
+    private val tagEditorManager: TagEditorManager,
+    private val downloadManager: com.moodtunes.app.data.local.download.SongDownloadManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LibraryUiState())
@@ -103,23 +106,40 @@ class LibraryViewModel @Inject constructor(
         observeSearch()
         observePlaylists()
         observeMostPlayed()
+        observeDownloads()
         loadOnlineStreamSongs()
     }
 
     private fun loadSongs() {
         viewModelScope.launch {
             val songs = getAllSongsUseCase()
+            val downloaded = songs.filter { downloadManager.isDownloaded(it.id) || it.uri.toString().contains("MoodTunes") }
             _uiState.update {
                 it.copy(
                     isLoading = false,
                     allSongs = songs,
                     filteredSongs = songs,
+                    downloadedSongs = downloaded,
                     albums = groupByAlbum(songs),
                     artists = groupByArtist(songs)
                 )
             }
         }
     }
+
+    private fun observeDownloads() {
+        viewModelScope.launch {
+            downloadManager.downloadedSongIds.collect { ids ->
+                val all = _uiState.value.allSongs
+                val downloaded = all.filter { ids.contains(it.id) || it.uri.toString().contains("MoodTunes") }
+                _uiState.update { it.copy(downloadedSongs = downloaded) }
+            }
+        }
+    }
+
+    fun downloadSong(song: Song) = downloadManager.downloadSong(song)
+    fun isDownloaded(songId: Long): Boolean = downloadManager.isDownloaded(songId)
+    fun deleteDownloadedSong(song: Song) = downloadManager.deleteDownloadedSong(song)
 
     fun loadOnlineStreamSongs(category: String = _uiState.value.selectedCategory) {
         viewModelScope.launch {
@@ -305,6 +325,7 @@ class LibraryViewModel @Inject constructor(
         val state = _uiState.value
         val group = when (state.selectedTab) {
             LibraryTab.LOCAL -> state.filteredSongs
+            LibraryTab.DOWNLOADS -> state.downloadedSongs
             LibraryTab.ONLINE_STREAM -> state.onlineStreamSongs
             LibraryTab.SERVER -> state.serverSongs
             LibraryTab.FAVORITES -> state.favoriteSongs

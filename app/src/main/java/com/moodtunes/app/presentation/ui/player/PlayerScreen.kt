@@ -347,14 +347,54 @@ fun PlayerScreen(
                         }
                     }
                 }
-                IconButton(onClick = viewModel::toggleFavorite) {
-                    Icon(
-                        imageVector = if (song?.isFavorite == true)
-                            Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                        contentDescription = "Favorite",
-                        tint = if (song?.isFavorite == true) FavoriteRed else White.copy(alpha = 0.6f),
-                        modifier = Modifier.size(28.dp)
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (song?.isStream == true || uiState.isDownloaded) {
+                        when {
+                            uiState.downloadProgress != null -> {
+                                Box(
+                                    modifier = Modifier.size(40.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator(
+                                        progress = { uiState.downloadProgress ?: 0f },
+                                        modifier = Modifier.size(22.dp),
+                                        color = White,
+                                        strokeWidth = 2.5.dp
+                                    )
+                                }
+                            }
+                            uiState.isDownloaded -> {
+                                IconButton(onClick = { viewModel.deleteCurrentSongDownload() }) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.DownloadDone,
+                                        contentDescription = "Downloaded (tap to remove)",
+                                        tint = Color(0xFF00E676),
+                                        modifier = Modifier.size(26.dp)
+                                    )
+                                }
+                            }
+                            else -> {
+                                IconButton(onClick = { viewModel.downloadCurrentSong() }) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Download,
+                                        contentDescription = "Download Song",
+                                        tint = White.copy(alpha = 0.85f),
+                                        modifier = Modifier.size(26.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    IconButton(onClick = viewModel::toggleFavorite) {
+                        Icon(
+                            imageVector = if (song?.isFavorite == true)
+                                Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                            contentDescription = "Favorite",
+                            tint = if (song?.isFavorite == true) FavoriteRed else White.copy(alpha = 0.6f),
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
                 }
             }
 
@@ -470,6 +510,24 @@ fun PlayerScreen(
                     active = uiState.isSmartShuffleEnabled,
                     onClick = viewModel::toggleSmartShuffle
                 )
+                if (song?.isStream == true || uiState.isDownloaded) {
+                    PlayerToolButton(
+                        icon = if (uiState.isDownloaded) Icons.Rounded.DownloadDone else Icons.Rounded.Download,
+                        label = when {
+                            uiState.downloadProgress != null -> "${(uiState.downloadProgress!! * 100).toInt()}%"
+                            uiState.isDownloaded -> "Saved"
+                            else -> "Download"
+                        },
+                        active = uiState.isDownloaded || uiState.downloadProgress != null,
+                        onClick = {
+                            if (uiState.isDownloaded) {
+                                viewModel.deleteCurrentSongDownload()
+                            } else {
+                                viewModel.downloadCurrentSong()
+                            }
+                        }
+                    )
+                }
             }
 
             Spacer(Modifier.height(12.dp))

@@ -48,7 +48,9 @@ fun SongActionBottomSheet(
     onToggleFavorite: () -> Unit = {},
     onAddToPlaylist: (playlistId: Long) -> Unit = {},
     onCreatePlaylist: (name: String) -> Unit = {},
-    onSaveTags: ((Song, String, String, String, String?, Uri?) -> Unit)? = null
+    onSaveTags: ((Song, String, String, String, String?, Uri?) -> Unit)? = null,
+    onDownload: ((Song) -> Unit)? = null,
+    isDownloaded: Boolean = false
 ) {
     if (song == null) return
 
@@ -236,6 +238,18 @@ fun SongActionBottomSheet(
                     onDismiss()
                 }
             )
+
+            if (song.isStream && onDownload != null) {
+                ActionItem(
+                    icon = if (isDownloaded) Icons.Rounded.DownloadDone else Icons.Rounded.Download,
+                    title = if (isDownloaded) "Downloaded" else "Download Song",
+                    subtitle = if (isDownloaded) "Saved to your device for offline playback" else "Save offline for listening without internet",
+                    onClick = {
+                        onDownload(song)
+                        onDismiss()
+                    }
+                )
+            }
 
             if (!song.isStream) {
                 if (onSaveTags != null) {

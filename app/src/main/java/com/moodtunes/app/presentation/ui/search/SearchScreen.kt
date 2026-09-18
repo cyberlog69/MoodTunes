@@ -79,7 +79,11 @@ fun SearchScreen(
             selectedSongForAction?.let { song ->
                 viewModel.createPlaylist(name, song)
             }
-        }
+        },
+        onDownload = { song ->
+            viewModel.downloadSong(song)
+        },
+        isDownloaded = selectedSongForAction?.let { viewModel.isDownloaded(it.id) } ?: false
     )
 
     Box(

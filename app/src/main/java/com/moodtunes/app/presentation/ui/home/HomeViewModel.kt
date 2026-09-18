@@ -46,7 +46,8 @@ class HomeViewModel @Inject constructor(
     private val addSongToPlaylistUseCase: AddSongToPlaylistUseCase,
     private val createPlaylistUseCase: CreatePlaylistUseCase,
     private val playbackManager: PlaybackManager,
-    private val preferencesRepository: UserPreferencesRepository
+    private val preferencesRepository: UserPreferencesRepository,
+    private val downloadManager: com.moodtunes.app.data.local.download.SongDownloadManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -181,6 +182,9 @@ class HomeViewModel @Inject constructor(
     fun skipPrevious() {
         playbackManager.skipPrevious()
     }
+
+    fun downloadSong(song: Song) = downloadManager.downloadSong(song)
+    fun isDownloaded(songId: Long): Boolean = downloadManager.isDownloaded(songId)
 
     fun saveMoodSession() {
         val state = uiState.value

@@ -3,6 +3,8 @@ package com.moodtunes.app.data.repository
 import android.net.Uri
 import com.moodtunes.app.data.local.db.dao.SongDao
 import com.moodtunes.app.data.local.db.entity.SongEntity
+import com.moodtunes.app.data.local.db.entity.toDomain
+import com.moodtunes.app.data.local.db.entity.toEntity
 import com.moodtunes.app.data.local.mediastore.MediaStoreRepository
 import com.moodtunes.app.domain.model.AudioFormat
 import com.moodtunes.app.domain.model.MoodType
@@ -23,9 +25,20 @@ class MusicRepositoryImpl @Inject constructor(
         val mediaSongs = mediaStoreRepository.getAllSongs()
         // Merge persisted state (favorites, play counts, recency) so a rescan
         // never clobbers listening history.
-        val merged = mergeDbStats(mediaSongs)
-        songDao.upsertSongs(merged.map { it.toEntity() })
-        return merged
+        val mergedMedia = mergeDbStats(mediaSongs)
+        songDao.upsertSongs(mergedMedia.map { it.toEntity() })
+
+        // Also include downloaded tracks from Room DB so they appear in Local library
+        val downloadedEntities = songDao.getDownloadedSongs(emptyList())
+        val downloadedSongs = downloadedEntities.map { it.toDomain() }
+
+        val existingUris = mergedMedia.map { it.uri.toString() }.toSet()
+        val existingIds = mergedMedia.map { it.id }.toSet()
+        val additionalDownloads = downloadedSongs.filter {
+            !existingIds.contains(it.id) && !existingUris.contains(it.uri.toString())
+        }
+
+        return (mergedMedia + additionalDownloads).sortedBy { it.title.lowercase() }
     }
 
     override suspend fun getSongsByMood(mood: MoodType): List<Song> {
@@ -76,39 +89,6 @@ class MusicRepositoryImpl @Inject constructor(
         if (songs.isEmpty()) return songs
         return mergeStats(songs, songDao.getSongsByIds(songs.map { it.id }))
     }
-
-    // --- Mappers ---
-    private fun Song.toEntity() = SongEntity(
-        id = id,
-        title = title,
-        artist = artist,
-        album = album,
-        duration = duration,
-        uriString = uri.toString(),
-        albumArtUriString = albumArtUri?.toString(),
-        genre = genre,
-        isFavorite = isFavorite,
-        audioFormatName = audioFormat.name,
-        isStream = isStream,
-        playCount = playCount,
-        lastPlayedAt = lastPlayedAt
-    )
-
-    private fun SongEntity.toDomain() = Song(
-        id = id,
-        title = title,
-        artist = artist,
-        album = album,
-        duration = duration,
-        uri = Uri.parse(uriString),
-        albumArtUri = albumArtUriString?.let { Uri.parse(it) },
-        genre = genre,
-        isFavorite = isFavorite,
-        audioFormat = runCatching { AudioFormat.valueOf(audioFormatName) }.getOrDefault(AudioFormat.MP3),
-        isStream = isStream,
-        playCount = playCount,
-        lastPlayedAt = lastPlayedAt
-    )
 }
 
 /**

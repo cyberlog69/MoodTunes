@@ -113,13 +113,11 @@ class LibraryViewModel @Inject constructor(
     private fun loadSongs() {
         viewModelScope.launch {
             val songs = getAllSongsUseCase()
-            val downloaded = songs.filter { downloadManager.isDownloaded(it.id) || it.uri.toString().contains("MoodTunes") }
             _uiState.update {
                 it.copy(
                     isLoading = false,
                     allSongs = songs,
                     filteredSongs = songs,
-                    downloadedSongs = downloaded,
                     albums = groupByAlbum(songs),
                     artists = groupByArtist(songs)
                 )
@@ -129,9 +127,7 @@ class LibraryViewModel @Inject constructor(
 
     private fun observeDownloads() {
         viewModelScope.launch {
-            downloadManager.downloadedSongIds.collect { ids ->
-                val all = _uiState.value.allSongs
-                val downloaded = all.filter { ids.contains(it.id) || it.uri.toString().contains("MoodTunes") }
+            downloadManager.getDownloadedSongs().collect { downloaded ->
                 _uiState.update { it.copy(downloadedSongs = downloaded) }
             }
         }

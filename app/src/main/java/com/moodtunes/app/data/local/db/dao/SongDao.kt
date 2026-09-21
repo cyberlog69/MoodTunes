@@ -51,4 +51,13 @@ interface SongDao {
 
     @Query("DELETE FROM songs WHERE id NOT IN (:activeIds)")
     suspend fun deleteRemovedSongs(activeIds: List<Long>)
+
+    @Query("SELECT * FROM songs WHERE isStream = 0 AND (album = 'MoodTunes Downloads' OR uriString LIKE '%MoodTunes%' OR id IN (:ids)) ORDER BY title ASC")
+    fun getDownloadedSongsFlow(ids: List<Long>): Flow<List<SongEntity>>
+
+    @Query("SELECT * FROM songs WHERE isStream = 0 AND (album = 'MoodTunes Downloads' OR uriString LIKE '%MoodTunes%' OR id IN (:ids)) ORDER BY title ASC")
+    suspend fun getDownloadedSongs(ids: List<Long>): List<SongEntity>
+
+    @Query("DELETE FROM songs WHERE id = :songId")
+    suspend fun deleteSongById(songId: Long)
 }

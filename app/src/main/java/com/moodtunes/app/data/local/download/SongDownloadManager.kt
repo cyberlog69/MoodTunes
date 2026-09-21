@@ -4,6 +4,7 @@ import android.app.NotificationManager
 import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
+import android.media.MediaScannerConnection
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.Uri
@@ -14,6 +15,7 @@ import androidx.core.app.NotificationCompat
 import com.moodtunes.app.MoodTunesApp
 import com.moodtunes.app.data.local.db.dao.SongDao
 import com.moodtunes.app.data.local.db.entity.SongEntity
+import com.moodtunes.app.data.local.db.entity.toDomain
 import com.moodtunes.app.data.local.preferences.UserPreferencesRepository
 import com.moodtunes.app.data.remote.OnlineStreamRepository
 import com.moodtunes.app.domain.model.AudioFormat
@@ -21,14 +23,22 @@ import com.moodtunes.app.domain.model.Song
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -37,9 +47,15 @@ import org.json.JSONArray
 import timber.log.Timber
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
+import java.io.RandomAccessFile
+import java.nio.ByteBuffer
+import java.nio.channels.FileChannel
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -50,6 +66,12 @@ sealed interface DownloadState {
     data class Failed(val reason: String) : DownloadState
 }
 
+private data class DownloadChunk(
+    val index: Int,
+    val start: Long,
+    val end: Long
+)
+
 @Singleton
 class SongDownloadManager @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -57,6 +79,14 @@ class SongDownloadManager @Inject constructor(
     private val songDao: SongDao,
     private val userPreferencesRepository: UserPreferencesRepository
 ) {
+    companion object {
+        private const val YOUTUBE_USER_AGENT =
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15"
+        private const val CHUNK_SIZE = 512 * 1024L // 512 KB per burst chunk
+        private const val CONCURRENCY = 3 // 3 concurrent Range workers
+        private const val BUFFER_SIZE = 65536 // 64 KB read buffer
+    }
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val httpClient = OkHttpClient.Builder()
@@ -110,6 +140,19 @@ class SongDownloadManager @Inject constructor(
     }
 
     /**
+     * Real-time reactive stream of downloaded songs directly from Room DB.
+     * Automatically emits whenever a download completes or is deleted.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun getDownloadedSongs(): Flow<List<Song>> {
+        return _downloadedSongIds.flatMapLatest { ids ->
+            songDao.getDownloadedSongsFlow(ids.toList()).map { entities ->
+                entities.map { it.toDomain() }
+            }
+        }
+    }
+
+    /**
      * Initiates asynchronous background download of a streamed track.
      */
     fun downloadSong(song: Song) {
@@ -141,6 +184,7 @@ class SongDownloadManager @Inject constructor(
 
     private suspend fun executeDownload(song: Song) = withContext(Dispatchers.IO) {
         val notificationId = (song.id.hashCode() and 0x7FFFFFFF)
+        val tempFile = File(context.cacheDir, "dl_${song.id}_${System.currentTimeMillis()}.tmp")
 
         // Show starting notification
         showProgressNotification(notificationId, song.title, song.artist, 0)
@@ -152,48 +196,32 @@ class SongDownloadManager @Inject constructor(
                 throw IllegalStateException("Failed to resolve playable audio stream")
             }
 
-            // 2. Request audio stream
-            val request = Request.Builder()
-                .url(directStreamUrl)
-                .addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
-                .build()
-
-            val response = httpClient.newCall(request).execute()
-            if (!response.isSuccessful) {
-                throw IllegalStateException("Server returned HTTP ${response.code}")
-            }
-
-            val body = response.body ?: throw IllegalStateException("Empty response body")
-            val totalBytes = body.contentLength()
-            val contentType = body.contentType()?.toString()?.lowercase() ?: "audio/mp4"
-
-            val (extension, mimeType, audioFormat) = when {
-                contentType.contains("webm") || contentType.contains("opus") -> Triple("opus", "audio/webm", AudioFormat.AAC_HQ)
-                contentType.contains("mp4") || contentType.contains("m4a") -> Triple("m4a", "audio/mp4", AudioFormat.AAC_HQ)
-                contentType.contains("mpeg") || contentType.contains("mp3") -> Triple("mp3", "audio/mpeg", AudioFormat.MP3)
-                else -> Triple("m4a", "audio/mp4", AudioFormat.AAC_HQ)
-            }
-
-            val safeArtist = song.artist.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim().take(40)
-            val safeTitle = song.title.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim().take(50)
-            val fileName = "${safeArtist} - ${safeTitle}_${song.id}.$extension"
-
-            // 3. Write audio stream to destination (MediaStore on Android 10+, fallback to app files)
+            // 2. High-speed multi-chunk download into temporary file
             var lastProgressUpdate = 0
-            val fileUri = writeToStorage(
-                fileName = fileName,
-                song = song,
-                mimeType = mimeType,
-                inputStream = body.byteStream(),
-                totalBytes = totalBytes,
+            val (mimeType, audioFormat) = downloadAudioStream(
+                directStreamUrl = directStreamUrl,
+                tempFile = tempFile,
                 onProgress = { percent ->
-                    if (percent - lastProgressUpdate >= 5 || percent == 100) {
+                    if (percent - lastProgressUpdate >= 3 || percent == 100) {
                         lastProgressUpdate = percent
                         val frac = percent / 100f
                         _downloadStates.update { it + (song.id to DownloadState.Downloading(frac)) }
                         showProgressNotification(notificationId, song.title, song.artist, percent)
                     }
                 }
+            )
+
+            val extension = if (mimeType.contains("webm") || mimeType.contains("opus")) "opus" else "m4a"
+            val safeArtist = song.artist.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim().take(40)
+            val safeTitle = song.title.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim().take(50)
+            val fileName = "${safeArtist} - ${safeTitle}_${song.id}.$extension"
+
+            // 3. Write tempFile to destination (MediaStore on Android 10+, fallback to public Music directory)
+            val fileUri = writeTempFileToStorage(
+                tempFile = tempFile,
+                fileName = fileName,
+                song = song,
+                mimeType = mimeType
             )
 
             // 4. Download and cache album art locally for offline viewing
@@ -229,16 +257,243 @@ class SongDownloadManager @Inject constructor(
             _downloadStates.update { it + (song.id to DownloadState.Failed(e.message ?: "Download failed")) }
             showFailedNotification(notificationId, song.title, e.message ?: "Download error")
             _userFeedback.tryEmit("Download failed: ${e.message}")
+        } finally {
+            if (tempFile.exists()) {
+                tempFile.delete()
+            }
         }
     }
 
-    private fun writeToStorage(
-        fileName: String,
-        song: Song,
-        mimeType: String,
-        inputStream: InputStream,
+    /**
+     * Downloads an audio stream at high speed using multi-chunk HTTP Range requests when supported,
+     * with graceful fallback to single-stream downloading if Range headers are not supported.
+     */
+    private suspend fun downloadAudioStream(
+        directStreamUrl: String,
+        tempFile: File,
+        onProgress: (Int) -> Unit
+    ): Pair<String, AudioFormat> {
+        val (totalBytes, contentType, supportsRange) = probeStream(directStreamUrl)
+
+        val audioFormat = when {
+            contentType.contains("webm") || contentType.contains("opus") -> AudioFormat.AAC_HQ
+            contentType.contains("mp4") || contentType.contains("m4a") -> AudioFormat.AAC_HQ
+            contentType.contains("mpeg") || contentType.contains("mp3") -> AudioFormat.MP3
+            else -> AudioFormat.AAC_HQ
+        }
+
+        if (supportsRange && totalBytes > 0) {
+            downloadParallelChunks(directStreamUrl, tempFile, totalBytes, onProgress)
+        } else {
+            downloadSequentialToTemp(directStreamUrl, tempFile, totalBytes, onProgress)
+        }
+
+        return Pair(contentType, audioFormat)
+    }
+
+    private fun probeStream(url: String): Triple<Long, String, Boolean> {
+        val clenFromUrl = Regex("[?&]clen=(\\d+)").find(url)?.groupValues?.get(1)?.toLongOrNull()
+
+        val probeReq = Request.Builder()
+            .url(url)
+            .addHeader("User-Agent", YOUTUBE_USER_AGENT)
+            .addHeader("Origin", "https://www.youtube.com")
+            .addHeader("Referer", "https://www.youtube.com/")
+            .addHeader("Range", "bytes=0-0")
+            .build()
+
+        return try {
+            httpClient.newCall(probeReq).execute().use { resp ->
+                val contentType = resp.header("Content-Type")?.lowercase() ?: "audio/mp4"
+                if (resp.code == 206) {
+                    val contentRange = resp.header("Content-Range")
+                    val totalFromRange = contentRange?.substringAfterLast('/')?.trim()?.toLongOrNull()
+                    val total = totalFromRange ?: clenFromUrl ?: 0L
+                    Triple(total, contentType, total > 0)
+                } else if (resp.isSuccessful) {
+                    val len = resp.body?.contentLength() ?: clenFromUrl ?: 0L
+                    Triple(len, contentType, false)
+                } else {
+                    Triple(clenFromUrl ?: 0L, contentType, false)
+                }
+            }
+        } catch (e: Exception) {
+            Timber.w(e, "Probe failed for stream $url")
+            Triple(clenFromUrl ?: 0L, "audio/mp4", false)
+        }
+    }
+
+    private suspend fun downloadParallelChunks(
+        url: String,
+        tempFile: File,
         totalBytes: Long,
         onProgress: (Int) -> Unit
+    ) = withContext(Dispatchers.IO) {
+        val raf = RandomAccessFile(tempFile, "rw")
+        raf.setLength(totalBytes)
+        val fileChannel = raf.channel
+
+        val chunks = mutableListOf<DownloadChunk>()
+        var offset = 0L
+        var chunkIdx = 0
+        while (offset < totalBytes) {
+            val end = (offset + CHUNK_SIZE - 1).coerceAtMost(totalBytes - 1)
+            chunks.add(DownloadChunk(chunkIdx++, offset, end))
+            offset = end + 1
+        }
+
+        val channel = Channel<DownloadChunk>(Channel.UNLIMITED)
+        chunks.forEach { channel.trySend(it) }
+        channel.close()
+
+        val bytesCopied = AtomicLong(0)
+        val lastProgress = AtomicInteger(0)
+
+        try {
+            coroutineScope {
+                val workers = List(CONCURRENCY) {
+                    launch {
+                        for (chunk in channel) {
+                            downloadSingleChunk(
+                                url = url,
+                                fileChannel = fileChannel,
+                                chunk = chunk,
+                                bytesCopied = bytesCopied,
+                                totalBytes = totalBytes,
+                                lastProgress = lastProgress,
+                                onProgress = onProgress
+                            )
+                        }
+                    }
+                }
+                workers.joinAll()
+            }
+            fileChannel.force(true)
+            onProgress(100)
+        } finally {
+            runCatching { fileChannel.close() }
+            runCatching { raf.close() }
+        }
+    }
+
+    private suspend fun downloadSingleChunk(
+        url: String,
+        fileChannel: FileChannel,
+        chunk: DownloadChunk,
+        bytesCopied: AtomicLong,
+        totalBytes: Long,
+        lastProgress: AtomicInteger,
+        onProgress: (Int) -> Unit
+    ) {
+        var attempt = 0
+        var success = false
+        var lastException: Exception? = null
+
+        while (attempt < 3 && !success) {
+            attempt++
+            try {
+                val request = Request.Builder()
+                    .url(url)
+                    .addHeader("User-Agent", YOUTUBE_USER_AGENT)
+                    .addHeader("Origin", "https://www.youtube.com")
+                    .addHeader("Referer", "https://www.youtube.com/")
+                    .addHeader("Range", "bytes=${chunk.start}-${chunk.end}")
+                    .build()
+
+                httpClient.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful && response.code != 206) {
+                        throw IOException("HTTP ${response.code} on chunk ${chunk.index}")
+                    }
+                    val body = response.body ?: throw IOException("Empty body on chunk ${chunk.index}")
+                    body.byteStream().use { inStream ->
+                        val buffer = ByteArray(BUFFER_SIZE)
+                        var read: Int
+                        var chunkWritten = 0L
+                        var currentPos = chunk.start
+
+                        while (inStream.read(buffer).also { read = it } != -1) {
+                            val byteBuf = ByteBuffer.wrap(buffer, 0, read)
+                            while (byteBuf.hasRemaining()) {
+                                val written = fileChannel.write(byteBuf, currentPos)
+                                currentPos += written
+                                chunkWritten += written
+                            }
+                            val currentTotal = bytesCopied.addAndGet(read.toLong())
+                            val percent = ((currentTotal * 100) / totalBytes).toInt().coerceIn(0, 100)
+                            val prev = lastProgress.get()
+                            if (percent - prev >= 3 || percent == 100) {
+                                if (lastProgress.compareAndSet(prev, percent)) {
+                                    onProgress(percent)
+                                }
+                            }
+                        }
+
+                        val expectedBytes = chunk.end - chunk.start + 1
+                        if (chunkWritten != expectedBytes) {
+                            throw IOException("Chunk ${chunk.index} wrote $chunkWritten bytes, expected $expectedBytes")
+                        }
+                    }
+                }
+                success = true
+            } catch (e: Exception) {
+                lastException = e
+                delay(100L * attempt)
+            }
+        }
+
+        if (!success) {
+            throw (lastException ?: IOException("Failed to download chunk ${chunk.index} after 3 attempts"))
+        }
+    }
+
+    private fun downloadSequentialToTemp(
+        url: String,
+        tempFile: File,
+        totalBytes: Long,
+        onProgress: (Int) -> Unit
+    ) {
+        val request = Request.Builder()
+            .url(url)
+            .addHeader("User-Agent", YOUTUBE_USER_AGENT)
+            .addHeader("Origin", "https://www.youtube.com")
+            .addHeader("Referer", "https://www.youtube.com/")
+            .build()
+
+        httpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw IOException("HTTP ${response.code} downloading stream")
+            }
+            val body = response.body ?: throw IOException("Empty stream body")
+            val effectiveTotal = if (totalBytes > 0) totalBytes else body.contentLength()
+            body.byteStream().use { input ->
+                tempFile.outputStream().use { output ->
+                    val buffer = ByteArray(BUFFER_SIZE)
+                    var bytesCopied = 0L
+                    var read: Int
+                    var lastProg = 0
+                    while (input.read(buffer).also { read = it } != -1) {
+                        output.write(buffer, 0, read)
+                        bytesCopied += read
+                        if (effectiveTotal > 0) {
+                            val percent = ((bytesCopied * 100) / effectiveTotal).toInt().coerceIn(0, 100)
+                            if (percent - lastProg >= 3 || percent == 100) {
+                                lastProg = percent
+                                onProgress(percent)
+                            }
+                        }
+                    }
+                    output.flush()
+                }
+            }
+        }
+        onProgress(100)
+    }
+
+    private fun writeTempFileToStorage(
+        tempFile: File,
+        fileName: String,
+        song: Song,
+        mimeType: String
     ): Uri {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val contentValues = ContentValues().apply {
@@ -260,7 +515,9 @@ class SongDownloadManager @Inject constructor(
 
             try {
                 context.contentResolver.openOutputStream(itemUri)?.use { output ->
-                    copyStreamWithProgress(inputStream, output, totalBytes, onProgress)
+                    tempFile.inputStream().use { input ->
+                        input.copyTo(output, bufferSize = BUFFER_SIZE)
+                    }
                 } ?: throw IllegalStateException("Failed to open output stream for $itemUri")
 
                 contentValues.clear()
@@ -272,42 +529,19 @@ class SongDownloadManager @Inject constructor(
                 throw e
             }
         } else {
-            // Legacy Android 9 and below fallback
             val baseDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC)
             val dir = File(baseDir, "MoodTunes").apply { if (!exists()) mkdirs() }
             val targetFile = File(dir, fileName)
 
-            targetFile.outputStream().use { output ->
-                copyStreamWithProgress(inputStream, output, totalBytes, onProgress)
-            }
+            tempFile.copyTo(targetFile, overwrite = true)
+            MediaScannerConnection.scanFile(
+                context,
+                arrayOf(targetFile.absolutePath),
+                arrayOf(mimeType),
+                null
+            )
             Uri.fromFile(targetFile)
         }
-    }
-
-    private fun copyStreamWithProgress(
-        input: InputStream,
-        output: OutputStream,
-        totalBytes: Long,
-        onProgress: (Int) -> Unit
-    ) {
-        val buffer = ByteArray(8192)
-        var bytesCopied: Long = 0
-        var read: Int
-
-        input.use { inStream ->
-            output.use { outStream ->
-                while (inStream.read(buffer).also { read = it } != -1) {
-                    outStream.write(buffer, 0, read)
-                    bytesCopied += read
-                    if (totalBytes > 0) {
-                        val percent = ((bytesCopied * 100) / totalBytes).toInt().coerceIn(0, 100)
-                        onProgress(percent)
-                    }
-                }
-                outStream.flush()
-            }
-        }
-        onProgress(100)
     }
 
     private fun cacheAlbumArt(song: Song): Uri? {
@@ -347,6 +581,9 @@ class SongDownloadManager @Inject constructor(
                 // Also remove cached art
                 val artFile = File(context.filesDir, "custom_artwork/art_${song.id}.jpg")
                 if (artFile.exists()) artFile.delete()
+
+                // Remove from Room DB
+                songDao.deleteSongById(song.id)
 
                 removeDownloadedSongId(song.id)
                 _downloadStates.update { it + (song.id to DownloadState.Idle) }

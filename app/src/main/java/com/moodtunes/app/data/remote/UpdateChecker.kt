@@ -1,6 +1,8 @@
 package com.moodtunes.app.data.remote
 
+import android.content.Context
 import com.moodtunes.app.BuildConfig
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -21,18 +23,48 @@ data class UpdateCheckResult(
 )
 
 @Singleton
-class UpdateChecker @Inject constructor() {
+class UpdateChecker @Inject constructor(
+    @ApplicationContext private val context: Context
+) {
 
     private val client = OkHttpClient.Builder()
-        .connectTimeout(5, TimeUnit.SECONDS)
-        .readTimeout(5, TimeUnit.SECONDS)
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(10, TimeUnit.SECONDS)
         .build()
 
-    suspend fun checkForUpdates(currentVersion: String = BuildConfig.VERSION_NAME): UpdateCheckResult = withContext(Dispatchers.IO) {
+    private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+    suspend fun checkForUpdates(
+        force: Boolean = false,
+        currentVersion: String = BuildConfig.VERSION_NAME
+    ): UpdateCheckResult = withContext(Dispatchers.IO) {
+        val lastCheckTime = prefs.getLong(KEY_LAST_CHECK_TIME, 0L)
+        val now = System.currentTimeMillis()
+
+        if (!force && (now - lastCheckTime < CACHE_DURATION_MILLIS)) {
+            val cachedVersion = prefs.getString(KEY_CACHED_LATEST_VERSION, null)
+            if (cachedVersion != null) {
+                val isAvailable = prefs.getBoolean(KEY_CACHED_IS_AVAILABLE, false)
+                val releaseNotes = prefs.getString(KEY_CACHED_RELEASE_NOTES, "") ?: ""
+                val downloadUrl = prefs.getString(KEY_CACHED_DOWNLOAD_URL, "https://github.com/cyberlog69/MoodTunes/releases") ?: "https://github.com/cyberlog69/MoodTunes/releases"
+                val apkDownloadUrl = prefs.getString(KEY_CACHED_APK_URL, "") ?: ""
+
+                Timber.d("UpdateChecker: Using cached result for %s (isAvailable=%b)", cachedVersion, isAvailable)
+                return@withContext UpdateCheckResult(
+                    isUpdateAvailable = isAvailable,
+                    latestVersion = cachedVersion,
+                    currentVersion = "v$currentVersion",
+                    releaseNotes = releaseNotes,
+                    downloadUrl = downloadUrl,
+                    apkDownloadUrl = apkDownloadUrl
+                )
+            }
+        }
+
         try {
             val request = Request.Builder()
                 .url("https://api.github.com/repos/cyberlog69/MoodTunes/releases/latest")
-                .header("User-Agent", "MoodTunes/1.0 (Android; Music Player App)")
+                .header("User-Agent", "MoodTunes/${BuildConfig.VERSION_NAME} (Android; Music Player App)")
                 .build()
 
             client.newCall(request).execute().use { response ->
@@ -70,13 +102,25 @@ class UpdateChecker @Inject constructor() {
                             .ifEmpty { "1.0.0" }
 
                         if (directApkUrl.isEmpty()) {
-                            directApkUrl = "https://github.com/cyberlog69/MoodTunes/releases/download/v$sanitizedVersion/MoodTunes-v$sanitizedVersion.apk"
+                            directApkUrl = "https://github.com/cyberlog69/MoodTunes/releases/download/v$sanitizedVersion/app-debug.apk"
                         }
 
                         val isNewer = isVersionNewer(currentVersion, sanitizedVersion)
+                        val latestVersionTag = "v$sanitizedVersion"
+
+                        // Save in cache
+                        prefs.edit()
+                            .putLong(KEY_LAST_CHECK_TIME, now)
+                            .putBoolean(KEY_CACHED_IS_AVAILABLE, isNewer)
+                            .putString(KEY_CACHED_LATEST_VERSION, latestVersionTag)
+                            .putString(KEY_CACHED_RELEASE_NOTES, bodyText)
+                            .putString(KEY_CACHED_DOWNLOAD_URL, safeDownloadUrl)
+                            .putString(KEY_CACHED_APK_URL, directApkUrl)
+                            .apply()
+
                         return@withContext UpdateCheckResult(
                             isUpdateAvailable = isNewer,
-                            latestVersion = "v$sanitizedVersion",
+                            latestVersion = latestVersionTag,
                             currentVersion = "v$currentVersion",
                             releaseNotes = bodyText,
                             downloadUrl = safeDownloadUrl,
@@ -109,5 +153,17 @@ class UpdateChecker @Inject constructor() {
             if (c > l) return false
         }
         return false
+    }
+
+    companion object {
+        private const val PREFS_NAME = "moodtunes_update_checker_cache"
+        private const val KEY_LAST_CHECK_TIME = "last_check_time"
+        private const val KEY_CACHED_IS_AVAILABLE = "cached_is_available"
+        private const val KEY_CACHED_LATEST_VERSION = "cached_latest_version"
+        private const val KEY_CACHED_RELEASE_NOTES = "cached_release_notes"
+        private const val KEY_CACHED_DOWNLOAD_URL = "cached_download_url"
+        private const val KEY_CACHED_APK_URL = "cached_apk_url"
+
+        private val CACHE_DURATION_MILLIS = TimeUnit.HOURS.toMillis(6)
     }
 }

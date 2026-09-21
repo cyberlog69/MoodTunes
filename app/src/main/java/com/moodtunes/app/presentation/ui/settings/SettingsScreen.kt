@@ -763,90 +763,12 @@ fun SettingsScreen(
 
                         // ─── In-App Update Prompt Dialog ──────────────────────────────
                         if (uiState.showUpdateDialog && uiState.updateResult != null) {
-                            val result = uiState.updateResult!!
-                            AlertDialog(
-                                onDismissRequest = {
-                                    if (!uiState.isDownloading) viewModel.dismissUpdateDialog()
-                                },
-                                title = {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            Icons.Rounded.DownloadForOffline,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(28.dp)
-                                        )
-                                        Spacer(Modifier.width(10.dp))
-                                        Text(
-                                            text = "Update Found (${result.latestVersion})",
-                                            style = MaterialTheme.typography.titleMedium
-                                        )
-                                    }
-                                },
-                                text = {
-                                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                        Text(
-                                            text = "A new update for MoodTunes is ready. Would you like to download and install it now?",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
-                                        if (result.releaseNotes.isNotEmpty()) {
-                                            Surface(
-                                                color = MaterialTheme.colorScheme.surfaceVariant,
-                                                shape = RoundedCornerShape(8.dp),
-                                                modifier = Modifier.fillMaxWidth()
-                                            ) {
-                                                Column(modifier = Modifier.padding(10.dp)) {
-                                                    Text(
-                                                        text = "Changelog:",
-                                                        style = MaterialTheme.typography.labelMedium,
-                                                        color = MaterialTheme.colorScheme.primary
-                                                    )
-                                                    Spacer(Modifier.height(4.dp))
-                                                    Text(
-                                                        text = result.releaseNotes,
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                    )
-                                                }
-                                            }
-                                        }
-
-                                        if (uiState.isDownloading) {
-                                            Spacer(Modifier.height(6.dp))
-                                            LinearProgressIndicator(
-                                                progress = { uiState.downloadProgress / 100f },
-                                                modifier = Modifier.fillMaxWidth(),
-                                                color = MaterialTheme.colorScheme.primary
-                                            )
-                                            Text(
-                                                text = "Downloading update... ${uiState.downloadProgress}%",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.align(Alignment.End)
-                                            )
-                                        }
-                                    }
-                                },
-                                confirmButton = {
-                                    Button(
-                                        onClick = { viewModel.startInAppUpdate(context) },
-                                        enabled = !uiState.isDownloading,
-                                        shape = RoundedCornerShape(10.dp)
-                                    ) {
-                                        Text(if (uiState.isDownloading) "Downloading..." else "Update")
-                                    }
-                                },
-                                dismissButton = {
-                                    if (!uiState.isDownloading) {
-                                        OutlinedButton(
-                                            onClick = viewModel::dismissUpdateDialog,
-                                            shape = RoundedCornerShape(10.dp)
-                                        ) {
-                                            Text("Cancel")
-                                        }
-                                    }
-                                }
+                            com.moodtunes.app.presentation.ui.components.AppUpdateDialog(
+                                updateResult = uiState.updateResult!!,
+                                isDownloading = uiState.isDownloading,
+                                downloadProgress = uiState.downloadProgress,
+                                onUpdateClick = { viewModel.startInAppUpdate(context) },
+                                onDismiss = viewModel::dismissUpdateDialog
                             )
                         }
 

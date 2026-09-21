@@ -29,6 +29,8 @@ sealed class DownloadState {
 class AppUpdateManager @Inject constructor() {
 
     private val client = OkHttpClient.Builder()
+        .followRedirects(true)
+        .followSslRedirects(true)
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
         .build()
@@ -41,7 +43,7 @@ class AppUpdateManager @Inject constructor() {
         try {
             val request = Request.Builder()
                 .url(apkUrl)
-                .header("User-Agent", "MoodTunes/1.0 (Android; Music Player App)")
+                .header("User-Agent", "MoodTunes/${com.moodtunes.app.BuildConfig.VERSION_NAME} (Android; Music Player App)")
                 .build()
 
             client.newCall(request).execute().use { response ->

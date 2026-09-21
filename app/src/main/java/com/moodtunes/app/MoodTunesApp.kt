@@ -20,6 +20,7 @@ class MoodTunesApp : Application() {
         }
         CrashHandler(this).install()
         createNotificationChannel()
+        com.moodtunes.app.platform.UpdateCheckJobService.schedule(this)
     }
 
     /** Minimal release tree: tag-based, no extra metadata. */
@@ -64,14 +65,25 @@ class MoodTunesApp : Application() {
                 setShowBadge(false)
             }
 
+            val updateChannel = NotificationChannel(
+                UPDATE_NOTIFICATION_CHANNEL_ID,
+                "App Updates",
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply {
+                description = "Notifies when a new version of MoodTunes is released"
+                setShowBadge(true)
+            }
+
             val manager = getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(playbackChannel)
             manager.createNotificationChannel(downloadChannel)
+            manager.createNotificationChannel(updateChannel)
         }
     }
 
     companion object {
         const val PLAYBACK_NOTIFICATION_CHANNEL_ID = "moodtunes_playback_channel"
         const val DOWNLOAD_NOTIFICATION_CHANNEL_ID = "moodtunes_download_channel"
+        const val UPDATE_NOTIFICATION_CHANNEL_ID = "moodtunes_update_channel"
     }
 }

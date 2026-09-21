@@ -1,5 +1,6 @@
 package com.moodtunes.app.data.remote.api
 
+import com.moodtunes.app.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -119,7 +120,7 @@ class LrclibService @Inject constructor() {
 
         val request = Request.Builder()
             .url(url)
-            .header("User-Agent", "MoodTunes/1.5.0 (Android; Music Player)")
+            .header("User-Agent", "MoodTunes/${BuildConfig.VERSION_NAME} (Android; Music Player)")
             .build()
 
         return try {
@@ -156,7 +157,7 @@ class LrclibService @Inject constructor() {
 
         val request = Request.Builder()
             .url(url)
-            .header("User-Agent", "MoodTunes/1.5.0 (Android; Music Player)")
+            .header("User-Agent", "MoodTunes/${BuildConfig.VERSION_NAME} (Android; Music Player)")
             .build()
 
         val results = mutableListOf<LrclibResult>()

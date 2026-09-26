@@ -17,6 +17,8 @@ import com.moodtunes.app.data.remote.UpdateCheckResult
 import com.moodtunes.app.data.remote.UpdateChecker
 import com.moodtunes.app.data.remote.api.SubsonicApiService
 import dagger.hilt.android.lifecycle.HiltViewModel
+import com.moodtunes.app.service.AudioEffectsManager
+import com.moodtunes.app.service.PlaybackManager
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -31,6 +33,9 @@ data class SettingsUiState(
     val whatsNewVersion: String? = null,
     val isTestingNavidrome: Boolean = false,
     val navidromeTestStatus: String? = null,
+    val isLoudnessNormalizationEnabled: Boolean = false,
+    val isAutoMoodEqEnabled: Boolean = false,
+    val isGaplessPlaybackEnabled: Boolean = true,
     val message: String? = null
 )
 
@@ -40,16 +45,26 @@ class SettingsViewModel @Inject constructor(
     private val updateChecker: UpdateChecker,
     private val appUpdateManager: AppUpdateManager,
     private val backupManager: BackupManager,
-    private val subsonicApiService: SubsonicApiService
+    private val subsonicApiService: SubsonicApiService,
+    private val audioEffectsManager: AudioEffectsManager,
+    private val playbackManager: PlaybackManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
 
     val uiState: StateFlow<SettingsUiState> = combine(
         _uiState,
-        preferencesRepository.settings
-    ) { state, settings ->
-        state.copy(userSettings = settings)
+        preferencesRepository.settings,
+        audioEffectsManager.isLoudnessNormalizationEnabled,
+        audioEffectsManager.isAutoMoodEqEnabled,
+        playbackManager.isGaplessPlaybackEnabled
+    ) { baseState, settings, loudness, moodEq, gapless ->
+        baseState.copy(
+            userSettings = settings,
+            isLoudnessNormalizationEnabled = loudness,
+            isAutoMoodEqEnabled = moodEq,
+            isGaplessPlaybackEnabled = gapless
+        )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -98,6 +113,18 @@ class SettingsViewModel @Inject constructor(
 
     fun onAudioSourceModeChanged(mode: AudioSourceMode) {
         preferencesRepository.updateAudioSourceMode(mode)
+    }
+
+    fun onToggleLoudnessNormalization(enabled: Boolean) {
+        audioEffectsManager.toggleLoudnessNormalization(enabled)
+    }
+
+    fun onToggleAutoMoodEq(enabled: Boolean) {
+        audioEffectsManager.toggleAutoMoodEq(enabled)
+    }
+
+    fun onToggleGapless(enabled: Boolean) {
+        playbackManager.setGaplessPlaybackEnabled(enabled)
     }
 
 

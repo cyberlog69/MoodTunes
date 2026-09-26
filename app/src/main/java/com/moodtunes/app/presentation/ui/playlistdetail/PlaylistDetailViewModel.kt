@@ -34,8 +34,11 @@ class PlaylistDetailViewModel @Inject constructor(
     private val moveSongInPlaylistUseCase: MoveSongInPlaylistUseCase,
     private val renamePlaylistUseCase: RenamePlaylistUseCase,
     private val deletePlaylistUseCase: DeletePlaylistUseCase,
-    private val playbackManager: PlaybackManager
+    private val playbackManager: PlaybackManager,
+    private val downloadManager: com.moodtunes.app.data.local.download.SongDownloadManager
 ) : ViewModel() {
+
+    val batchProgress: StateFlow<com.moodtunes.app.data.local.download.BatchDownloadProgress?> = downloadManager.batchProgress
 
     private val playlistId: Long = savedStateHandle.get<Long>("playlistId") ?: -1L
     private val _showPicker = MutableStateFlow(false)
@@ -88,6 +91,12 @@ class PlaylistDetailViewModel @Inject constructor(
         val playlist = uiState.value.playlist ?: return
         if (playlist.songs.isEmpty()) return
         playbackManager.playSongs(playlist.songs, 0, mood = null)
+    }
+
+    fun downloadAllSongs() {
+        val playlist = uiState.value.playlist ?: return
+        if (playlist.songs.isEmpty()) return
+        downloadManager.downloadSongs(playlist.songs, playlist.name)
     }
 
     fun playSong(index: Int) {

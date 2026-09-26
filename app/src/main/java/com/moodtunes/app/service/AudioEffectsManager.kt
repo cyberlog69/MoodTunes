@@ -2,9 +2,11 @@ package com.moodtunes.app.service
 
 import android.media.audiofx.BassBoost
 import android.media.audiofx.Equalizer
+import android.media.audiofx.LoudnessEnhancer
 import android.media.audiofx.PresetReverb
 import android.media.audiofx.Virtualizer
 import com.moodtunes.app.data.local.preferences.PlaybackPreferencesRepository
+import com.moodtunes.app.domain.model.MoodType
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,17 +31,31 @@ enum class ReverbPreset(val id: Short, val displayName: String, val icon: String
 }
 
 /**
- * Wraps platform AudioFX (Equalizer, BassBoost, 3D Virtualizer, PresetReverb)
+ * Wraps platform AudioFX (Equalizer, BassBoost, 3D Virtualizer, PresetReverb, LoudnessEnhancer)
  * and binds them to the active ExoPlayer audio session.
  */
 @Singleton
 class AudioEffectsManager @Inject constructor(
     private val playbackPreferencesRepository: PlaybackPreferencesRepository
 ) {
+    companion object {
+        // Built-in curated EQ curves (5-band normalized: -1.0f to 1.0f)
+        val CURATED_PRESETS: Map<String, List<Float>> = mapOf(
+            "Flat" to listOf(0f, 0f, 0f, 0f, 0f),
+            "Bass Booster" to listOf(0.6f, 0.4f, 0.1f, 0f, -0.1f),
+            "Treble Booster" to listOf(-0.2f, 0f, 0.1f, 0.45f, 0.7f),
+            "Vocal Booster" to listOf(-0.2f, 0.2f, 0.55f, 0.35f, -0.1f),
+            "Acoustic" to listOf(0.35f, 0.25f, 0f, 0.25f, 0.45f),
+            "Electronic" to listOf(0.6f, 0.35f, -0.1f, 0.35f, 0.6f),
+            "Rock" to listOf(0.5f, 0.25f, -0.15f, 0.25f, 0.5f)
+        )
+    }
+
     private var equalizer: Equalizer? = null
     private var bassBoost: BassBoost? = null
     private var virtualizer: Virtualizer? = null
     private var presetReverb: PresetReverb? = null
+    private var loudnessEnhancer: LoudnessEnhancer? = null
     private var attachedSessionId: Int = -1
 
     private val _isEqualizerEnabled = MutableStateFlow(playbackPreferencesRepository.equalizerEnabled)
@@ -60,13 +76,25 @@ class AudioEffectsManager @Inject constructor(
     private val _reverbPreset = MutableStateFlow(ReverbPreset.fromId(playbackPreferencesRepository.reverbPreset))
     val reverbPreset: StateFlow<ReverbPreset> = _reverbPreset.asStateFlow()
 
+    private val _isLoudnessNormalizationEnabled = MutableStateFlow(playbackPreferencesRepository.loudnessNormalizationEnabled)
+    val isLoudnessNormalizationEnabled: StateFlow<Boolean> = _isLoudnessNormalizationEnabled.asStateFlow()
+
+    private val _loudnessGainMb = MutableStateFlow(playbackPreferencesRepository.loudnessGainMb)
+    val loudnessGainMb: StateFlow<Int> = _loudnessGainMb.asStateFlow()
+
+    private val _isAutoMoodEqEnabled = MutableStateFlow(playbackPreferencesRepository.autoMoodEqEnabled)
+    val isAutoMoodEqEnabled: StateFlow<Boolean> = _isAutoMoodEqEnabled.asStateFlow()
+
+    private val _selectedPresetName = MutableStateFlow(playbackPreferencesRepository.selectedPresetName)
+    val selectedPresetName: StateFlow<String> = _selectedPresetName.asStateFlow()
+
     private val _bandLevels = MutableStateFlow<List<Float>>(emptyList())
     val bandLevels: StateFlow<List<Float>> = _bandLevels.asStateFlow()
 
     private val _bandFrequencies = MutableStateFlow<List<Int>>(emptyList())
     val bandFrequencies: StateFlow<List<Int>> = _bandFrequencies.asStateFlow()
 
-    private val _presets = MutableStateFlow<List<String>>(emptyList())
+    private val _presets = MutableStateFlow<List<String>>(CURATED_PRESETS.keys.toList())
     val presets: StateFlow<List<String>> = _presets.asStateFlow()
 
     /** @return true when AudioFX was successfully bound to the session. */
@@ -81,7 +109,11 @@ class AudioEffectsManager @Inject constructor(
             val savedLevels = playbackPreferencesRepository.loadEqualizerLevels(bandCount)
             _bandLevels.value = if (savedLevels.size == bandCount) savedLevels else List(bandCount) { 0f }
             _bandFrequencies.value = (0 until bandCount).map { band -> eq.getCenterFreq(band.toShort()) }
-            _presets.value = (0 until eq.numberOfPresets.toInt()).map { preset -> eq.getPresetName(preset.toShort()) }
+            
+            // Combine curated presets with any system hardware presets
+            val systemPresets = (0 until eq.numberOfPresets.toInt()).map { preset -> eq.getPresetName(preset.toShort()) }
+            val combined = (CURATED_PRESETS.keys + systemPresets).distinct()
+            _presets.value = combined
             equalizer = eq
 
             runCatching {
@@ -93,11 +125,15 @@ class AudioEffectsManager @Inject constructor(
             runCatching {
                 presetReverb = PresetReverb(0, audioSessionId)
             }
+            runCatching {
+                loudnessEnhancer = LoudnessEnhancer(audioSessionId)
+            }
 
             applyEqualizer()
             applyBassBoost()
             applyVirtualizer()
             applyReverb()
+            applyLoudnessNormalization()
             true
         }.getOrElse {
             release()
@@ -110,10 +146,12 @@ class AudioEffectsManager @Inject constructor(
         runCatching { bassBoost?.release() }
         runCatching { virtualizer?.release() }
         runCatching { presetReverb?.release() }
+        runCatching { loudnessEnhancer?.release() }
         equalizer = null
         bassBoost = null
         virtualizer = null
         presetReverb = null
+        loudnessEnhancer = null
         attachedSessionId = -1
     }
 
@@ -148,20 +186,80 @@ class AudioEffectsManager @Inject constructor(
     }
 
     fun applyPreset(presetIndex: Int) {
-        val eq = equalizer ?: return
-        if (presetIndex !in 0 until eq.numberOfPresets.toInt()) return
-        runCatching {
-            eq.usePreset(presetIndex.toShort())
-            val range = eq.bandLevelRange
-            val min = range[0].toInt()
-            val max = range[1].toInt()
-            val span = (max - min).coerceAtLeast(1)
-            val levels = (0 until eq.numberOfBands.toInt()).map { band ->
-                ((eq.getBandLevel(band.toShort()).toInt() - min).toFloat() / span.toFloat()) * 2f - 1f
-            }
-            _bandLevels.value = levels
-            playbackPreferencesRepository.saveEqualizerLevels(levels)
+        val presetName = _presets.value.getOrNull(presetIndex)
+        if (presetName != null) {
+            applyPresetByName(presetName)
         }
+    }
+
+    fun applyPresetByName(name: String) {
+        _selectedPresetName.value = name
+        playbackPreferencesRepository.selectedPresetName = name
+
+        // 1. Check curated presets first
+        val curated = CURATED_PRESETS[name]
+        if (curated != null) {
+            val bandCount = _bandLevels.value.size
+            if (bandCount > 0) {
+                val interpolated = sampleCurve(curated, bandCount)
+                _bandLevels.value = interpolated
+                applyEqualizer()
+                playbackPreferencesRepository.saveEqualizerLevels(interpolated)
+            }
+            return
+        }
+
+        // 2. Hardware system presets fallback
+        val eq = equalizer ?: return
+        val systemPresets = (0 until eq.numberOfPresets.toInt()).map { eq.getPresetName(it.toShort()) }
+        val systemIdx = systemPresets.indexOf(name)
+        if (systemIdx >= 0) {
+            runCatching {
+                eq.usePreset(systemIdx.toShort())
+                val range = eq.bandLevelRange
+                val min = range[0].toInt()
+                val max = range[1].toInt()
+                val span = (max - min).coerceAtLeast(1)
+                val levels = (0 until eq.numberOfBands.toInt()).map { band ->
+                    ((eq.getBandLevel(band.toShort()).toInt() - min).toFloat() / span.toFloat()) * 2f - 1f
+                }
+                _bandLevels.value = levels
+                playbackPreferencesRepository.saveEqualizerLevels(levels)
+            }
+        }
+    }
+
+    /**
+     * Automatically adapts the equalizer curve to match the emotional mood profile.
+     */
+    fun applyMood(mood: MoodType) {
+        if (!_isAutoMoodEqEnabled.value) return
+        val presetName = when (mood) {
+            MoodType.ENERGETIC -> "Bass Booster"
+            MoodType.CALM, MoodType.SLEEP -> "Acoustic"
+            MoodType.HAPPY, MoodType.EUPHORIC -> "Rock"
+            MoodType.SAD -> "Vocal Booster"
+        }
+        applyPresetByName(presetName)
+    }
+
+    fun toggleAutoMoodEq(enabled: Boolean) {
+        playbackPreferencesRepository.autoMoodEqEnabled = enabled
+        _isAutoMoodEqEnabled.value = enabled
+    }
+
+    // ── Loudness Normalization (EBU R128 / ReplayGain) ────────────────────────
+    fun toggleLoudnessNormalization(enabled: Boolean) {
+        playbackPreferencesRepository.loudnessNormalizationEnabled = enabled
+        _isLoudnessNormalizationEnabled.value = enabled
+        applyLoudnessNormalization()
+    }
+
+    fun setLoudnessGainMb(gainMb: Int) {
+        val clamped = gainMb.coerceIn(0, 1000) // 0 to +10 dB boost
+        playbackPreferencesRepository.loudnessGainMb = clamped
+        _loudnessGainMb.value = clamped
+        applyLoudnessNormalization()
     }
 
     // ── Bass Boost ───────────────────────────────────────────────────────────
@@ -217,6 +315,16 @@ class AudioEffectsManager @Inject constructor(
         }
     }
 
+    private fun applyLoudnessNormalization() {
+        val le = loudnessEnhancer ?: return
+        runCatching {
+            le.enabled = _isLoudnessNormalizationEnabled.value
+            if (_isLoudnessNormalizationEnabled.value) {
+                le.setTargetGain(_loudnessGainMb.value)
+            }
+        }
+    }
+
     private fun applyBassBoost() {
         val bb = bassBoost ?: return
         runCatching {
@@ -243,6 +351,19 @@ class AudioEffectsManager @Inject constructor(
         runCatching {
             rev.enabled = current != ReverbPreset.NONE
             rev.preset = current.id
+        }
+    }
+
+    private fun sampleCurve(curve5: List<Float>, bandCount: Int): List<Float> {
+        if (bandCount <= 0) return emptyList()
+        if (bandCount == 5) return curve5
+        return (0 until bandCount).map { i ->
+            val pos = i.toFloat() / (bandCount - 1).coerceAtLeast(1) * 4f
+            val idx = pos.toInt().coerceIn(0, 3)
+            val frac = pos - idx
+            val v0 = curve5[idx]
+            val v1 = curve5[minOf(idx + 1, 4)]
+            (v0 + (v1 - v0) * frac).coerceIn(-1f, 1f)
         }
     }
 }

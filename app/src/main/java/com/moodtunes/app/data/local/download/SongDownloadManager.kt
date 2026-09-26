@@ -66,6 +66,13 @@ sealed interface DownloadState {
     data class Failed(val reason: String) : DownloadState
 }
 
+data class BatchDownloadProgress(
+    val current: Int,
+    val total: Int,
+    val isDownloading: Boolean,
+    val batchTitle: String? = null
+)
+
 private data class DownloadChunk(
     val index: Int,
     val start: Long,
@@ -77,7 +84,8 @@ class SongDownloadManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val onlineStreamRepository: OnlineStreamRepository,
     private val songDao: SongDao,
-    private val userPreferencesRepository: UserPreferencesRepository
+    private val userPreferencesRepository: UserPreferencesRepository,
+    private val lyricsRepository: com.moodtunes.app.data.local.lyrics.LyricsRepository
 ) {
     companion object {
         private const val YOUTUBE_USER_AGENT =
@@ -104,6 +112,10 @@ class SongDownloadManager @Inject constructor(
     // In-memory per-song download state
     private val _downloadStates = MutableStateFlow<Map<Long, DownloadState>>(emptyMap())
     val downloadStates: StateFlow<Map<Long, DownloadState>> = _downloadStates.asStateFlow()
+
+    // Batch download state
+    private val _batchProgress = MutableStateFlow<BatchDownloadProgress?>(null)
+    val batchProgress: StateFlow<BatchDownloadProgress?> = _batchProgress.asStateFlow()
 
     // Set of downloaded song IDs persisted across launches
     private val _downloadedSongIds = MutableStateFlow<Set<Long>>(loadDownloadedSongIds())
@@ -182,6 +194,58 @@ class SongDownloadManager @Inject constructor(
         }
     }
 
+    /**
+     * Batch downloads a collection of songs (e.g. an entire album, playlist, or queue)
+     * with aggregate progress tracking.
+     */
+    fun downloadSongs(songs: List<Song>, batchName: String? = null) {
+        if (songs.isEmpty()) return
+
+        val settings = userPreferencesRepository.settings.value
+        if (settings.wifiOnlyDownloads && !isWifiConnected()) {
+            _userFeedback.tryEmit("Wi-Fi only downloads enabled. Connect to Wi-Fi to download.")
+            return
+        }
+
+        val pending = songs.filter { !isDownloaded(it.id) }
+        if (pending.isEmpty()) {
+            _userFeedback.tryEmit("All ${songs.size} songs are already downloaded.")
+            return
+        }
+
+        val label = if (!batchName.isNullOrBlank()) " from \"$batchName\"" else ""
+        _userFeedback.tryEmit("Queued ${pending.size} songs for download$label...")
+
+        scope.launch {
+            _batchProgress.value = BatchDownloadProgress(
+                current = 0,
+                total = pending.size,
+                isDownloading = true,
+                batchTitle = batchName
+            )
+            pending.forEachIndexed { index, song ->
+                _batchProgress.value = BatchDownloadProgress(
+                    current = index + 1,
+                    total = pending.size,
+                    isDownloading = true,
+                    batchTitle = batchName
+                )
+                val currentState = _downloadStates.value[song.id]
+                if (currentState !is DownloadState.Downloading && !isDownloaded(song.id)) {
+                    _downloadStates.update { it + (song.id to DownloadState.Downloading(0f)) }
+                    executeDownload(song)
+                }
+            }
+            _batchProgress.value = BatchDownloadProgress(
+                current = pending.size,
+                total = pending.size,
+                isDownloading = false,
+                batchTitle = batchName
+            )
+            _userFeedback.tryEmit("Completed download of ${pending.size} songs$label!")
+        }
+    }
+
     private suspend fun executeDownload(song: Song) = withContext(Dispatchers.IO) {
         val notificationId = (song.id.hashCode() and 0x7FFFFFFF)
         val tempFile = File(context.cacheDir, "dl_${song.id}_${System.currentTimeMillis()}.tmp")
@@ -226,6 +290,11 @@ class SongDownloadManager @Inject constructor(
 
             // 4. Download and cache album art locally for offline viewing
             val localArtUri = cacheAlbumArt(song)
+
+            // 4b. Download and cache synchronized lyrics locally for true offline lyrics playback
+            runCatching {
+                lyricsRepository.cacheLyricsForSong(song)
+            }
 
             // 5. Index into Room database for instant local library visibility
             val songEntity = SongEntity(

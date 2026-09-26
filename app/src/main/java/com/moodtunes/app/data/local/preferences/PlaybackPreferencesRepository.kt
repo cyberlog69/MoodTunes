@@ -93,6 +93,36 @@ class PlaybackPreferencesRepository @Inject constructor(
             prefs.edit().putInt("visualizer_mode", value).apply()
         }
 
+    var loudnessNormalizationEnabled: Boolean
+        get() = prefs.getBoolean("loudness_normalization_enabled", false)
+        set(value) {
+            prefs.edit().putBoolean("loudness_normalization_enabled", value).apply()
+        }
+
+    var loudnessGainMb: Int
+        get() = prefs.getInt("loudness_gain_mb", 300)
+        set(value) {
+            prefs.edit().putInt("loudness_gain_mb", value).apply()
+        }
+
+    var autoMoodEqEnabled: Boolean
+        get() = prefs.getBoolean("auto_mood_eq_enabled", false)
+        set(value) {
+            prefs.edit().putBoolean("auto_mood_eq_enabled", value).apply()
+        }
+
+    var gaplessPlaybackEnabled: Boolean
+        get() = prefs.getBoolean("gapless_playback_enabled", true)
+        set(value) {
+            prefs.edit().putBoolean("gapless_playback_enabled", value).apply()
+        }
+
+    var selectedPresetName: String
+        get() = prefs.getString("selected_eq_preset", "Flat") ?: "Flat"
+        set(value) {
+            prefs.edit().putString("selected_eq_preset", value).apply()
+        }
+
     fun saveEqualizerLevels(levels: List<Float>) {
         prefs.edit()
             .putString("eq_levels", levels.joinToString(",") { it.toString() })

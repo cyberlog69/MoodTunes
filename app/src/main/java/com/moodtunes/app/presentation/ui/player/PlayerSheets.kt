@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -66,7 +67,8 @@ fun PlayerBottomSheet(
                 onMoveDown = { from, to -> viewModel.moveQueueItem(from, to) },
                 onRemove = viewModel::removeFromQueue,
                 onShuffleQueue = viewModel::shuffleQueue,
-                onClearQueue = { viewModel.clearQueue(keepCurrent = true) }
+                onClearQueue = { viewModel.clearQueue(keepCurrent = true) },
+                onDownloadQueue = viewModel::downloadRemainingQueue
             )
             PlayerSheet.LYRICS -> LyricsSheetContent(
                 lyrics = uiState.lyrics,
@@ -83,6 +85,7 @@ fun PlayerBottomSheet(
                 onToggleTranslation = viewModel::toggleLyricsTranslation,
                 onPlayPause = viewModel::playPause,
                 onSkipNext = viewModel::skipNext,
+                onOpenLyricsSearch = viewModel::openLyricsSearchDialog,
                 onDismiss = onDismiss
             )
             PlayerSheet.SPEED -> SpeedSheetContent(
@@ -106,6 +109,11 @@ fun PlayerBottomSheet(
                 virtualizerStrength = uiState.virtualizerStrength,
                 reverbPreset = uiState.reverbPreset,
                 isSkipSilenceEnabled = uiState.isSkipSilenceEnabled,
+                isLoudnessNormalizationEnabled = uiState.isLoudnessNormalizationEnabled,
+                loudnessGainMb = uiState.loudnessGainMb,
+                isAutoMoodEqEnabled = uiState.isAutoMoodEqEnabled,
+                selectedPreset = uiState.selectedEqPreset,
+                isGaplessPlaybackEnabled = uiState.isGaplessPlaybackEnabled,
                 bandLevels = uiState.equalizerLevels,
                 bandFrequencies = uiState.equalizerFrequencies,
                 presets = uiState.equalizerPresets,
@@ -116,6 +124,11 @@ fun PlayerBottomSheet(
                 onVirtualizerStrength = viewModel::setVirtualizerStrength,
                 onReverbPreset = viewModel::setReverbPreset,
                 onToggleSkipSilence = viewModel::setSkipSilenceEnabled,
+                onToggleLoudnessNormalization = viewModel::toggleLoudnessNormalization,
+                onLoudnessGainMb = viewModel::setLoudnessGainMb,
+                onToggleAutoMoodEq = viewModel::toggleAutoMoodEq,
+                onPresetByName = viewModel::applyEqualizerPresetByName,
+                onToggleGapless = viewModel::setGaplessPlaybackEnabled,
                 onBandLevel = viewModel::setBandLevel,
                 onReset = viewModel::resetEqualizer,
                 onPreset = viewModel::applyEqualizerPreset
@@ -144,7 +157,8 @@ private fun QueueSheetContent(
     onMoveDown: (Int, Int) -> Unit,
     onRemove: (Int) -> Unit,
     onShuffleQueue: () -> Unit,
-    onClearQueue: () -> Unit
+    onClearQueue: () -> Unit,
+    onDownloadQueue: () -> Unit = {}
 ) {
     val totalRemainingMs = remember(songs, currentIndex) {
         songs.drop(currentIndex.coerceAtLeast(0)).sumOf { it.duration }
@@ -186,6 +200,19 @@ private fun QueueSheetContent(
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (songs.isNotEmpty()) {
+                IconButton(
+                    onClick = onDownloadQueue,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        Icons.Rounded.Download,
+                        contentDescription = "Download Remaining Queue",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
             if (songs.size > 2) {
                 IconButton(
                     onClick = onShuffleQueue,
@@ -392,6 +419,7 @@ private fun LyricsSheetContent(
     onToggleTranslation: () -> Unit,
     onPlayPause: () -> Unit,
     onSkipNext: () -> Unit,
+    onOpenLyricsSearch: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -541,6 +569,16 @@ private fun LyricsSheetContent(
                             modifier = Modifier.size(22.dp)
                         )
                     }
+
+                    // Search / Edit Lyrics Button
+                    IconButton(onClick = onOpenLyricsSearch) {
+                        Icon(
+                            Icons.Rounded.EditNote,
+                            contentDescription = "Search or Edit lyrics",
+                            tint = White.copy(alpha = 0.85f),
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
                 }
             }
 
@@ -613,6 +651,19 @@ private fun LyricsSheetContent(
                                     color = White.copy(alpha = 0.6f),
                                     textAlign = TextAlign.Center
                                 )
+                                Spacer(Modifier.height(16.dp))
+                                Button(
+                                    onClick = onOpenLyricsSearch,
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = White.copy(alpha = 0.2f),
+                                        contentColor = White
+                                    )
+                                ) {
+                                    Icon(Icons.Rounded.Search, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("Find or Add Lyrics")
+                                }
                             }
                         }
                     }
@@ -1042,6 +1093,11 @@ private fun EqualizerSheetContent(
     virtualizerStrength: Short,
     reverbPreset: com.moodtunes.app.service.ReverbPreset,
     isSkipSilenceEnabled: Boolean,
+    isLoudnessNormalizationEnabled: Boolean = false,
+    loudnessGainMb: Int = 300,
+    isAutoMoodEqEnabled: Boolean = false,
+    selectedPreset: String? = null,
+    isGaplessPlaybackEnabled: Boolean = true,
     bandLevels: List<Float>,
     bandFrequencies: List<Int>,
     presets: List<String>,
@@ -1052,6 +1108,11 @@ private fun EqualizerSheetContent(
     onVirtualizerStrength: (Short) -> Unit,
     onReverbPreset: (com.moodtunes.app.service.ReverbPreset) -> Unit,
     onToggleSkipSilence: (Boolean) -> Unit,
+    onToggleLoudnessNormalization: (Boolean) -> Unit = {},
+    onLoudnessGainMb: (Int) -> Unit = {},
+    onToggleAutoMoodEq: (Boolean) -> Unit = {},
+    onPresetByName: (String) -> Unit = {},
+    onToggleGapless: (Boolean) -> Unit = {},
     onBandLevel: (Int, Float) -> Unit,
     onReset: () -> Unit,
     onPreset: (Int) -> Unit
@@ -1059,7 +1120,7 @@ private fun EqualizerSheetContent(
     SheetHeader(
         icon = Icons.Rounded.Equalizer,
         title = "Audio FX & Acoustics",
-        subtitle = "10-band equalizer, 3D spatial virtualizer & reverb acoustics"
+        subtitle = "Audiophile DSP, parametric equalizer, loudness & acoustics"
     )
     Column(
         modifier = Modifier
@@ -1067,6 +1128,38 @@ private fun EqualizerSheetContent(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp)
     ) {
+        // ── 0. Auto Mood EQ ──
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Rounded.AutoAwesome,
+                contentDescription = null,
+                tint = if (isAutoMoodEqEnabled) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Auto Mood EQ",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Dynamically adjusts acoustic curves to match active song mood",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Switch(
+                checked = isAutoMoodEqEnabled,
+                onCheckedChange = onToggleAutoMoodEq
+            )
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+
         // ── 1. Equalizer Section ──
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1080,7 +1173,7 @@ private fun EqualizerSheetContent(
             )
             Spacer(Modifier.width(12.dp))
             Text(
-                text = "Equalizer",
+                text = "Parametric Equalizer",
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f)
@@ -1092,9 +1185,37 @@ private fun EqualizerSheetContent(
         }
 
         if (isEqualizerEnabled) {
+            Text(
+                text = "Curated Presets",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+            )
+            val curatedPresets = listOf("Flat", "Bass Booster", "Treble Booster", "Vocal Booster", "Acoustic", "Electronic", "Rock")
+            LazyRow(
+                contentPadding = PaddingValues(vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                itemsIndexed(curatedPresets) { _, name ->
+                    val isSelected = selectedPreset == name
+                    FilterChip(
+                        selected = isSelected,
+                        onClick = { onPresetByName(name) },
+                        label = { Text(name) },
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
+            }
+
             if (presets.isNotEmpty()) {
+                Text(
+                    text = "Device Hardware Presets",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                )
                 LazyRow(
-                    contentPadding = PaddingValues(vertical = 8.dp),
+                    contentPadding = PaddingValues(vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     itemsIndexed(presets) { index, name ->
@@ -1116,8 +1237,12 @@ private fun EqualizerSheetContent(
                     modifier = Modifier.padding(vertical = 12.dp)
                 )
             } else {
+                Spacer(Modifier.height(8.dp))
                 bandLevels.forEachIndexed { bandIndex, level ->
                     val freq = bandFrequencies.getOrNull(bandIndex) ?: 0
+                    val clampedLevel = level.coerceIn(-1f, 1f)
+                    val dbValue = (clampedLevel * 15f).toInt()
+                    val dbText = "${if (dbValue > 0) "+" else ""}$dbValue dB"
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
@@ -1129,13 +1254,13 @@ private fun EqualizerSheetContent(
                             modifier = Modifier.width(64.dp)
                         )
                         Slider(
-                            value = level.coerceIn(-1f, 1f),
+                            value = clampedLevel,
                             onValueChange = { onBandLevel(bandIndex, it) },
                             valueRange = -1f..1f,
                             modifier = Modifier.weight(1f)
                         )
                         Text(
-                            text = "${((level.coerceIn(-1f, 1f)) * 100).toInt()}%",
+                            text = dbText,
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.End,
@@ -1149,14 +1274,67 @@ private fun EqualizerSheetContent(
                 ) {
                     Icon(Icons.Rounded.RestartAlt, contentDescription = null)
                     Spacer(Modifier.width(4.dp))
-                    Text("Reset")
+                    Text("Reset Flat")
                 }
             }
         }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
 
-        // ── 2. Bass Boost ──
+        // ── 2. Loudness Normalization (EBU R128 Gain) ──
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.AutoMirrored.Rounded.VolumeUp,
+                contentDescription = null,
+                tint = if (isLoudnessNormalizationEnabled) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Loudness Normalization",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Levels volume peaks & enhances quiet tracks (EBU R128)",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Switch(
+                checked = isLoudnessNormalizationEnabled,
+                onCheckedChange = onToggleLoudnessNormalization
+            )
+        }
+        if (isLoudnessNormalizationEnabled) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Slider(
+                    value = loudnessGainMb.toFloat(),
+                    onValueChange = { onLoudnessGainMb(it.toInt()) },
+                    valueRange = 0f..1000f,
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "+${loudnessGainMb / 100}.${(loudnessGainMb % 100) / 10} dB",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.End,
+                    modifier = Modifier.width(52.dp)
+                )
+            }
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+
+        // ── 3. Bass Boost ──
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
@@ -1202,7 +1380,7 @@ private fun EqualizerSheetContent(
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
 
-        // ── 3. 3D Spatial Virtualizer ──
+        // ── 4. 3D Spatial Virtualizer ──
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
@@ -1254,7 +1432,7 @@ private fun EqualizerSheetContent(
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
 
-        // ── 4. Reverb & Acoustic Environment ──
+        // ── 5. Reverb & Acoustic Environment ──
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
@@ -1297,7 +1475,38 @@ private fun EqualizerSheetContent(
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
 
-        // ── 5. Silence Trimming ──
+        // ── 6. Gapless Playback & Silence Trimming ──
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.AutoMirrored.Rounded.QueueMusic,
+                contentDescription = null,
+                tint = if (isGaplessPlaybackEnabled) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "True Gapless Playback",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Seamless consecutive track transitions without gaps",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Switch(
+                checked = isGaplessPlaybackEnabled,
+                onCheckedChange = onToggleGapless
+            )
+        }
+
+        Spacer(Modifier.height(10.dp))
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
@@ -1456,3 +1665,149 @@ private fun formatMs(ms: Long): String {
     val seconds = totalSeconds % 60
     return "%d:%02d".format(minutes, seconds)
 }
+
+@Composable
+fun LyricsSearchDialog(
+    initialTitle: String,
+    initialArtist: String,
+    isLoading: Boolean,
+    feedback: String?,
+    onDismiss: () -> Unit,
+    onSearch: (title: String, artist: String) -> Unit,
+    onSaveCustom: (rawLrc: String) -> Unit
+) {
+    var selectedTab by remember { mutableIntStateOf(0) }
+    var titleQuery by remember(initialTitle) { mutableStateOf(initialTitle) }
+    var artistQuery by remember(initialArtist) { mutableStateOf(initialArtist) }
+    var customLrcText by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "Lyrics Search & Editor",
+                style = MaterialTheme.typography.titleLarge
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+            ) {
+                TabRow(
+                    selectedTabIndex = selectedTab,
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                ) {
+                    Tab(
+                        selected = selectedTab == 0,
+                        onClick = { selectedTab = 0 },
+                        text = { Text("Search Online") }
+                    )
+                    Tab(
+                        selected = selectedTab == 1,
+                        onClick = { selectedTab = 1 },
+                        text = { Text("Custom LRC") }
+                    )
+                }
+
+                Spacer(Modifier.height(16.dp))
+
+                if (selectedTab == 0) {
+                    Text(
+                        text = "Search LRCLIB for synced lyrics with custom track/artist names:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = titleQuery,
+                        onValueChange = { titleQuery = it },
+                        label = { Text("Track Title") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = artistQuery,
+                        onValueChange = { artistQuery = it },
+                        label = { Text("Artist Name") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    if (isLoading) {
+                        Spacer(Modifier.height(12.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Searching online...", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+
+                    if (!feedback.isNullOrBlank()) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = feedback,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (feedback.contains("updated", ignoreCase = true)) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.error
+                            },
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                } else {
+                    Text(
+                        text = "Paste standard LRC formatted lyrics or plain text to save offline:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = customLrcText,
+                        onValueChange = { customLrcText = it },
+                        label = { Text("Lyrics / LRC Content") },
+                        placeholder = { Text("[00:12.50] First lyric line\n[00:16.80] Second lyric line") },
+                        minLines = 6,
+                        maxLines = 10,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            if (selectedTab == 0) {
+                Button(
+                    onClick = { onSearch(titleQuery, artistQuery) },
+                    enabled = !isLoading && titleQuery.isNotBlank() && artistQuery.isNotBlank()
+                ) {
+                    Text("Search & Apply")
+                }
+            } else {
+                Button(
+                    onClick = { onSaveCustom(customLrcText) },
+                    enabled = customLrcText.isNotBlank()
+                ) {
+                    Text("Save Offline")
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+

@@ -16,3 +16,7 @@ captures/
 *.apk
 *.aar
 gradle/gradle-daemon-jvm.properties
+
+# Internal Planning & Roadmap (Local Only)
+ROADMAP.md
+roadmap*.md

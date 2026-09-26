@@ -21,10 +21,20 @@ class LyricsRepository @Inject constructor(
     private val translationService: LyricsTranslationService
 ) {
     private val cache = mutableMapOf<Long, List<LyricsLine>>()
+    private val lyricsCacheDir = File(context.filesDir, "lyrics_cache").apply {
+        if (!exists()) mkdirs()
+    }
 
     suspend fun getLyrics(song: Song): List<LyricsLine> = withContext(Dispatchers.IO) {
         cache[song.id]?.let { return@withContext it }
 
+        // 1. Check persistent offline disk cache first
+        readFromDiskCache(song.id)?.let { diskLyrics ->
+            cache[song.id] = diskLyrics
+            return@withContext diskLyrics
+        }
+
+        // 2. Resolve via local files or remote LRCLIB
         val lyrics = if (song.isStream) {
             fetchFromLrclib(song)
         } else {
@@ -33,6 +43,67 @@ class LyricsRepository @Inject constructor(
 
         if (lyrics.isNotEmpty()) cache[song.id] = lyrics
         lyrics
+    }
+
+    /**
+     * Proactively fetches and caches lyrics to disk (e.g. when downloading a track offline).
+     */
+    suspend fun cacheLyricsForSong(song: Song): List<LyricsLine> = withContext(Dispatchers.IO) {
+        val existing = readFromDiskCache(song.id)
+        if (existing != null && existing.isNotEmpty()) {
+            cache[song.id] = existing
+            return@withContext existing
+        }
+        val fetched = fetchFromLrclib(song) ?: emptyList()
+        if (fetched.isNotEmpty()) {
+            cache[song.id] = fetched
+        }
+        fetched
+    }
+
+    /**
+     * Saves user-supplied or edited LRC content directly to disk cache.
+     */
+    suspend fun saveCustomLyrics(songId: Long, rawLrc: String): List<LyricsLine> = withContext(Dispatchers.IO) {
+        val parsed = LrcParser.parse(rawLrc)
+        if (parsed.isNotEmpty()) {
+            saveToDiskCache(songId, rawLrc)
+            cache[songId] = parsed
+        }
+        parsed
+    }
+
+    /**
+     * Manually searches LRCLIB using custom user-provided title/artist queries
+     * and persists the matched lyrics to disk cache.
+     */
+    suspend fun searchAndSetLyrics(song: Song, queryTitle: String, queryArtist: String): List<LyricsLine>? = withContext(Dispatchers.IO) {
+        return@withContext try {
+            val durationSec = if (song.duration > 0) (song.duration / 1000).toInt() else null
+            val result = lrclibService.getLyrics(queryTitle, queryArtist, durationSec)
+            if (result != null) {
+                val raw = result.syncedLyrics ?: result.plainLyrics ?: ""
+                val parsed = when {
+                    !result.syncedLyrics.isNullOrBlank() -> LrcParser.parse(result.syncedLyrics)
+                    !result.plainLyrics.isNullOrBlank() -> {
+                        result.plainLyrics.lines()
+                            .filter { it.isNotBlank() }
+                            .mapIndexed { index, line ->
+                                LyricsLine(timeMs = index * 4000L, text = line.trim())
+                            }
+                    }
+                    else -> null
+                }
+                if (parsed != null && parsed.isNotEmpty()) {
+                    saveToDiskCache(song.id, raw)
+                    cache[song.id] = parsed
+                    parsed
+                } else null
+            } else null
+        } catch (e: Exception) {
+            Timber.w(e, "Manual lyrics search failed for query: $queryTitle - $queryArtist")
+            null
+        }
     }
 
     suspend fun translateLyrics(songId: Long, lyrics: List<LyricsLine>): List<LyricsLine> = withContext(Dispatchers.IO) {
@@ -49,6 +120,21 @@ class LyricsRepository @Inject constructor(
         translatedLyrics
     }
 
+    private fun readFromDiskCache(songId: Long): List<LyricsLine>? = runCatching {
+        val file = File(lyricsCacheDir, "$songId.lrc")
+        if (file.exists() && file.isFile) {
+            val text = file.readText()
+            if (text.isNotBlank()) LrcParser.parse(text) else null
+        } else null
+    }.getOrNull()
+
+    private fun saveToDiskCache(songId: Long, rawLrc: String) = runCatching {
+        if (rawLrc.isNotBlank()) {
+            val file = File(lyricsCacheDir, "$songId.lrc")
+            file.writeText(rawLrc)
+        }
+    }
+
     private suspend fun fetchFromLrclib(song: Song): List<LyricsLine>? {
         return try {
             val durationSec = if (song.duration > 0) (song.duration / 1000).toInt() else null
@@ -57,7 +143,8 @@ class LyricsRepository @Inject constructor(
                 // Prefer synced lyrics, fall back to plain
                 val syncedText = result.syncedLyrics
                 val plainText = result.plainLyrics
-                when {
+                val raw = syncedText ?: plainText ?: ""
+                val parsed = when {
                     !syncedText.isNullOrBlank() -> LrcParser.parse(syncedText)
                     !plainText.isNullOrBlank() -> {
                         // Convert plain text to LyricsLine with 0ms timestamps
@@ -69,6 +156,10 @@ class LyricsRepository @Inject constructor(
                     }
                     else -> null
                 }
+                if (parsed != null && parsed.isNotEmpty()) {
+                    saveToDiskCache(song.id, raw)
+                }
+                parsed
             } else null
         } catch (e: Exception) {
             Timber.w(e, "LRCLIB lyrics fetch failed for: ${song.title}")
@@ -87,7 +178,10 @@ class LyricsRepository @Inject constructor(
         )?.use { cursor ->
             if (cursor.moveToFirst()) {
                 val text = cursor.getString(0)
-                if (!text.isNullOrBlank()) LrcParser.parse(text) else null
+                if (!text.isNullOrBlank()) {
+                    saveToDiskCache(song.id, text)
+                    LrcParser.parse(text)
+                } else null
             } else {
                 null
             }
@@ -110,7 +204,11 @@ class LyricsRepository @Inject constructor(
         val lrcFile = listOf(File("$baseName.lrc"), File("$baseName.LRC"))
             .firstOrNull { it.exists() && it.isFile } ?: return null
 
-        val parsed = LrcParser.parse(lrcFile.readText())
-        if (parsed.isNotEmpty()) parsed else null
+        val raw = lrcFile.readText()
+        val parsed = LrcParser.parse(raw)
+        if (parsed.isNotEmpty()) {
+            saveToDiskCache(song.id, raw)
+            parsed
+        } else null
     }.getOrNull()
 }

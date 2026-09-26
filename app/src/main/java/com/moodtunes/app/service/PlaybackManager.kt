@@ -185,6 +185,9 @@ class PlaybackManager @Inject constructor(
         _playlist.value = effectiveSongs
         _currentMood.value = mood
         _currentSong.value = effectiveSongs.getOrNull(effectiveStart)
+        if (mood != null) {
+            audioEffectsManager.applyMood(mood)
+        }
 
         scope.launch {
             val controller = mediaController ?: run {
@@ -523,7 +526,7 @@ class PlaybackManager @Inject constructor(
         playSongs(newPlaylist, 0, _currentMood.value)
     }
 
-    // ── Equalizer, Bass Boost, 3D Virtualizer & Reverb ──────────────────────
+    // ── Equalizer, Bass Boost, 3D Virtualizer, Reverb & Loudness Normalization ─
     fun toggleEqualizer(enabled: Boolean) = audioEffectsManager.toggleEqualizer(enabled)
     fun toggleBassBoost(enabled: Boolean) = audioEffectsManager.toggleBassBoost(enabled)
     fun setBassBoostStrength(strength: Short) = audioEffectsManager.setBassBoostStrength(strength)
@@ -533,6 +536,18 @@ class PlaybackManager @Inject constructor(
     fun setBandLevel(bandIndex: Int, normalized: Float) = audioEffectsManager.setBandLevel(bandIndex, normalized)
     fun resetEqualizer() = audioEffectsManager.resetEqualizer()
     fun applyEqualizerPreset(presetIndex: Int) = audioEffectsManager.applyPreset(presetIndex)
+    fun applyEqualizerPresetByName(presetName: String) = audioEffectsManager.applyPresetByName(presetName)
+    fun toggleAutoMoodEq(enabled: Boolean) = audioEffectsManager.toggleAutoMoodEq(enabled)
+    fun toggleLoudnessNormalization(enabled: Boolean) = audioEffectsManager.toggleLoudnessNormalization(enabled)
+    fun setLoudnessGainMb(gainMb: Int) = audioEffectsManager.setLoudnessGainMb(gainMb)
+
+    private val _isGaplessPlaybackEnabled = MutableStateFlow(playbackPreferencesRepository.gaplessPlaybackEnabled)
+    val isGaplessPlaybackEnabled: StateFlow<Boolean> = _isGaplessPlaybackEnabled.asStateFlow()
+
+    fun setGaplessPlaybackEnabled(enabled: Boolean) {
+        playbackPreferencesRepository.gaplessPlaybackEnabled = enabled
+        _isGaplessPlaybackEnabled.value = enabled
+    }
 
     private fun ensureAudioEffectsAttached() {
         effectsRetryJob?.cancel()

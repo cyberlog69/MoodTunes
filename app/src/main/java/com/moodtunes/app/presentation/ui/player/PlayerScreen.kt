@@ -656,6 +656,18 @@ fun PlayerScreen(
         onDismiss = { activeSheet = PlayerSheet.NONE },
         viewModel = viewModel
     )
+
+    if (uiState.isLyricsSearchDialogOpen) {
+        LyricsSearchDialog(
+            initialTitle = uiState.currentSong?.title.orEmpty(),
+            initialArtist = uiState.currentSong?.artist.orEmpty(),
+            isLoading = uiState.isManualLyricsLoading,
+            feedback = uiState.lyricsSearchFeedback,
+            onDismiss = viewModel::closeLyricsSearchDialog,
+            onSearch = viewModel::searchAndSetLyrics,
+            onSaveCustom = viewModel::saveCustomLyrics
+        )
+    }
 }
 
 @Composable

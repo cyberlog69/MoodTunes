@@ -349,6 +349,69 @@ fun SettingsScreen(
                                 }
                             }
                         }
+
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Loudness Normalization", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
+                                Text("Level volume peaks & enhance quiet tracks (EBU R128)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Switch(
+                                checked = uiState.isLoudnessNormalizationEnabled,
+                                onCheckedChange = viewModel::onToggleLoudnessNormalization,
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                                    checkedTrackColor = MaterialTheme.colorScheme.primary
+                                )
+                            )
+                        }
+
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Auto Mood Equalizer", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
+                                Text("Dynamically adjusts acoustic curves to match active song mood", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Switch(
+                                checked = uiState.isAutoMoodEqEnabled,
+                                onCheckedChange = viewModel::onToggleAutoMoodEq,
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                                    checkedTrackColor = MaterialTheme.colorScheme.primary
+                                )
+                            )
+                        }
+
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("True Gapless Playback", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
+                                Text("Seamless track transitions without gaps or delays", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Switch(
+                                checked = uiState.isGaplessPlaybackEnabled,
+                                onCheckedChange = viewModel::onToggleGapless,
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                                    checkedTrackColor = MaterialTheme.colorScheme.primary
+                                )
+                            )
+                        }
                     }
                 }
 
@@ -811,7 +874,7 @@ fun SettingsScreen(
                                                 )
                                                 Spacer(Modifier.height(4.dp))
                                                 Text(
-                                                    text = "• Offline Song Downloads: Download streams to local MediaStore with offline artwork caching & dedicated Downloads library tab\n• YouTube Music Engine: 100% full-song streaming with global catalog, charts & auto-radio\n• Live FFT Audio Visualizer: Neon Bars, Pulse Aura, Cosmic Particles\n• 3D Spatial Virtualizer & Reverb Room Acoustics\n• Material Design 3 Themed Icons & Modern Branding\n• On-Device ID3 Tag & Cover Art Editor\n• ListenBrainz Scrobbler & Navidrome Lossless Server Support",
+                                                    text = "• Audiophile DSP & Equalizer: Curated audiophile curves (Flat, Bass Booster, Treble, Vocal, Acoustic, Rock, Electronic) + dynamic Mood-to-EQ matching\n• Loudness Normalization: Native hardware LoudnessEnhancer for EBU R128 dynamic peak leveling & gain boost\n• True Gapless Playback: Seamless track transitions without silence or delays\n• Batch Download Engine: Download entire queues and playlists with background progress tracking\n• Offline Synced Lyrics: Auto-caches lyrics to local disk on download + manual LRCLIB search and custom LRC editor",
                                                     style = MaterialTheme.typography.bodySmall,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )

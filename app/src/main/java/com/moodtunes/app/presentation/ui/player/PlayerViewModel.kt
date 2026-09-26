@@ -61,7 +61,15 @@ data class PlayerUiState(
     val castMessage: String? = null,
     val playbackError: PlaybackError? = null,
     val isDownloaded: Boolean = false,
-    val downloadProgress: Float? = null
+    val downloadProgress: Float? = null,
+    val isLoudnessNormalizationEnabled: Boolean = false,
+    val loudnessGainMb: Int = 300,
+    val isAutoMoodEqEnabled: Boolean = false,
+    val selectedEqPreset: String = "Flat",
+    val isGaplessPlaybackEnabled: Boolean = true,
+    val isLyricsSearchDialogOpen: Boolean = false,
+    val isManualLyricsLoading: Boolean = false,
+    val lyricsSearchFeedback: String? = null
 ) {
     val progress: Float get() = if (durationMs > 0) currentPositionMs / durationMs.toFloat() else 0f
 }
@@ -261,6 +269,36 @@ class PlayerViewModel @Inject constructor(
             }
         }
 
+        viewModelScope.launch {
+            audioEffectsManager.isLoudnessNormalizationEnabled.collectLatest { enabled ->
+                _uiState.update { it.copy(isLoudnessNormalizationEnabled = enabled) }
+            }
+        }
+
+        viewModelScope.launch {
+            audioEffectsManager.loudnessGainMb.collectLatest { gain ->
+                _uiState.update { it.copy(loudnessGainMb = gain) }
+            }
+        }
+
+        viewModelScope.launch {
+            audioEffectsManager.isAutoMoodEqEnabled.collectLatest { auto ->
+                _uiState.update { it.copy(isAutoMoodEqEnabled = auto) }
+            }
+        }
+
+        viewModelScope.launch {
+            audioEffectsManager.selectedPresetName.collectLatest { preset ->
+                _uiState.update { it.copy(selectedEqPreset = preset) }
+            }
+        }
+
+        viewModelScope.launch {
+            playbackManager.isGaplessPlaybackEnabled.collectLatest { gapless ->
+                _uiState.update { it.copy(isGaplessPlaybackEnabled = gapless) }
+            }
+        }
+
         // Visualizer collections
         viewModelScope.launch {
             visualizerManager.currentMode.collectLatest { mode ->
@@ -392,7 +430,7 @@ class PlayerViewModel @Inject constructor(
     fun clearQueue(keepCurrent: Boolean = true) = playbackManager.clearQueue(keepCurrent)
     fun shuffleQueue() = playbackManager.shuffleQueue()
 
-    // ── Equalizer, Bass Boost, 3D Virtualizer & Reverb ──────────────────────
+    // ── Equalizer, Bass Boost, 3D Virtualizer, Reverb & Loudness Normalization ─
     fun toggleEqualizer(enabled: Boolean) = playbackManager.toggleEqualizer(enabled)
     fun toggleBassBoost(enabled: Boolean) = playbackManager.toggleBassBoost(enabled)
     fun setBassBoostStrength(strength: Short) = playbackManager.setBassBoostStrength(strength)
@@ -402,6 +440,70 @@ class PlayerViewModel @Inject constructor(
     fun setBandLevel(bandIndex: Int, normalized: Float) = playbackManager.setBandLevel(bandIndex, normalized)
     fun resetEqualizer() = playbackManager.resetEqualizer()
     fun applyEqualizerPreset(presetIndex: Int) = playbackManager.applyEqualizerPreset(presetIndex)
+    fun applyEqualizerPresetByName(presetName: String) = playbackManager.applyEqualizerPresetByName(presetName)
+    fun toggleAutoMoodEq(enabled: Boolean) = playbackManager.toggleAutoMoodEq(enabled)
+    fun toggleLoudnessNormalization(enabled: Boolean) = playbackManager.toggleLoudnessNormalization(enabled)
+    fun setLoudnessGainMb(gainMb: Int) = playbackManager.setLoudnessGainMb(gainMb)
+    fun setGaplessPlaybackEnabled(enabled: Boolean) = playbackManager.setGaplessPlaybackEnabled(enabled)
+
+    // ── Batch Downloads ───────────────────────────────────────────────────────
+    fun downloadRemainingQueue() {
+        val currentIdx = _uiState.value.currentSongIndex
+        val songs = _uiState.value.songs.drop(currentIdx.coerceAtLeast(0))
+        downloadManager.downloadSongs(songs, batchName = "Queue")
+    }
+
+    // ── Manual Lyrics Matcher & Editor ───────────────────────────────────────
+    fun openLyricsSearchDialog() {
+        _uiState.update { it.copy(isLyricsSearchDialogOpen = true, lyricsSearchFeedback = null) }
+    }
+
+    fun closeLyricsSearchDialog() {
+        _uiState.update { it.copy(isLyricsSearchDialogOpen = false, lyricsSearchFeedback = null) }
+    }
+
+    fun searchAndSetLyrics(queryTitle: String, queryArtist: String) {
+        val current = _uiState.value.currentSong ?: return
+        if (queryTitle.isBlank() || queryArtist.isBlank()) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isManualLyricsLoading = true, lyricsSearchFeedback = null) }
+            val found = lyricsRepository.searchAndSetLyrics(current, queryTitle.trim(), queryArtist.trim())
+            if (found != null && found.isNotEmpty()) {
+                _uiState.update {
+                    it.copy(
+                        lyrics = found,
+                        isManualLyricsLoading = false,
+                        isLyricsSearchDialogOpen = false,
+                        lyricsSearchFeedback = "Lyrics updated!"
+                    )
+                }
+            } else {
+                _uiState.update {
+                    it.copy(
+                        isManualLyricsLoading = false,
+                        lyricsSearchFeedback = "No lyrics found for \"$queryTitle\""
+                    )
+                }
+            }
+        }
+    }
+
+    fun saveCustomLyrics(rawLrc: String) {
+        val current = _uiState.value.currentSong ?: return
+        if (rawLrc.isBlank()) return
+        viewModelScope.launch {
+            val saved = lyricsRepository.saveCustomLyrics(current.id, rawLrc)
+            if (saved.isNotEmpty()) {
+                _uiState.update {
+                    it.copy(
+                        lyrics = saved,
+                        isLyricsSearchDialogOpen = false,
+                        lyricsSearchFeedback = null
+                    )
+                }
+            }
+        }
+    }
 
     // ── Playback Error Recovery ──────────────────────────────────────────────
     fun retryPlayback() = playbackManager.retryPlayback()

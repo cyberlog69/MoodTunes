@@ -64,6 +64,13 @@ android {
             isReturnDefaultValues = true
         }
     }
+
+    applicationVariants.all {
+        outputs.all {
+            (this as? com.android.build.gradle.internal.api.BaseVariantOutputImpl)?.outputFileName =
+                "MoodTunes-v${defaultConfig.versionName}.apk"
+        }
+    }
 }
 
 dependencies {

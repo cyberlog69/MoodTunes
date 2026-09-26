@@ -102,7 +102,7 @@ class UpdateChecker @Inject constructor(
                             .ifEmpty { "1.0.0" }
 
                         if (directApkUrl.isEmpty()) {
-                            directApkUrl = "https://github.com/cyberlog69/MoodTunes/releases/download/v$sanitizedVersion/app-debug.apk"
+                            directApkUrl = "https://github.com/cyberlog69/MoodTunes/releases/download/v$sanitizedVersion/MoodTunes-v$sanitizedVersion.apk"
                         }
 
                         val isNewer = isVersionNewer(currentVersion, sanitizedVersion)

@@ -47,20 +47,19 @@ data class LibraryUiState(
     val selectedArtist: String? = null,
     val searchQuery: String = "",
     val filteredSongs: List<Song> = emptyList(),
-    val selectedTab: LibraryTab = LibraryTab.LOCAL,
+    val selectedTab: LibraryTab = LibraryTab.ONLINE_STREAM,
     val selectedCategory: String = "Top Hits",
     val currentSongId: Long? = null,
     val isPlaying: Boolean = false
 )
 
 enum class LibraryTab(val label: String) {
-    LOCAL("📁 Local"),
-    DOWNLOADS("⬇️ Downloaded"),
-    ONLINE_STREAM("🌐 Online"),
-    SERVER("🏠 Server"),
+    ONLINE_STREAM("🌐 Online Hits"),
     FAVORITES("❤️ Favorites"),
+    DOWNLOADS("⬇️ Downloaded"),
     PLAYLISTS("📚 Playlists"),
     TOP_TRACKS("🔥 Top Tracks"),
+    SERVER("🏠 Server"),
     ALBUMS("💿 Albums"),
     ARTISTS("🎤 Artists")
 }
@@ -320,9 +319,8 @@ class LibraryViewModel @Inject constructor(
     fun onSongSelected(song: Song) {
         val state = _uiState.value
         val group = when (state.selectedTab) {
-            LibraryTab.LOCAL -> state.filteredSongs
-            LibraryTab.DOWNLOADS -> state.downloadedSongs
             LibraryTab.ONLINE_STREAM -> state.onlineStreamSongs
+            LibraryTab.DOWNLOADS -> state.downloadedSongs
             LibraryTab.SERVER -> state.serverSongs
             LibraryTab.FAVORITES -> state.favoriteSongs
             LibraryTab.ALBUMS -> state.selectedAlbum?.songs ?: state.filteredSongs

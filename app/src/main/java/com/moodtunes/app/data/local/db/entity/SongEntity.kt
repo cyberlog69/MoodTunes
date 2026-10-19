@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import com.moodtunes.app.domain.model.AudioFormat
+import com.moodtunes.app.domain.model.MoodType
 import com.moodtunes.app.domain.model.Song
 import org.json.JSONArray
 
@@ -35,6 +36,12 @@ fun SongEntity.toDomain(): Song = Song(
     albumArtUri = albumArtUriString?.let { Uri.parse(it) },
     genre = genre,
     isFavorite = isFavorite,
+    moodTags = runCatching {
+        val arr = JSONArray(moodTagsJson)
+        (0 until arr.length()).mapNotNull { i ->
+            runCatching { MoodType.valueOf(arr.getString(i)) }.getOrNull()
+        }
+    }.getOrDefault(emptyList()),
     audioFormat = runCatching { AudioFormat.valueOf(audioFormatName) }.getOrDefault(AudioFormat.MP3),
     isStream = isStream,
     playCount = playCount,

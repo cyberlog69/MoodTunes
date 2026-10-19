@@ -42,11 +42,11 @@ fun LibraryScreen(
     var selectedSongForAction by remember { mutableStateOf<Song?>(null) }
 
     val displayedSongs = when (uiState.selectedTab) {
-        LibraryTab.LOCAL -> uiState.filteredSongs
-        LibraryTab.DOWNLOADS -> uiState.downloadedSongs
         LibraryTab.ONLINE_STREAM -> uiState.onlineStreamSongs
+        LibraryTab.DOWNLOADS -> uiState.downloadedSongs
         LibraryTab.SERVER -> uiState.serverSongs
         LibraryTab.FAVORITES -> uiState.favoriteSongs
+        LibraryTab.TOP_TRACKS -> uiState.mostPlayed
         else -> emptyList()
     }
 
@@ -157,9 +157,8 @@ fun LibraryScreen(
                 ) {
                     Text(
                         text = when (uiState.selectedTab) {
-                            LibraryTab.LOCAL -> "${uiState.allSongs.size} offline"
-                            LibraryTab.DOWNLOADS -> "${uiState.downloadedSongs.size} downloaded"
                             LibraryTab.ONLINE_STREAM -> "${uiState.onlineStreamSongs.size} online"
+                            LibraryTab.DOWNLOADS -> "${uiState.downloadedSongs.size} downloaded"
                             LibraryTab.SERVER -> "${uiState.serverSongs.size} server"
                             LibraryTab.FAVORITES -> "${uiState.favoriteSongs.size} saved"
                             LibraryTab.PLAYLISTS -> "${uiState.playlists.size} lists"
@@ -175,7 +174,7 @@ fun LibraryScreen(
             }
 
             // ─── Search Bar (hidden when browsing albums/artists) ────────────
-            if (uiState.selectedTab == LibraryTab.LOCAL ||
+            if (uiState.selectedTab == LibraryTab.ONLINE_STREAM ||
                 uiState.selectedTab == LibraryTab.DOWNLOADS ||
                 uiState.selectedTab == LibraryTab.FAVORITES ||
                 uiState.selectedTab == LibraryTab.ALBUMS ||
@@ -272,7 +271,7 @@ fun LibraryScreen(
                     onNavigateToPlayer = onNavigateToPlayer,
                     onMoreClick = { song -> selectedSongForAction = song }
                 )
-                LibraryTab.LOCAL, LibraryTab.DOWNLOADS, LibraryTab.FAVORITES -> SongListContent(
+                LibraryTab.DOWNLOADS, LibraryTab.FAVORITES -> SongListContent(
                     uiState = uiState,
                     displayedSongs = displayedSongs,
                     onToggleFavorite = viewModel::onToggleFavorite,

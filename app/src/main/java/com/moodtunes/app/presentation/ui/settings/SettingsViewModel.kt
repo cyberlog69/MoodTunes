@@ -232,6 +232,9 @@ class SettingsViewModel @Inject constructor(
             if (apkFile != null) {
                 _uiState.update { it.copy(showUpdateDialog = false) }
                 appUpdateManager.installApk(context, apkFile)
+            } else {
+                _uiState.update { it.copy(showUpdateDialog = false) }
+                appUpdateManager.openBrowserFallback(context, updateResult.downloadUrl)
             }
         }
     }

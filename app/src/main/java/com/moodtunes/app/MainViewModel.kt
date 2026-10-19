@@ -107,6 +107,9 @@ class MainViewModel @Inject constructor(
                 _showUpdateDialog.value = false
                 appUpdateNotifier.clearNotification()
                 appUpdateManager.installApk(context, apkFile)
+            } else {
+                _showUpdateDialog.value = false
+                appUpdateManager.openBrowserFallback(context, result.downloadUrl)
             }
         }
     }

@@ -28,8 +28,8 @@ class UpdateChecker @Inject constructor(
 ) {
 
     private val client = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(10, TimeUnit.SECONDS)
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(15, TimeUnit.SECONDS)
         .build()
 
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -65,6 +65,7 @@ class UpdateChecker @Inject constructor(
             val request = Request.Builder()
                 .url("https://api.github.com/repos/cyberlog69/MoodTunes/releases/latest")
                 .header("User-Agent", "MoodTunes/${BuildConfig.VERSION_NAME} (Android; Music Player App)")
+                .header("Accept", "application/vnd.github+json")
                 .build()
 
             client.newCall(request).execute().use { response ->
@@ -74,9 +75,8 @@ class UpdateChecker @Inject constructor(
                         val json = JSONObject(body)
                         val tagName = json.optString("tag_name", "v1.0.0").replace("v", "")
                         val bodyText = json.optString("body", "Bug fixes and performance improvements.")
-                        val htmlUrl = json.optString("html_url", "")
+                        val htmlUrl = json.optString("html_url", "https://github.com/cyberlog69/MoodTunes/releases")
 
-                        // SECURITY FIX (S3): Validate download URL must be a GitHub URL — no MITM redirect
                         val safeDownloadUrl = if (htmlUrl.startsWith("https://github.com/cyberlog69/MoodTunes")) {
                             htmlUrl
                         } else {
@@ -89,15 +89,15 @@ class UpdateChecker @Inject constructor(
                         if (assets != null) {
                             for (i in 0 until assets.length()) {
                                 val asset = assets.getJSONObject(i)
+                                val name = asset.optString("name", "")
                                 val assetUrl = asset.optString("browser_download_url", "")
-                                if (assetUrl.endsWith(".apk") && assetUrl.startsWith("https://github.com/cyberlog69/MoodTunes")) {
+                                if (name.endsWith(".apk", ignoreCase = true) || assetUrl.endsWith(".apk", ignoreCase = true)) {
                                     directApkUrl = assetUrl
                                     break
                                 }
                             }
                         }
 
-                        // Sanitize version string: only allow digits and dots
                         val sanitizedVersion = tagName.filter { it.isDigit() || it == '.' }
                             .ifEmpty { "1.0.0" }
 
@@ -108,7 +108,6 @@ class UpdateChecker @Inject constructor(
                         val isNewer = isVersionNewer(currentVersion, sanitizedVersion)
                         val latestVersionTag = "v$sanitizedVersion"
 
-                        // Save in cache
                         prefs.edit()
                             .putLong(KEY_LAST_CHECK_TIME, now)
                             .putBoolean(KEY_CACHED_IS_AVAILABLE, isNewer)
@@ -130,7 +129,6 @@ class UpdateChecker @Inject constructor(
                 }
             }
         } catch (e: Exception) {
-            // SECURITY FIX (S9): No printStackTrace in production — debug-only logging
             Timber.w(e, "Update check failed")
         }
 
@@ -164,6 +162,6 @@ class UpdateChecker @Inject constructor(
         private const val KEY_CACHED_DOWNLOAD_URL = "cached_download_url"
         private const val KEY_CACHED_APK_URL = "cached_apk_url"
 
-        private val CACHE_DURATION_MILLIS = TimeUnit.HOURS.toMillis(6)
+        private val CACHE_DURATION_MILLIS = TimeUnit.MINUTES.toMillis(5)
     }
 }

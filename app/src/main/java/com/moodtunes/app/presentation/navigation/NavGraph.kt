@@ -22,27 +22,14 @@ import com.moodtunes.app.presentation.ui.playlistdetail.PlaylistDetailScreen
 import com.moodtunes.app.presentation.ui.search.SearchScreen
 import com.moodtunes.app.presentation.ui.settings.SettingsScreen
 
-@OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun MoodTunesNavGraph(
     navController: NavHostController = rememberNavController(),
     shortcutMood: MoodType? = null
 ) {
-    val audioPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        rememberPermissionState(Manifest.permission.READ_MEDIA_AUDIO)
-    } else {
-        rememberPermissionState(Manifest.permission.READ_EXTERNAL_STORAGE)
-    }
-
-    val startDestination = if (audioPermission.status.isGranted) {
-        Routes.HOME
-    } else {
-        Routes.PERMISSION
-    }
-
     NavHost(
         navController = navController,
-        startDestination = startDestination
+        startDestination = Routes.HOME
     ) {
         composable(Routes.PERMISSION) {
             PermissionScreen(

@@ -5,45 +5,42 @@ import com.moodtunes.app.data.local.db.dao.SongDao
 import com.moodtunes.app.data.local.db.entity.SongEntity
 import com.moodtunes.app.data.local.db.entity.toDomain
 import com.moodtunes.app.data.local.db.entity.toEntity
-import com.moodtunes.app.data.local.mediastore.MediaStoreRepository
-import com.moodtunes.app.domain.model.AudioFormat
+import com.moodtunes.app.data.remote.OnlineStreamRepository
 import com.moodtunes.app.domain.model.MoodType
 import com.moodtunes.app.domain.model.Song
 import com.moodtunes.app.domain.repository.IMusicRepository
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class MusicRepositoryImpl @Inject constructor(
-    private val mediaStoreRepository: MediaStoreRepository,
+    private val onlineStreamRepository: OnlineStreamRepository,
     private val songDao: SongDao
 ) : IMusicRepository {
 
     override suspend fun getAllSongs(): List<Song> {
-        val mediaSongs = mediaStoreRepository.getAllSongs()
-        // Merge persisted state (favorites, play counts, recency) so a rescan
-        // never clobbers listening history.
-        val mergedMedia = mergeDbStats(mediaSongs)
-        songDao.upsertSongs(mergedMedia.map { it.toEntity() })
-
-        // Also include downloaded tracks from Room DB so they appear in Local library
-        val downloadedEntities = songDao.getDownloadedSongs(emptyList())
-        val downloadedSongs = downloadedEntities.map { it.toDomain() }
-
-        val existingUris = mergedMedia.map { it.uri.toString() }.toSet()
-        val existingIds = mergedMedia.map { it.id }.toSet()
-        val additionalDownloads = downloadedSongs.filter {
-            !existingIds.contains(it.id) && !existingUris.contains(it.uri.toString())
+        val trending = runCatching { onlineStreamRepository.getGeneralTrendingSongs() }.getOrDefault(emptyList())
+        if (trending.isNotEmpty()) {
+            val merged = mergeDbStats(trending)
+            songDao.upsertSongs(merged.map { it.toEntity() })
+            return merged
         }
-
-        return (mergedMedia + additionalDownloads).sortedBy { it.title.lowercase() }
+        val cached = songDao.getAllSongs().firstOrNull()?.map { it.toDomain() } ?: emptyList()
+        return cached.sortedBy { it.title.lowercase() }
     }
 
     override suspend fun getSongsByMood(mood: MoodType): List<Song> {
-        val moodSongs = mediaStoreRepository.getSongsByMood(mood)
-        return mergeDbStats(moodSongs)
+        val onlineMoodSongs = runCatching { onlineStreamRepository.getSongsByMood(mood) }.getOrDefault(emptyList())
+        if (onlineMoodSongs.isNotEmpty()) {
+            val merged = mergeDbStats(onlineMoodSongs)
+            songDao.upsertSongs(merged.map { it.toEntity() })
+            return merged
+        }
+        val cached = songDao.getAllSongs().firstOrNull()?.map { it.toDomain() } ?: emptyList()
+        return cached.filter { it.moodTags.contains(mood) }
     }
 
     override fun getFavoriteSongs(): Flow<List<Song>> =
@@ -57,6 +54,12 @@ class MusicRepositoryImpl @Inject constructor(
     }
 
     override suspend fun searchSongs(query: String): List<Song> {
+        val onlineMatches = runCatching { onlineStreamRepository.searchSongs(query) }.getOrDefault(emptyList())
+        if (onlineMatches.isNotEmpty()) {
+            val merged = mergeDbStats(onlineMatches)
+            songDao.upsertSongs(merged.map { it.toEntity() })
+            return merged
+        }
         return songDao.searchSongs(query).map { it.toDomain() }
     }
 
@@ -87,13 +90,14 @@ class MusicRepositoryImpl @Inject constructor(
     /** Loads persisted rows for the given songs and overlays DB-only state. */
     private suspend fun mergeDbStats(songs: List<Song>): List<Song> {
         if (songs.isEmpty()) return songs
-        return mergeStats(songs, songDao.getSongsByIds(songs.map { it.id }))
+        val dbRows = songDao.getSongsByIds(songs.map { it.id })
+        return mergeStats(songs, dbRows)
     }
 }
 
 /**
- * Pure overlay of persisted (DB-only) state onto fresh MediaStore scans, so a
- * rescan never clobbers favorites, play counts, or listening recency.
+ * Pure overlay of persisted (DB-only) state onto tracks, so updates
+ * never clobber favorites, play counts, or listening recency.
  */
 internal fun mergeStats(songs: List<Song>, dbRows: List<SongEntity>): List<Song> {
     if (songs.isEmpty()) return songs

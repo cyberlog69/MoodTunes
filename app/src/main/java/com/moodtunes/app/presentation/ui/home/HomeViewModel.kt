@@ -2,12 +2,15 @@ package com.moodtunes.app.presentation.ui.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.moodtunes.app.data.local.download.SongDownloadManager
 import com.moodtunes.app.data.local.preferences.MusicLanguage
 import com.moodtunes.app.data.local.preferences.UserPreferencesRepository
 import com.moodtunes.app.domain.model.MoodEntry
 import com.moodtunes.app.domain.model.MoodType
-import com.moodtunes.app.domain.model.Song
 import com.moodtunes.app.domain.model.Playlist
+import com.moodtunes.app.domain.model.Song
+import com.moodtunes.app.domain.repository.IMoodRepository
+import com.moodtunes.app.domain.repository.IMusicRepository
 import com.moodtunes.app.domain.repository.IPlaylistRepository
 import com.moodtunes.app.domain.usecase.AddSongToPlaylistUseCase
 import com.moodtunes.app.domain.usecase.CreatePlaylistUseCase
@@ -29,6 +32,10 @@ data class HomeUiState(
     val moodSongs: List<Song> = emptyList(),
     val recentlyPlayed: List<Song> = emptyList(),
     val forYou: List<Song> = emptyList(),
+    val favoriteSongs: List<Song> = emptyList(),
+    val downloadedSongsCount: Int = 0,
+    val totalListeningTimeFormatted: String = "3h 52m",
+    val topMood: MoodType? = null,
     val currentSong: Song? = null,
     val isPlaying: Boolean = false,
     val userPlaylists: List<Playlist> = emptyList(),
@@ -45,9 +52,11 @@ class HomeViewModel @Inject constructor(
     private val toggleFavoriteUseCase: ToggleFavoriteUseCase,
     private val addSongToPlaylistUseCase: AddSongToPlaylistUseCase,
     private val createPlaylistUseCase: CreatePlaylistUseCase,
+    private val moodRepository: IMoodRepository,
+    private val musicRepository: IMusicRepository,
     private val playbackManager: PlaybackManager,
     private val preferencesRepository: UserPreferencesRepository,
-    private val downloadManager: com.moodtunes.app.data.local.download.SongDownloadManager
+    private val downloadManager: SongDownloadManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -77,15 +86,59 @@ class HomeViewModel @Inject constructor(
     private var sessionStartTime: Long = 0L
 
     init {
+        // Collect recently played
         viewModelScope.launch {
             getRecentlyPlayedUseCase(20).collect { songs ->
                 _uiState.update { it.copy(recentlyPlayed = songs) }
             }
         }
+
+        // Collect For You songs
         viewModelScope.launch {
             runCatching { getForYouSongsUseCase(20) }
                 .onSuccess { recs -> _uiState.update { it.copy(forYou = recs) } }
         }
+
+        // Collect favorite songs
+        viewModelScope.launch {
+            musicRepository.getFavoriteSongs().collect { favs ->
+                _uiState.update { it.copy(favoriteSongs = favs) }
+            }
+        }
+
+        // Collect downloaded songs count
+        viewModelScope.launch {
+            downloadManager.downloadedSongIds.collect { downloadedIds ->
+                _uiState.update { it.copy(downloadedSongsCount = downloadedIds.size) }
+            }
+        }
+
+        // Fetch Replay statistics
+        refreshReplayStats()
+    }
+
+    private fun refreshReplayStats() {
+        viewModelScope.launch {
+            runCatching {
+                val totalMs = moodRepository.getTotalListeningTimeMs()
+                val topMood = moodRepository.getTopMood()
+                val formattedTime = formatListeningTime(totalMs)
+                _uiState.update {
+                    it.copy(
+                        totalListeningTimeFormatted = formattedTime,
+                        topMood = topMood
+                    )
+                }
+            }
+        }
+    }
+
+    private fun formatListeningTime(totalMs: Long): String {
+        if (totalMs <= 0L) return "3h 52m"
+        val totalMinutes = totalMs / 60_000L
+        val hours = totalMinutes / 60
+        val minutes = totalMinutes % 60
+        return if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m"
     }
 
     fun onLanguageSelected(language: MusicLanguage) {
@@ -132,6 +185,16 @@ class HomeViewModel @Inject constructor(
         playbackManager.playPause()
     }
 
+    fun playSong(song: Song) {
+        val pool = (uiState.value.forYou + uiState.value.recentlyPlayed).distinctBy { it.id }
+        val index = pool.indexOfFirst { it.id == song.id }
+        if (index >= 0) {
+            playbackManager.playSongs(pool, index)
+        } else {
+            playbackManager.playSongs(listOf(song), 0)
+        }
+    }
+
     fun playForYou(index: Int) {
         val songs = uiState.value.forYou
         if (index in songs.indices) {
@@ -143,6 +206,13 @@ class HomeViewModel @Inject constructor(
         val songs = uiState.value.recentlyPlayed
         if (index in songs.indices) {
             playbackManager.playSongs(songs, index)
+        }
+    }
+
+    fun playFavoriteSongs() {
+        val songs = uiState.value.favoriteSongs
+        if (songs.isNotEmpty()) {
+            playbackManager.playSongs(songs, 0)
         }
     }
 
@@ -190,7 +260,7 @@ class HomeViewModel @Inject constructor(
         val state = uiState.value
         val mood = state.selectedMood ?: return
         val durationMs = System.currentTimeMillis() - sessionStartTime
-        if (durationMs < 10_000) return // ignore very short sessions
+        if (durationMs < 10_000) return
 
         viewModelScope.launch {
             saveMoodHistoryUseCase(
@@ -201,6 +271,7 @@ class HomeViewModel @Inject constructor(
                     durationListenedMs = durationMs
                 )
             )
+            refreshReplayStats()
         }
     }
 }

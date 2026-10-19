@@ -14,8 +14,8 @@ android {
         applicationId = "com.moodtunes.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 8
-        versionName = "1.6.0"
+        versionCode = 9
+        versionName = "1.7.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -54,7 +54,14 @@ android {
 
     packaging {
         resources {
-            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            excludes += setOf(
+                "/META-INF/{AL2.0,LGPL2.1}",
+                "META-INF/DEPENDENCIES",
+                "META-INF/LICENSE*",
+                "META-INF/NOTICE*",
+                "META-INF/*.kotlin_module",
+                "mozilla/public-suffix-list.txt"
+            )
         }
     }
 
@@ -124,8 +131,10 @@ dependencies {
     // Coil (image loading for album art)
     implementation(libs.coil.compose)
 
-    // Networking
+    // Networking & YouTube Streaming Engine
     implementation(libs.okhttp)
+    implementation(libs.androidx.javascriptengine)
+    implementation(libs.newpipe.extractor)
 
     // Lottie (animations)
     implementation(libs.lottie.compose)

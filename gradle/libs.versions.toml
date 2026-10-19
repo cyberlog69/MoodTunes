@@ -48,6 +48,10 @@ kotlinxCoroutines      = "1.10.2"
 # ── Logging ─────────────────────────────────────────────────────────────────
 timber                 = "5.0.1"
 
+# ── Streaming Engine ────────────────────────────────────────────────────────
+javascriptengine       = "1.1.1"
+newpipeExtractor       = "v0.26.5"
+
 # ── Testing ─────────────────────────────────────────────────────────────────
 okhttp                 = "4.12.0"
 junit                  = "4.13.2"
@@ -118,6 +122,8 @@ lottie-compose                       = { group = "com.airbnb.android",      name
 timber                               = { group = "com.jakewharton.timber",  name = "timber",                          version.ref = "timber" }
 
 okhttp                               = { group = "com.squareup.okhttp3",    name = "okhttp",                          version.ref = "okhttp" }
+androidx-javascriptengine            = { group = "androidx.javascriptengine", name = "javascriptengine",             version.ref = "javascriptengine" }
+newpipe-extractor                    = { group = "com.github.TeamNewPipe",  name = "NewPipeExtractor",               version.ref = "newpipeExtractor" }
 
 # Accompanist
 accompanist-permissions              = { group = "com.google.accompanist",  name = "accompanist-permissions",         version.ref = "accompanistPermissions" }

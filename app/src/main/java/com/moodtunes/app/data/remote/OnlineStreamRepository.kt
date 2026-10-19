@@ -2,6 +2,7 @@ package com.moodtunes.app.data.remote
 
 import com.moodtunes.app.data.local.preferences.MusicLanguage
 import com.moodtunes.app.data.remote.api.YouTubeMusicApiService
+import com.moodtunes.app.data.remote.stream.StreamResolver
 import com.moodtunes.app.domain.model.MoodType
 import com.moodtunes.app.domain.model.Song
 import kotlinx.coroutines.Dispatchers
@@ -11,20 +12,24 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Modern online streaming repository powered purely by YouTube Music (InnerTube).
+ * Modern online streaming repository powered purely by YouTube Music (InnerTube & NewPipe).
  * Provides free, full-length streaming tracks, trending charts, mood discovery,
- * and high-fidelity Opus/AAC stream resolution.
+ * and high-fidelity Opus/AAC stream resolution with 1MB chunked prefetching.
  */
 @Singleton
 class OnlineStreamRepository @Inject constructor(
-    private val youTubeMusicApi: YouTubeMusicApiService
+    private val youTubeMusicApi: YouTubeMusicApiService,
+    private val streamResolver: StreamResolver
 ) {
 
     /**
      * Resolves the playable direct HTTPS audio streaming URL for a given YouTube Music song or URL.
+     * Uses multi-tier NewPipe fast-path, VISIONOS fallback, and V8 cipher solver.
      */
     suspend fun resolveDirectStreamUrl(targetUrlOrVideoId: String): String = withContext(Dispatchers.IO) {
-        val resolved = youTubeMusicApi.resolveStreamUrl(targetUrlOrVideoId)
+        val resolved = streamResolver.resolveStreamUrl(targetUrlOrVideoId)
+            ?: youTubeMusicApi.resolveStreamUrl(targetUrlOrVideoId)
+
         if (!resolved.isNullOrBlank()) {
             resolved
         } else {

@@ -85,7 +85,8 @@ class SongDownloadManager @Inject constructor(
     private val onlineStreamRepository: OnlineStreamRepository,
     private val songDao: SongDao,
     private val userPreferencesRepository: UserPreferencesRepository,
-    private val lyricsRepository: com.moodtunes.app.data.local.lyrics.LyricsRepository
+    private val lyricsRepository: com.moodtunes.app.data.local.lyrics.LyricsRepository,
+    @com.moodtunes.app.di.StreamingClient private val streamingHttpClient: OkHttpClient
 ) {
     companion object {
         private const val YOUTUBE_USER_AGENT =
@@ -97,12 +98,7 @@ class SongDownloadManager @Inject constructor(
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    private val httpClient = OkHttpClient.Builder()
-        .connectTimeout(20, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .followRedirects(true)
-        .followSslRedirects(true)
-        .build()
+    private val httpClient: OkHttpClient = streamingHttpClient
 
     private val notificationManager =
         context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

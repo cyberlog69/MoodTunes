@@ -4,11 +4,7 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -19,11 +15,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -32,9 +27,16 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.moodtunes.app.domain.model.MoodType
 import com.moodtunes.app.domain.model.Song
+import com.moodtunes.app.presentation.ui.components.CircularGlassButton
+import com.moodtunes.app.presentation.ui.components.GlassCard
 import com.moodtunes.app.presentation.ui.components.MiniPlayer
+import com.moodtunes.app.presentation.ui.components.MoodSelectorBottomSheet
 import com.moodtunes.app.presentation.ui.components.SongActionBottomSheet
-import com.moodtunes.app.presentation.ui.theme.*
+import com.moodtunes.app.presentation.ui.components.SpeedDialTile
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun HomeScreen(
@@ -48,6 +50,19 @@ fun HomeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var selectedSongForAction by remember { mutableStateOf<Song?>(null) }
+    var showMoodSheet by remember { mutableStateOf(false) }
+
+    // Mood Selector Bottom Sheet
+    if (showMoodSheet) {
+        MoodSelectorBottomSheet(
+            selectedMood = uiState.selectedMood,
+            onDismiss = { showMoodSheet = false },
+            onMoodSelected = { mood ->
+                viewModel.onMoodSelected(mood)
+                onNavigateToPlayer()
+            }
+        )
+    }
 
     // Song Context Menu Sheet
     SongActionBottomSheet(
@@ -56,7 +71,7 @@ fun HomeScreen(
         onDismiss = { selectedSongForAction = null },
         onPlay = {
             selectedSongForAction?.let { song ->
-                viewModel.playForYou(0)
+                viewModel.playSong(song)
                 onNavigateToPlayer()
             }
         },
@@ -99,187 +114,347 @@ fun HomeScreen(
         }
     }
 
+    // Dynamic greeting & date calculation
+    val hour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
+    val greeting = remember(hour) {
+        when (hour) {
+            in 5..11 -> "Good morning"
+            in 12..17 -> "Good afternoon"
+            else -> "Good evening"
+        }
+    }
+    val todayDate = remember {
+        val locale = Locale.getDefault()
+        SimpleDateFormat("EEEE d MMMM", locale).format(Date()).uppercase(locale)
+    }
+    val quickPicks = remember(uiState.forYou, uiState.recentlyPlayed) {
+        (uiState.forYou.ifEmpty { uiState.recentlyPlayed }).take(12)
+    }
+    val extraRecent = remember(uiState.recentlyPlayed, quickPicks) {
+        uiState.recentlyPlayed.filter { it.id !in quickPicks.map { p -> p.id } }.take(10)
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(Color(0xFF131018))
     ) {
-        // Animated gradient background accent
+        // Soft ambient warm backlight glow at top
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(280.dp)
+                .height(380.dp)
                 .background(
                     Brush.radialGradient(
                         colors = listOf(
-                            (uiState.selectedMood?.gradientStart ?: MaterialTheme.colorScheme.primary).copy(alpha = 0.25f),
+                            Color(0xFFE55D6C).copy(alpha = 0.18f),
+                            Color(0xFF7B2CBF).copy(alpha = 0.10f),
                             Color.Transparent
                         ),
-                        center = Offset(500f, 100f),
-                        radius = 800f
+                        center = androidx.compose.ui.geometry.Offset(450f, 150f),
+                        radius = 850f
                     )
                 )
         )
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
+        // Main Scrollable Content
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                bottom = if (uiState.currentSong != null) 160.dp else 100.dp
+            )
         ) {
-            // ─── Top Bar ────────────────────────────────────────────────────
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            // ─── 1. Top Header ──────────────────────────────────────────────
+            item {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    com.moodtunes.app.presentation.ui.components.MoodTunesLogoBadge(size = 42.dp)
-                    Column {
-                        Text(
-                            text = "MoodTunes",
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = MaterialTheme.colorScheme.onBackground
-                        )
-                        Text(
-                            text = "How are you feeling today?",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    IconButton(onClick = onNavigateToSearch) {
-                        Icon(
-                            Icons.Rounded.Search,
-                            contentDescription = "Search",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    IconButton(onClick = onNavigateToHistory) {
-                        Icon(
-                            Icons.Rounded.BarChart,
-                            contentDescription = "History",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    IconButton(onClick = onNavigateToLibrary) {
-                        Icon(
-                            Icons.Rounded.MusicNote,
-                            contentDescription = "Songs",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    IconButton(onClick = onNavigateToSettings) {
-                        Icon(
-                            Icons.Rounded.Settings,
-                            contentDescription = "Settings",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-
-            // ─── Quick Search Launch Bar ────────────────────────────────────
-            Surface(
-                shape = RoundedCornerShape(20.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 4.dp)
-                    .clickable(onClick = onNavigateToSearch)
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(start = 20.dp, end = 16.dp, top = 16.dp, bottom = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = todayDate,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.2.sp,
+                                fontSize = 11.sp
+                            ),
+                            color = Color.White.copy(alpha = 0.55f)
+                        )
+                        Spacer(Modifier.height(3.dp))
+                        Text(
+                            text = greeting,
+                            style = MaterialTheme.typography.headlineMedium.copy(
+                                fontWeight = FontWeight.Black,
+                                fontSize = 32.sp
+                            ),
+                            color = Color.White
+                        )
+                    }
+
+                    // Top Action Buttons: Moods, Search, Settings
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        CircularGlassButton(
+                            icon = Icons.Rounded.AutoAwesome,
+                            contentDescription = "Moods",
+                            onClick = { showMoodSheet = true },
+                            tint = Color(0xFFFFD166),
+                            backgroundColor = Color(0xFF261D2B).copy(alpha = 0.7f)
+                        )
+                        CircularGlassButton(
+                            icon = Icons.Rounded.Search,
+                            contentDescription = "Search",
+                            onClick = onNavigateToSearch,
+                            tint = Color.White.copy(alpha = 0.9f),
+                            backgroundColor = Color(0xFF261D2B).copy(alpha = 0.7f)
+                        )
+                        CircularGlassButton(
+                            icon = Icons.Rounded.Person,
+                            contentDescription = "Settings",
+                            onClick = onNavigateToSettings,
+                            tint = Color.White.copy(alpha = 0.9f),
+                            backgroundColor = Color(0xFF261D2B).copy(alpha = 0.7f)
+                        )
+                    }
+                }
+            }
+
+            // ─── 2. Hero Replay Card ────────────────────────────────────────
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                        .height(160.dp)
+                        .clip(RoundedCornerShape(26.dp))
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(
+                                    Color(0xFFFF2A6D), // Vibrant red-pink
+                                    Color(0xFF9130F4), // Purple violet
+                                    Color(0xFF00B4D8)  // Bright cyan-blue
+                                )
+                            )
+                        )
+                        .clickable(onClick = onNavigateToHistory)
+                        .padding(22.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.align(Alignment.BottomStart)
+                    ) {
+                        Text(
+                            text = "REPLAY 2026",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = FontWeight.Black,
+                                letterSpacing = 1.1.sp
+                            ),
+                            color = Color.White.copy(alpha = 0.9f)
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = uiState.totalListeningTimeFormatted,
+                            style = MaterialTheme.typography.displaySmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 36.sp
+                            ),
+                            color = Color.White
+                        )
+                        Spacer(Modifier.height(3.dp))
+                        Text(
+                            text = uiState.topMood?.let { "Top mood: ${it.displayName} • See all stats" }
+                                ?: "See your top songs, artists and genres",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White.copy(alpha = 0.88f)
+                        )
+                    }
+
                     Icon(
-                        Icons.Rounded.Search,
+                        imageVector = Icons.Rounded.AutoAwesome,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    Text(
-                        text = "Search songs, artists, albums, streams...",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                        tint = Color.White,
+                        modifier = Modifier
+                            .size(24.dp)
+                            .align(Alignment.TopEnd)
                     )
                 }
             }
 
-            // ─── Mood Grid + Discovery Rails ────────────────────────────────
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
-                contentPadding = PaddingValues(
-                    start = 16.dp,
-                    end = 16.dp,
-                    top = 8.dp,
-                    bottom = if (uiState.currentSong != null) 140.dp else 90.dp
-                ),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.weight(1f)
-            ) {
-                if (uiState.forYou.isNotEmpty()) {
-                    item(span = { GridItemSpan(maxLineSpan) }) {
-                        SectionHeader(title = "For You", subtitle = "Based on your favorites and top mood")
+            // ─── 3. Speed Dial 2-Column Grid (6 Items) ──────────────────────
+            item {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    // Row 1: Liked songs | Downloads
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        SpeedDialTile(
+                            title = "Liked songs",
+                            icon = Icons.Rounded.Favorite,
+                            iconTint = Color(0xFF0E1A34),
+                            iconContainerColor = Color(0xFF8EB9FF),
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                if (uiState.favoriteSongs.isNotEmpty()) {
+                                    viewModel.playFavoriteSongs()
+                                    onNavigateToPlayer()
+                                } else {
+                                    onNavigateToLibrary()
+                                }
+                            }
+                        )
+                        SpeedDialTile(
+                            title = "Downloads",
+                            icon = Icons.Rounded.FileDownloadDone,
+                            iconTint = Color(0xFF0E1A34),
+                            iconContainerColor = Color(0xFF8EB9FF),
+                            modifier = Modifier.weight(1f),
+                            onClick = onNavigateToLibrary
+                        )
                     }
-                    item(span = { GridItemSpan(maxLineSpan) }) {
-                        SongRail(
-                            songs = uiState.forYou,
-                            onPlay = { index ->
-                                viewModel.playForYou(index)
-                                onNavigateToPlayer()
-                            },
-                            onMoreClick = { song -> selectedSongForAction = song }
+
+                    // Row 2: Moods | Replay
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        SpeedDialTile(
+                            title = uiState.selectedMood?.displayName ?: "Moods",
+                            icon = Icons.Rounded.AutoAwesome,
+                            iconTint = Color(0xFF2C1038),
+                            iconContainerColor = Color(0xFFE898FF),
+                            modifier = Modifier.weight(1f),
+                            onClick = { showMoodSheet = true }
+                        )
+                        SpeedDialTile(
+                            title = "Replay",
+                            icon = Icons.Rounded.History,
+                            iconTint = Color(0xFF231B3A),
+                            iconContainerColor = Color(0xFFC7B8FF),
+                            modifier = Modifier.weight(1f),
+                            onClick = onNavigateToHistory
+                        )
+                    }
+
+                    // Row 3: Dynamic recent songs / albums
+                    val recentSong1 = uiState.recentlyPlayed.getOrNull(0)
+                        ?: uiState.forYou.getOrNull(0)
+                    val recentSong2 = uiState.recentlyPlayed.getOrNull(1)
+                        ?: uiState.forYou.getOrNull(1)
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        SpeedDialTile(
+                            title = recentSong1?.title ?: "Chill Mix",
+                            thumbnailUri = recentSong1?.albumArtUri,
+                            icon = if (recentSong1?.albumArtUri == null) Icons.Rounded.MusicNote else null,
+                            iconTint = Color.White,
+                            iconContainerColor = Color(0xFF382F42),
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                recentSong1?.let {
+                                    viewModel.playSong(it)
+                                    onNavigateToPlayer()
+                                } ?: onNavigateToLibrary()
+                            }
+                        )
+                        SpeedDialTile(
+                            title = recentSong2?.title ?: "Top Hits",
+                            thumbnailUri = recentSong2?.albumArtUri,
+                            icon = if (recentSong2?.albumArtUri == null) Icons.Rounded.MusicNote else null,
+                            iconTint = Color.White,
+                            iconContainerColor = Color(0xFF382F42),
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                recentSong2?.let {
+                                    viewModel.playSong(it)
+                                    onNavigateToPlayer()
+                                } ?: onNavigateToLibrary()
+                            }
                         )
                     }
                 }
-                if (uiState.recentlyPlayed.isNotEmpty()) {
-                    item(span = { GridItemSpan(maxLineSpan) }) {
-                        SectionHeader(title = "Recently Played", subtitle = null)
-                    }
-                    item(span = { GridItemSpan(maxLineSpan) }) {
-                        SongRail(
-                            songs = uiState.recentlyPlayed,
-                            onPlay = { index ->
-                                viewModel.playRecentlyPlayed(index)
-                                onNavigateToPlayer()
-                            },
-                            onMoreClick = { song -> selectedSongForAction = song }
-                        )
-                    }
+            }
+
+            // ─── 4. Quick picks Section ─────────────────────────────────────
+            if (quickPicks.isNotEmpty()) {
+                item {
+                    Text(
+                        text = "Quick picks",
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 22.sp
+                        ),
+                        color = Color.White,
+                        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 10.dp)
+                    )
                 }
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    SectionHeader(title = "Moods", subtitle = "Pick how you feel and we'll match the music")
-                }
-                items(MoodType.entries) { mood ->
-                    MoodCard(
-                        mood = mood,
-                        isSelected = uiState.selectedMood == mood,
-                        isLoading = uiState.isLoading && uiState.selectedMood == mood,
-                        songCount = if (uiState.selectedMood == mood) uiState.moodSongs.size else null,
+
+                itemsIndexed(
+                    quickPicks,
+                    key = { index, song -> "pick_${song.id}_$index" }
+                ) { index, song ->
+                    QuickPickRow(
+                        song = song,
+                        isDownloaded = viewModel.isDownloaded(song.id),
                         onClick = {
-                            viewModel.onMoodSelected(mood)
+                            viewModel.playSong(song)
                             onNavigateToPlayer()
-                        }
+                        },
+                        onMoreClick = { selectedSongForAction = song }
+                    )
+                }
+            }
+
+            // ─── 5. Recently Played (if distinct) ───────────────────────────
+            if (extraRecent.isNotEmpty()) {
+                item {
+                    Text(
+                        text = "Recently played",
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 22.sp
+                        ),
+                        color = Color.White,
+                        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 10.dp)
+                    )
+                }
+                itemsIndexed(
+                    extraRecent,
+                    key = { index, song -> "recent_${song.id}_$index" }
+                ) { index, song ->
+                    QuickPickRow(
+                        song = song,
+                        isDownloaded = viewModel.isDownloaded(song.id),
+                        onClick = {
+                            viewModel.playSong(song)
+                            onNavigateToPlayer()
+                        },
+                        onMoreClick = { selectedSongForAction = song }
                     )
                 }
             }
         }
 
-        // ─── Bottom Navigation Dock ─────────────────────────────────────────
+        // ─── Bottom Floating Player & Navigation Bar ────────────────────────
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
         ) {
-            // Mini Player if active
+            // Floating MiniPlayer
             AnimatedVisibility(
                 visible = uiState.currentSong != null,
                 enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
@@ -296,344 +471,214 @@ fun HomeScreen(
                         onExpandClick = onNavigateToPlayer,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 4.dp)
+                            .padding(horizontal = 14.dp, vertical = 6.dp)
                     )
                 }
             }
 
-            // Bottom Navigation Bar with "Songs" button
-            NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                tonalElevation = 8.dp,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                NavigationBarItem(
-                    selected = true,
-                    onClick = { /* Already on Home */ },
-                    icon = { Icon(Icons.Rounded.Home, contentDescription = "Home") },
-                    label = { Text("Home") }
-                )
-                NavigationBarItem(
-                    selected = false,
-                    onClick = onNavigateToLibrary,
-                    icon = { Icon(Icons.Rounded.MusicNote, contentDescription = "Songs") },
-                    label = { Text("Songs") }
-                )
-                NavigationBarItem(
-                    selected = false,
-                    onClick = onNavigateToHistory,
-                    icon = { Icon(Icons.Rounded.BarChart, contentDescription = "Stats") },
-                    label = { Text("Stats") }
-                )
-                NavigationBarItem(
-                    selected = false,
-                    onClick = onNavigateToSettings,
-                    icon = { Icon(Icons.Rounded.Settings, contentDescription = "Settings") },
-                    label = { Text("Settings") }
-                )
-            }
-        }
-    }
-}
-
-// ─── Section Header ──────────────────────────────────────────────────────────
-@Composable
-private fun SectionHeader(title: String, subtitle: String?) {
-    Column(modifier = Modifier.padding(top = 12.dp, bottom = 4.dp, start = 4.dp)) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onBackground
-        )
-        if (subtitle != null) {
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
-// ─── Horizontal Song Rail ────────────────────────────────────────────────────
-@Composable
-private fun SongRail(
-    songs: List<Song>,
-    onPlay: (Int) -> Unit,
-    onMoreClick: (Song) -> Unit = {}
-) {
-    LazyRow(
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
-    ) {
-        itemsIndexed(songs, key = { index, song -> "rail_${song.id}_$index" }) { index, song ->
-            RailCard(
-                song = song,
-                onClick = { onPlay(index) },
-                onLongClick = { onMoreClick(song) }
-            )
-        }
-    }
-}
-
-// ─── Compact Rail Card ───────────────────────────────────────────────────────
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun RailCard(
-    song: Song,
-    onClick: () -> Unit,
-    onLongClick: () -> Unit = {}
-) {
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        modifier = Modifier
-            .width(148.dp)
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongClick
-            )
-    ) {
-        Column {
+            // Frosted Glass Bottom Navigation Bar matching Screenshot 2
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(148.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                contentAlignment = Alignment.Center
+                    .background(Color(0xFF0F0D14).copy(alpha = 0.95f))
+                    .border(
+                        width = 0.6.dp,
+                        brush = Brush.verticalGradient(
+                            listOf(Color.White.copy(alpha = 0.15f), Color.Transparent)
+                        ),
+                        shape = androidx.compose.ui.graphics.RectangleShape
+                    )
+                    .navigationBarsPadding()
             ) {
-                if (song.albumArtUri != null) {
-                    AsyncImage(
-                        model = song.albumArtUri,
-                        contentDescription = "Album art",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.Rounded.MusicNote,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(36.dp)
-                    )
-                }
-                // Play overlay
-                Box(
+                Row(
                     modifier = Modifier
-                        .padding(8.dp)
-                        .size(34.dp)
-                        .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.55f)),
-                    contentAlignment = Alignment.Center
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceAround,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = Icons.Rounded.PlayArrow,
-                        contentDescription = "Play",
-                        tint = Color.White,
-                        modifier = Modifier.size(22.dp)
+                    // Home (Selected Tab with pill)
+                    FrostedNavItem(
+                        icon = Icons.Rounded.Home,
+                        label = "Home",
+                        isSelected = true,
+                        onClick = { /* Already on Home */ }
+                    )
+
+                    // Library
+                    FrostedNavItem(
+                        icon = Icons.Rounded.MusicNote,
+                        label = "Library",
+                        isSelected = false,
+                        onClick = onNavigateToLibrary
+                    )
+
+                    // Search
+                    FrostedNavItem(
+                        icon = Icons.Rounded.Search,
+                        label = "Search",
+                        isSelected = false,
+                        onClick = onNavigateToSearch
+                    )
+
+                    // Replay / Stats
+                    FrostedNavItem(
+                        icon = Icons.Rounded.AutoAwesome,
+                        label = "Replay",
+                        isSelected = false,
+                        onClick = onNavigateToHistory
                     )
                 }
-            }
-            Column(modifier = Modifier.padding(10.dp)) {
-                Text(
-                    text = song.title,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = song.artist,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
             }
         }
     }
 }
 
-// ─── Material 3 Mood Card Component ──────────────────────────────────────────
+/**
+ * Individual Quick Pick song row matching Screenshot 2.
+ */
 @Composable
-private fun MoodCard(
-    mood: MoodType,
-    isSelected: Boolean,
-    isLoading: Boolean,
-    songCount: Int?,
-    onClick: () -> Unit
+private fun QuickPickRow(
+    song: Song,
+    isDownloaded: Boolean,
+    onClick: () -> Unit,
+    onMoreClick: () -> Unit
 ) {
-    val animatedBorderColor by animateColorAsState(
-        targetValue = if (isSelected) mood.gradientStart else mood.gradientStart.copy(alpha = 0.25f),
-        animationSpec = tween(350),
-        label = "moodBorderColor"
-    )
-
-    val animatedBorderWidth by animateDpAsState(
-        targetValue = if (isSelected) 2.dp else 1.dp,
-        animationSpec = tween(350),
-        label = "moodBorderWidth"
-    )
-
-    val animatedElevation by animateDpAsState(
-        targetValue = if (isSelected) 8.dp else 2.dp,
-        animationSpec = tween(350),
-        label = "moodElevation"
-    )
-
-    Card(
-        onClick = onClick,
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(156.dp),
-        shape = RoundedCornerShape(26.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
-        ),
-        border = BorderStroke(animatedBorderWidth, animatedBorderColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = animatedElevation)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 18.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            // Ambient Mood Glow: soft radial aura from top-right corner
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.radialGradient(
-                            colors = listOf(
-                                mood.gradientStart.copy(alpha = if (isSelected) 0.32f else 0.16f),
-                                mood.gradientEnd.copy(alpha = if (isSelected) 0.14f else 0.05f),
-                                Color.Transparent
-                            ),
-                            center = Offset(300f, 40f),
-                            radius = 450f
-                        )
-                    )
+        // Thumbnail Artwork
+        Box(
+            modifier = Modifier
+                .size(52.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color.White.copy(alpha = 0.08f)),
+            contentAlignment = Alignment.Center
+        ) {
+            AsyncImage(
+                model = song.albumArtUri,
+                contentDescription = song.title,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+                onError = {}
             )
-
-            // Content
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.SpaceBetween
-            ) {
-                // Top Row: Tonal Squircle Emoji Container + Status Pill
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // M3 Squircle Emoji Badge
-                    Surface(
-                        shape = RoundedCornerShape(14.dp),
-                        color = mood.gradientStart.copy(alpha = 0.18f),
-                        border = BorderStroke(1.dp, mood.gradientStart.copy(alpha = 0.30f)),
-                        modifier = Modifier.size(44.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(
-                                text = mood.emoji,
-                                fontSize = 22.sp
-                            )
-                        }
-                    }
-
-                    // Status: Loading / Active Pill / Song Count
-                    when {
-                        isLoading -> {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                color = mood.gradientStart,
-                                strokeWidth = 2.5.dp
-                            )
-                        }
-                        isSelected -> {
-                            Surface(
-                                shape = CircleShape,
-                                color = mood.gradientStart.copy(alpha = 0.20f),
-                                border = BorderStroke(1.dp, mood.gradientStart.copy(alpha = 0.45f))
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Rounded.GraphicEq,
-                                        contentDescription = null,
-                                        tint = mood.gradientStart,
-                                        modifier = Modifier.size(12.dp)
-                                    )
-                                    Text(
-                                        text = "Active",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                                        color = mood.gradientStart
-                                    )
-                                }
-                            }
-                        }
-                        songCount != null -> {
-                            Surface(
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
-                            ) {
-                                Text(
-                                    text = "$songCount",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // Bottom Row: Mood Info + Play Action Button
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Bottom
-                ) {
-                    Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                        Text(
-                            text = mood.displayName,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Spacer(Modifier.height(2.dp))
-                        Text(
-                            text = mood.description,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-
-                    // Tactile M3 Play Button
-                    Surface(
-                        shape = CircleShape,
-                        color = if (isSelected) mood.gradientStart else mood.gradientStart.copy(alpha = 0.15f),
-                        border = BorderStroke(1.dp, if (isSelected) mood.gradientStart else mood.gradientStart.copy(alpha = 0.30f)),
-                        modifier = Modifier.size(34.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = if (isSelected) Icons.Rounded.GraphicEq else Icons.Rounded.PlayArrow,
-                                contentDescription = "Play ${mood.displayName}",
-                                tint = if (isSelected) Color.White else mood.gradientStart,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-                }
+            if (song.albumArtUri == null) {
+                Icon(
+                    imageVector = Icons.Rounded.MusicNote,
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.5f),
+                    modifier = Modifier.size(24.dp)
+                )
             }
         }
+
+        // Title and Subtitle
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = song.title,
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp
+                ),
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(Modifier.height(3.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                if (isDownloaded) {
+                    Icon(
+                        imageVector = Icons.Rounded.Check,
+                        contentDescription = "Downloaded",
+                        tint = Color(0xFF4EE49B),
+                        modifier = Modifier.size(13.dp)
+                    )
+                }
+                Text(
+                    text = "${song.artist} • ${song.album.ifBlank { "Single" }}",
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                    color = Color.White.copy(alpha = 0.60f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+
+        // Context menu button (three dots)
+        IconButton(
+            onClick = onMoreClick,
+            modifier = Modifier.size(36.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.MoreVert,
+                contentDescription = "More actions",
+                tint = Color.White.copy(alpha = 0.65f),
+                modifier = Modifier.size(20.dp)
+            )
+        }
+    }
+}
+
+/**
+ * Modern frosted navigation tab item with pill background when selected.
+ */
+@Composable
+private fun FrostedNavItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        if (isSelected) {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color.White.copy(alpha = 0.16f))
+                    .padding(horizontal = 18.dp, vertical = 4.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = label,
+                    tint = Color.White,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+        } else {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = Color.White.copy(alpha = 0.55f),
+                modifier = Modifier.size(22.dp)
+            )
+        }
+        Spacer(Modifier.height(3.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                fontSize = 10.sp
+            ),
+            color = if (isSelected) Color.White else Color.White.copy(alpha = 0.55f)
+        )
     }
 }

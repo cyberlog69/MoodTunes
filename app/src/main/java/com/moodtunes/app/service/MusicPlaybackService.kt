@@ -63,6 +63,7 @@ class MusicPlaybackService : MediaLibraryService() {
     @Inject lateinit var onlineStreamRepository: OnlineStreamRepository
     @Inject lateinit var audioEffectsManager: AudioEffectsManager
     @Inject lateinit var playbackPreferencesRepository: PlaybackPreferencesRepository
+    @Inject lateinit var okHttpDataSourceFactory: androidx.media3.datasource.okhttp.OkHttpDataSource.Factory
 
     private var mediaSession: MediaLibraryService.MediaLibrarySession? = null
     private val callbackScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -122,9 +123,10 @@ class MusicPlaybackService : MediaLibraryService() {
                 StandaloneDatabaseProvider(this)
             )
             simpleCache = cache
+            val upstreamHttpFactory = DefaultDataSource.Factory(this, okHttpDataSourceFactory)
             val cacheDataSourceFactory = CacheDataSource.Factory()
                 .setCache(cache)
-                .setUpstreamDataSourceFactory(DefaultDataSource.Factory(this))
+                .setUpstreamDataSourceFactory(upstreamHttpFactory)
                 .setCacheWriteDataSinkFactory(
                     CacheDataSink.Factory()
                         .setCache(cache) // Required: the write sink needs the same cache reference.
@@ -133,7 +135,7 @@ class MusicPlaybackService : MediaLibraryService() {
             DefaultMediaSourceFactory(cacheDataSourceFactory)
         }.getOrElse { e ->
             Timber.w(e, "Offline cache unavailable; falling back to non-cached playback")
-            DefaultMediaSourceFactory(DefaultDataSource.Factory(this))
+            DefaultMediaSourceFactory(DefaultDataSource.Factory(this, okHttpDataSourceFactory))
         }
 
         player = ExoPlayer.Builder(this, renderersFactory)

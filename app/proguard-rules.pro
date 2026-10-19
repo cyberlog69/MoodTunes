@@ -48,3 +48,10 @@
 
 # ── Prevent stripping of crash/logging classes ────────────────────────────
 -keep class android.util.Log { *; }
+
+# ── NewPipeExtractor & Streaming Engine ──────────────────────────────────
+-keep class org.schabi.newpipe.extractor.** { *; }
+-dontwarn org.schabi.newpipe.extractor.**
+-dontwarn org.mozilla.javascript.**
+-keep class androidx.javascriptengine.** { *; }
+-dontwarn androidx.javascriptengine.**

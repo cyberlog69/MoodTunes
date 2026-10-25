@@ -1,12 +1,11 @@
 # 🎵 MoodTunes — Mood-Based Android Music Player
 
-[![Android](https://img.shields.io/badge/Platform-Android-3DDC84?style=flat-square&logo=android&logoColor=white)](https://developer.android.com)
-[![Kotlin](https://img.shields.io/badge/Language-Kotlin%202.1-7F52FF?style=flat-square&logo=kotlin&logoColor=white)](https://kotlinlang.org)
-[![Compose](https://img.shields.io/badge/UI-Jetpack%20Compose-4285F4?style=flat-square&logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
+[![Android](https://img.shields.io/badge/Platform-Android%20%7C%20iOS%20(KMP)-3DDC84?style=flat-square&logo=android&logoColor=white)](https://developer.android.com)
+[![Kotlin Multiplatform](https://img.shields.io/badge/KMP-Kotlin%202.1-7F52FF?style=flat-square&logo=kotlin&logoColor=white)](https://kotlinlang.org/docs/multiplatform.html)
+[![Compose](https://img.shields.io/badge/UI-Jetpack%20Compose%20%26%20SwiftUI-4285F4?style=flat-square&logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
 [![Media3](https://img.shields.io/badge/Audio-androidx.media3%20ExoPlayer-FF6F00?style=flat-square)](https://developer.android.com/guide/topics/media/media3)
-[![Hilt](https://img.shields.io/badge/DI-Hilt-00897B?style=flat-square)](https://dagger.dev/hilt/)
-[![Room](https://img.shields.io/badge/Database-Room%202.7-4285F4?style=flat-square)](https://developer.android.com/training/data-storage/room)
-[![Release](https://img.shields.io/badge/Version-v1.5.1-blue?style=flat-square)](https://github.com/cyberlog69/MoodTunes/releases)
+[![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2088FF?style=flat-square&logo=githubactions&logoColor=white)](https://github.com/cyberlog69/MoodTunes/actions)
+[![Release](https://img.shields.io/badge/Release-v1.6.0-blue?style=flat-square)](https://github.com/cyberlog69/MoodTunes/releases)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
 
 ---
@@ -167,6 +166,32 @@ app/src/main/java/com/moodtunes/app/
    $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
    .\gradlew.bat assembleRelease
    ```
+
+---
+
+## 🍏 Kotlin Multiplatform & iOS CI/CD Pipeline
+
+MoodTunes features a modular **Kotlin Multiplatform (KMP)** architecture enabling code sharing across Android and iOS without sacrificing native performance:
+
+```
+MoodTunes/
+├── app/                  # Android Native Module (Jetpack Compose, Media3, Hilt, Room)
+├── shared/               # Kotlin Multiplatform Shared Core
+│   ├── commonMain/       # Shared Domain Models, Ktor 3 Network Client, Synced LRC Parser
+│   ├── androidMain/      # Android Platform Implementations & OkHttp Engine
+│   └── iosMain/          # iOS Platform Implementations & Darwin Network Engine
+├── iosApp/               # iOS Native App Workspace (SwiftUI, Xcode Project)
+└── .github/workflows/    # Automated GitHub Actions Cloud CI/CD
+    ├── ios-build.yml     # macOS-14 Runner: Builds XCFramework & packages MoodTunes iOS .ipa
+    └── android-build.yml # Ubuntu Runner: Compiles & releases MoodTunes Android .apk
+```
+
+### 🚀 Automated Cloud iOS Builds via GitHub Actions
+You do not need a physical Mac or paid Apple Developer Account to compile and export the iOS application:
+1. **Runner**: Runs on Apple Silicon (`macos-14`) with Xcode pre-configured.
+2. **Framework Build**: Executes `./gradlew :shared:assembleSharedCoreReleaseXCFramework` to bundle the multiplatform binary.
+3. **IPA Packaging**: Archives via `xcodebuild` and packages an unsigned, sideloadable `MoodTunes-v1.6.0-iOS.ipa` plus the distributable `MoodTunes-SharedCore-XCFramework.zip`.
+4. **Triggering**: Automatic on every push to `main` and on version tag releases, or manually with one-click using `workflow_dispatch` in the GitHub Actions tab.
 
 ---
 

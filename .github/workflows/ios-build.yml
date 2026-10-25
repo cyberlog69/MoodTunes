@@ -1,0 +1,88 @@
+name: iOS Build & CI/CD
+
+on:
+  push:
+    branches: [ "main" ]
+    tags: [ "v*" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    name: Build iOS App & Shared XCFramework
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'gradle'
+
+      - name: Make Gradle Wrapper Executable
+        run: chmod +x ./gradlew
+
+      - name: Build Kotlin Multiplatform SharedCore XCFramework
+        run: |
+          ./gradlew :shared:assembleSharedCoreReleaseXCFramework --stacktrace --no-daemon
+
+      - name: Verify SharedCore XCFramework
+        run: |
+          echo "Checking generated XCFramework..."
+          ls -la shared/build/XCFrameworks/release/
+
+      - name: Build and Archive iOS App (xcodebuild)
+        run: |
+          xcodebuild -project iosApp/iosApp.xcodeproj \
+            -scheme MoodTunes \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath build/MoodTunes.xcarchive \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            archive
+
+      - name: Package Unsigned iOS .ipa
+        run: |
+          mkdir -p build/Payload
+          cp -r build/MoodTunes.xcarchive/Products/Applications/MoodTunes.app build/Payload/
+          cd build
+          zip -r "MoodTunes-v1.6.0-iOS.ipa" Payload
+          cd ..
+          ls -lh build/MoodTunes-v1.6.0-iOS.ipa
+
+      - name: Package SharedCore XCFramework Bundle
+        run: |
+          cd shared/build/XCFrameworks/release
+          zip -r "../../../../build/MoodTunes-SharedCore-XCFramework.zip" SharedCore.xcframework
+          cd ../../../..
+
+      - name: Upload iOS App (.ipa) Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MoodTunes-v1.6.0-iOS
+          path: build/MoodTunes-v1.6.0-iOS.ipa
+          retention-days: 14
+
+      - name: Upload SharedCore XCFramework Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MoodTunes-SharedCore-XCFramework
+          path: build/MoodTunes-SharedCore-XCFramework.zip
+          retention-days: 14
+
+      - name: Attach iOS Assets to GitHub Release (Tag Trigger Only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            build/MoodTunes-v1.6.0-iOS.ipa
+            build/MoodTunes-SharedCore-XCFramework.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

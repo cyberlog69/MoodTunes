@@ -1,0 +1,269 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		110000012900000000000001 /* MoodTunesApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 110000022900000000000001 /* MoodTunesApp.swift */; };
+		110000012900000000000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 110000022900000000000002 /* ContentView.swift */; };
+		110000012900000000000003 /* SharedCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 110000022900000000000003 /* SharedCore.xcframework */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		110000022900000000000000 /* MoodTunes.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MoodTunes.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		110000022900000000000001 /* MoodTunesApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoodTunesApp.swift; sourceTree = "<group>"; };
+		110000022900000000000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		110000022900000000000003 /* SharedCore.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = SharedCore.xcframework; path = ../shared/build/XCFrameworks/release/SharedCore.xcframework; sourceTree = "<group>"; };
+		110000022900000000000004 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		110000032900000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				110000012900000000000003 /* SharedCore.xcframework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		110000042900000000000001 = {
+			isa = PBXGroup;
+			children = (
+				110000042900000000000002 /* iosApp */,
+				110000042900000000000003 /* Frameworks */,
+				110000042900000000000004 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		110000042900000000000002 /* iosApp */ = {
+			isa = PBXGroup;
+			children = (
+				110000022900000000000001 /* MoodTunesApp.swift */,
+				110000022900000000000002 /* ContentView.swift */,
+				110000022900000000000004 /* Info.plist */,
+			);
+			path = iosApp;
+			sourceTree = "<group>";
+		};
+		110000042900000000000003 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				110000022900000000000003 /* SharedCore.xcframework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		110000042900000000000004 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				110000022900000000000000 /* MoodTunes.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		110000052900000000000001 /* MoodTunes */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 110000062900000000000001 /* Build configuration list for PBXNativeTarget "MoodTunes" */;
+			buildPhases = (
+				110000072900000000000001 /* Sources */,
+				110000032900000000000001 /* Frameworks */,
+				110000082900000000000001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = MoodTunes;
+			productName = MoodTunes;
+			productReference = 110000022900000000000000 /* MoodTunes.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		110000092900000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastUpgradeCheck = 1520;
+				TargetAttributes = {
+					110000052900000000000001 = {
+						CreatedOnToolsVersion = 15.2;
+					};
+				};
+			};
+			buildConfigurationList = 110000062900000000000002 /* Build configuration list for PBXProject "iosApp" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 110000042900000000000001;
+			productRefGroup = 110000042900000000000004 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				110000052900000000000001 /* MoodTunes */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		110000082900000000000001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		110000072900000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				110000012900000000000001 /* MoodTunesApp.swift in Sources */,
+				110000012900000000000002 /* ContentView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		1100000A2900000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_IDENTITY = "";
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/../shared/build/XCFrameworks/$(CONFIGURATION)",
+					"$(SRCROOT)/../shared/build/XCFrameworks/release",
+					"$(SRCROOT)/../shared/build/XCFrameworks/debug",
+				);
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				INFOPLIST_FILE = iosApp/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				PRODUCT_BUNDLE_IDENTIFIER = com.moodtunes.ios;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		1100000A2900000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_IDENTITY = "";
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/../shared/build/XCFrameworks/$(CONFIGURATION)",
+					"$(SRCROOT)/../shared/build/XCFrameworks/release",
+					"$(SRCROOT)/../shared/build/XCFrameworks/debug",
+				);
+				GCC_OPTIMIZATION_LEVEL = s;
+				INFOPLIST_FILE = iosApp/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MTL_ENABLE_DEBUG_INFO = NO;
+				PRODUCT_BUNDLE_IDENTIFIER = com.moodtunes.ios;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		1100000A2900000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				SDKROOT = iphoneos;
+			};
+			name = Debug;
+		};
+		1100000A2900000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				SDKROOT = iphoneos;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		110000062900000000000001 /* Build configuration list for PBXNativeTarget "MoodTunes" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1100000A2900000000000001 /* Debug */,
+				1100000A2900000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		110000062900000000000002 /* Build configuration list for PBXProject "iosApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1100000A2900000000000003 /* Debug */,
+				1100000A2900000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+	};
+	rootObject = 110000092900000000000001 /* Project object */;
+}

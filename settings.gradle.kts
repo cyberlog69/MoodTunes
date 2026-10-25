@@ -22,3 +22,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "MoodTunes"
 include(":app")
+include(":shared")
+

@@ -25,4 +25,6 @@ roadmap*.md
 iosApp/**/xcuserdata/
 iosApp/**/*.xcuserstate
 iosApp/**/DerivedData/
+*.ipa
+release_assets/
 

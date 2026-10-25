@@ -201,8 +201,7 @@ struct ContentView: View {
             }
         }
         .onAppear {
-            let platform = PlatformKt.getPlatform()
-            platformName = platform.name
+            platformName = PlatformHelper().platformName
         }
     }
 }

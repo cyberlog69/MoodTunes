@@ -6,3 +6,9 @@ interface Platform {
 }
 
 expect fun getPlatform(): Platform
+
+class PlatformHelper {
+    val currentPlatform: Platform = getPlatform()
+    val platformName: String get() = currentPlatform.name
+}
+

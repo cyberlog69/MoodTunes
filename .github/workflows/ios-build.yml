@@ -8,10 +8,15 @@ on:
     branches: [ "main" ]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build-ios:
     name: Build iOS App & Shared XCFramework
     runs-on: macos-14
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout Repository

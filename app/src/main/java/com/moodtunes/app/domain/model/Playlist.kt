@@ -8,6 +8,7 @@ data class Playlist(
     val name: String,
     val moodType: MoodType?,      // null = user-created
     val songs: List<Song> = emptyList(),
+    val coverUri: String? = null,
     val createdAt: Long = System.currentTimeMillis()
 ) {
     val songCount: Int get() = songs.size

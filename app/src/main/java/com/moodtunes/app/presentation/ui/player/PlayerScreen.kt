@@ -38,8 +38,10 @@ import androidx.mediarouter.app.MediaRouteButton
 import coil.compose.AsyncImage
 import com.google.android.gms.cast.framework.CastButtonFactory
 import com.moodtunes.app.R
+import com.moodtunes.app.data.local.preferences.PlayerDeckStyle
 import com.moodtunes.app.domain.model.LyricsLine
 import com.moodtunes.app.domain.model.Song
+import com.moodtunes.app.presentation.ui.components.CassettePlayerView
 import com.moodtunes.app.presentation.ui.theme.*
 import com.moodtunes.app.service.PlaybackError
 
@@ -146,6 +148,19 @@ fun PlayerScreen(
                 Row(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    // Deck Style quick switch
+                    IconButton(onClick = { viewModel.cyclePlayerDeckStyle() }) {
+                        Icon(
+                            imageVector = when (uiState.playerDeckStyle) {
+                                PlayerDeckStyle.VINYL -> Icons.Rounded.Album
+                                PlayerDeckStyle.CASSETTE -> Icons.Rounded.GraphicEq
+                                PlayerDeckStyle.STANDARD -> Icons.Rounded.Image
+                            },
+                            contentDescription = "Deck: ${uiState.playerDeckStyle.name}",
+                            tint = White
+                        )
+                    }
+
                     // Share the current song
                     // Visualizer Mode Cycle Button
                     IconButton(onClick = { viewModel.cycleVisualizerMode() }) {
@@ -219,61 +234,24 @@ fun PlayerScreen(
 
             Spacer(Modifier.height(12.dp))
 
-            // ─── Visualizer & Vinyl Turntable ────────────────────────────────
-            Box(
-                modifier = Modifier
-                    .size(310.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                // Live Reactive Canvas Visualizer
-                com.moodtunes.app.presentation.ui.components.AudioVisualizerView(
-                    mode = uiState.visualizerMode,
-                    fftBands = uiState.fftBands,
-                    primaryColor = animatedGradientStart,
-                    secondaryColor = animatedGradientEnd,
-                    turntableDiameter = 250.dp,
-                    modifier = Modifier.fillMaxSize()
-                )
-
-                // Vinyl Disc
-                Box(
-                    modifier = Modifier
-                        .size(250.dp)
-                        .clip(CircleShape)
-                        .background(
-                            Brush.radialGradient(
-                                colors = listOf(
-                                    Color(0xFF2A2A3A),
-                                    Color(0xFF0A0A0F)
-                                )
-                            )
-                        )
-                        .rotate(if (uiState.isPlaying) rotation else 0f),
-                    contentAlignment = Alignment.Center
-                ) {
-                    // Vinyl grooves
-                    Box(
+            // ─── Center Deck View (Vinyl, Cassette, Standard) ────────────────
+            when (uiState.playerDeckStyle) {
+                PlayerDeckStyle.CASSETTE -> {
+                    CassettePlayerView(
+                        song = song,
+                        isPlaying = uiState.isPlaying,
+                        progressFraction = uiState.progress,
+                        accentColor = animatedGradientStart,
                         modifier = Modifier
-                            .fillMaxSize()
-                            .clip(CircleShape)
-                            .background(
-                                Brush.radialGradient(
-                                    colors = listOf(
-                                        Color.Transparent,
-                                        Color(0x15FFFFFF),
-                                        Color.Transparent,
-                                        Color(0x10FFFFFF),
-                                        Color.Transparent
-                                    )
-                                )
-                            )
+                            .fillMaxWidth()
+                            .height(260.dp)
                     )
-
-                    // Album art in center
+                }
+                PlayerDeckStyle.STANDARD -> {
                     Box(
                         modifier = Modifier
-                            .size(125.dp)
-                            .clip(CircleShape)
+                            .size(280.dp)
+                            .clip(RoundedCornerShape(24.dp))
                             .background(SurfaceVariant),
                         contentAlignment = Alignment.Center
                     ) {
@@ -289,18 +267,97 @@ fun PlayerScreen(
                                 imageVector = Icons.Rounded.MusicNote,
                                 contentDescription = null,
                                 tint = OnSurfaceVariant,
-                                modifier = Modifier.size(48.dp)
+                                modifier = Modifier.size(64.dp)
                             )
                         }
                     }
-
-                    // Center hole
+                }
+                PlayerDeckStyle.VINYL -> {
                     Box(
                         modifier = Modifier
-                            .size(16.dp)
-                            .clip(CircleShape)
-                            .background(Background)
-                    )
+                            .size(310.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        // Live Reactive Canvas Visualizer (suppressed if performance mode is enabled)
+                        if (!uiState.isPerformanceMode) {
+                            com.moodtunes.app.presentation.ui.components.AudioVisualizerView(
+                                mode = uiState.visualizerMode,
+                                fftBands = uiState.fftBands,
+                                primaryColor = animatedGradientStart,
+                                secondaryColor = animatedGradientEnd,
+                                turntableDiameter = 250.dp,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+
+                        // Vinyl Disc
+                        Box(
+                            modifier = Modifier
+                                .size(250.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    Brush.radialGradient(
+                                        colors = listOf(
+                                            Color(0xFF2A2A3A),
+                                            Color(0xFF0A0A0F)
+                                        )
+                                    )
+                                )
+                                .rotate(if (uiState.isPlaying) rotation else 0f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            // Vinyl grooves
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clip(CircleShape)
+                                    .background(
+                                        Brush.radialGradient(
+                                            colors = listOf(
+                                                Color.Transparent,
+                                                Color(0x15FFFFFF),
+                                                Color.Transparent,
+                                                Color(0x10FFFFFF),
+                                                Color.Transparent
+                                            )
+                                        )
+                                    )
+                            )
+
+                            // Album art in center
+                            Box(
+                                modifier = Modifier
+                                    .size(125.dp)
+                                    .clip(CircleShape)
+                                    .background(SurfaceVariant),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                AsyncImage(
+                                    model = song?.albumArtUri,
+                                    contentDescription = "Album Art",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop,
+                                    onError = {}
+                                )
+                                if (song?.albumArtUri == null) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.MusicNote,
+                                        contentDescription = null,
+                                        tint = OnSurfaceVariant,
+                                        modifier = Modifier.size(48.dp)
+                                    )
+                                }
+                            }
+
+                            // Center hole
+                            Box(
+                                modifier = Modifier
+                                    .size(16.dp)
+                                    .clip(CircleShape)
+                                    .background(Background)
+                            )
+                        }
+                    }
                 }
             }
 
@@ -479,6 +536,32 @@ fun PlayerScreen(
                     label = "Lyrics",
                     active = uiState.lyrics.isNotEmpty(),
                     onClick = { activeSheet = PlayerSheet.LYRICS }
+                )
+                PlayerToolButton(
+                    icon = Icons.Rounded.Mic,
+                    label = if (uiState.vocalAttenuation > 0f) "Sing (${(uiState.vocalAttenuation * 100).toInt()}%)" else "Sing",
+                    active = uiState.vocalAttenuation > 0f || uiState.pitchSemitones != 0,
+                    onClick = { activeSheet = PlayerSheet.KARAOKE_SING }
+                )
+                PlayerToolButton(
+                    icon = Icons.Rounded.Headphones,
+                    label = if (uiState.isDjModeEnabled) "DJ (${uiState.currentTrackDjInfo?.camelotKey ?: "ON"})" else "DJ Mode",
+                    active = uiState.isDjModeEnabled,
+                    onClick = { activeSheet = PlayerSheet.DJ_MODE }
+                )
+                PlayerToolButton(
+                    icon = when (uiState.playerDeckStyle) {
+                        PlayerDeckStyle.VINYL -> Icons.Rounded.Album
+                        PlayerDeckStyle.CASSETTE -> Icons.Rounded.GraphicEq
+                        PlayerDeckStyle.STANDARD -> Icons.Rounded.Image
+                    },
+                    label = when (uiState.playerDeckStyle) {
+                        PlayerDeckStyle.VINYL -> "Vinyl"
+                        PlayerDeckStyle.CASSETTE -> "Tape"
+                        PlayerDeckStyle.STANDARD -> "Cover"
+                    },
+                    active = uiState.playerDeckStyle != PlayerDeckStyle.VINYL,
+                    onClick = { viewModel.cyclePlayerDeckStyle() }
                 )
                 PlayerToolButton(
                     icon = Icons.Rounded.Speed,

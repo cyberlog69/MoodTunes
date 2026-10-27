@@ -41,7 +41,7 @@ import com.moodtunes.app.presentation.ui.theme.EuphoricGradientEnd
 import com.moodtunes.app.presentation.ui.theme.White
 
 /** Which bottom sheet is currently open on the player screen. */
-enum class PlayerSheet { NONE, QUEUE, LYRICS, SPEED, SLEEP_TIMER, EQUALIZER, CROSSFADE }
+enum class PlayerSheet { NONE, QUEUE, LYRICS, SPEED, SLEEP_TIMER, EQUALIZER, CROSSFADE, KARAOKE_SING, DJ_MODE }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -138,6 +138,21 @@ fun PlayerBottomSheet(
                 durationMs = uiState.crossfadeDurationMs,
                 onEnabledChanged = viewModel::setCrossfadeEnabled,
                 onDurationChanged = viewModel::setCrossfadeDurationMs
+            )
+            PlayerSheet.KARAOKE_SING -> KaraokeSingSheetContent(
+                vocalAttenuation = uiState.vocalAttenuation,
+                pitchSemitones = uiState.pitchSemitones,
+                onAttenuationChanged = viewModel::setVocalAttenuation,
+                onPitchChanged = viewModel::setPitchSemitones
+            )
+            PlayerSheet.DJ_MODE -> DjModeSheetContent(
+                isDjModeEnabled = uiState.isDjModeEnabled,
+                djVibe = uiState.djVibe,
+                currentTrackDjInfo = uiState.currentTrackDjInfo,
+                upcomingSongs = uiState.songs.drop(uiState.currentSongIndex + 1),
+                onToggleDjMode = viewModel::toggleDjMode,
+                onVibeSelected = viewModel::setDjVibe,
+                onApplyHarmonicMix = viewModel::applyDjHarmonicMix
             )
             PlayerSheet.NONE -> Unit
         }
@@ -1809,5 +1824,437 @@ fun LyricsSearchDialog(
             }
         }
     )
+}
+
+// ─── Sing / Karaoke Studio Sheet ─────────────────────────────────────────────
+@Composable
+fun KaraokeSingSheetContent(
+    vocalAttenuation: Float,
+    pitchSemitones: Int,
+    onAttenuationChanged: (Float) -> Unit,
+    onPitchChanged: (Int) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Rounded.Mic,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text(
+                        text = "Sing / Karaoke Studio",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                    )
+                    Text(
+                        text = "Real-time vocal attenuation & key pitch shifter",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            if (vocalAttenuation > 0.05f) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                ) {
+                    Text(
+                        text = "KARAOKE ON",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                            letterSpacing = 1.sp
+                        ),
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(20.dp))
+
+        // Vocal Attenuation Card
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Vocal Suppression",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "${(vocalAttenuation * 100).toInt()}%",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                Slider(
+                    value = vocalAttenuation,
+                    onValueChange = onAttenuationChanged,
+                    valueRange = 0f..1f,
+                    colors = SliderDefaults.colors(
+                        thumbColor = MaterialTheme.colorScheme.primary,
+                        activeTrackColor = MaterialTheme.colorScheme.primary
+                    )
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Original (0%)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Duet (50%)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Instrumental (100%)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                // Quick Presets
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = { onAttenuationChanged(0f) },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (vocalAttenuation == 0f) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface
+                        ),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("Original", style = MaterialTheme.typography.labelSmall)
+                    }
+                    Button(
+                        onClick = { onAttenuationChanged(0.70f) },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (vocalAttenuation in 0.65f..0.75f) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface
+                        ),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("Guide Vocal", style = MaterialTheme.typography.labelSmall)
+                    }
+                    Button(
+                        onClick = { onAttenuationChanged(1f) },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (vocalAttenuation == 1f) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface
+                        ),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("Karaoke", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        // Semitone Key / Pitch Shifter Card
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Key / Pitch Shift",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                    )
+                    Text(
+                        text = when {
+                            pitchSemitones > 0 -> "+$pitchSemitones Semitones"
+                            pitchSemitones < 0 -> "$pitchSemitones Semitones"
+                            else -> "Original Key (±0)"
+                        },
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                Spacer(Modifier.height(14.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    FilledTonalIconButton(
+                        onClick = { onPitchChanged((pitchSemitones - 1).coerceAtLeast(-6)) },
+                        enabled = pitchSemitones > -6
+                    ) {
+                        Icon(Icons.Rounded.Remove, contentDescription = "Decrease key")
+                    }
+
+                    Text(
+                        text = if (pitchSemitones == 0) "±0" else if (pitchSemitones > 0) "+$pitchSemitones" else "$pitchSemitones",
+                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    FilledTonalIconButton(
+                        onClick = { onPitchChanged((pitchSemitones + 1).coerceAtMost(6)) },
+                        enabled = pitchSemitones < 6
+                    ) {
+                        Icon(Icons.Rounded.Add, contentDescription = "Increase key")
+                    }
+
+                    OutlinedButton(
+                        onClick = { onPitchChanged(0) },
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("Reset", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ─── DJ Mode & Harmonic Mixing Sheet ─────────────────────────────────────────
+@Composable
+fun DjModeSheetContent(
+    isDjModeEnabled: Boolean,
+    djVibe: com.moodtunes.app.service.dj.DjVibe,
+    currentTrackDjInfo: com.moodtunes.app.service.dj.DjTrackInfo?,
+    upcomingSongs: List<Song>,
+    onToggleDjMode: (Boolean) -> Unit,
+    onVibeSelected: (com.moodtunes.app.service.dj.DjVibe) -> Unit,
+    onApplyHarmonicMix: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 12.dp)
+    ) {
+        // Header with switch
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Rounded.Headphones,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text(
+                        text = "DJ Mode & Harmonic Mixing",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                    )
+                    Text(
+                        text = "Camelot wheel mixing & smart crossfade",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Switch(
+                checked = isDjModeEnabled,
+                onCheckedChange = onToggleDjMode
+            )
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        // Current Track Harmonic Tag Card
+        currentTrackDjInfo?.let { info ->
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "CURRENT TRACK HARMONICS",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                letterSpacing = 1.sp
+                            ),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = info.song.title,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        // Camelot Key Pill
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.primary
+                        ) {
+                            Text(
+                                text = "Key ${info.camelotKey}",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                        // BPM Pill
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.secondaryContainer
+                        ) {
+                            Text(
+                                text = "${info.bpm} BPM",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        // DJ Vibe Selection Chips
+        Text(
+            text = "DJ Flow & Vibe Trajectory",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+        )
+        Spacer(Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            com.moodtunes.app.service.dj.DjVibe.entries.forEach { vibe ->
+                val isSelected = djVibe == vibe
+                FilterChip(
+                    selected = isSelected,
+                    onClick = { onVibeSelected(vibe) },
+                    label = { Text("${vibe.icon} ${vibe.displayName}", style = MaterialTheme.typography.labelSmall) },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
+        Text(
+            text = djVibe.description,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
+        )
+
+        // Action: Harmonically Auto-Mix Queue
+        Button(
+            onClick = onApplyHarmonicMix,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Icon(Icons.Rounded.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Auto-Mix Queue Harmonically", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+        }
+
+        if (upcomingSongs.isNotEmpty()) {
+            Spacer(Modifier.height(16.dp))
+            Text(
+                text = "Upcoming Harmonic Queue (${upcomingSongs.size} tracks)",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+            )
+            Spacer(Modifier.height(8.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                upcomingSongs.take(4).forEach { s ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = s.title,
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            text = s.artist,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            modifier = Modifier.padding(horizontal = 8.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
 

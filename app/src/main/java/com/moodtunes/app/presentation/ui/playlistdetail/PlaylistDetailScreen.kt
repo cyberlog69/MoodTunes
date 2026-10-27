@@ -16,11 +16,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil.compose.AsyncImage
 import com.moodtunes.app.domain.model.Song
+import com.moodtunes.app.presentation.ui.components.PlaylistCoverDesignerDialog
 import com.moodtunes.app.presentation.ui.theme.*
 import kotlinx.coroutines.FlowPreview
 
@@ -37,6 +40,7 @@ fun PlaylistDetailScreen(
     var showRenameDialog by remember { mutableStateOf(false) }
     var renameText by remember { mutableStateOf("") }
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var showCoverDesigner by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
@@ -86,6 +90,9 @@ fun PlaylistDetailScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+                IconButton(onClick = { showCoverDesigner = true }) {
+                    Icon(Icons.Rounded.Palette, contentDescription = "Design Cover", tint = MaterialTheme.colorScheme.onBackground)
+                }
                 IconButton(onClick = {
                     renameText = playlist?.name ?: ""
                     showRenameDialog = true
@@ -94,6 +101,50 @@ fun PlaylistDetailScreen(
                 }
                 IconButton(onClick = { showDeleteDialog = true }) {
                     Icon(Icons.Rounded.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.onBackground)
+                }
+            }
+
+            // ─── Cover Artwork / Designer Card ──────────────────────────────
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(140.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .clickable { showCoverDesigner = true },
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (playlist?.coverUri != null) {
+                        AsyncImage(
+                            model = playlist.coverUri,
+                            contentDescription = "Playlist Cover",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                Icons.Rounded.Palette,
+                                contentDescription = "Design Cover",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(36.dp)
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = "Design Cover",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
                 }
             }
 
@@ -280,6 +331,18 @@ fun PlaylistDetailScreen(
             onQueryChanged = viewModel::onPickerQueryChanged,
             onAdd = viewModel::addPickedSongs,
             onDismiss = viewModel::closePicker
+        )
+    }
+
+    // ─── Procedural Playlist Cover Designer (Prism-inspired) ─────────────────
+    if (showCoverDesigner) {
+        PlaylistCoverDesignerDialog(
+            initialTitle = playlist?.name.orEmpty(),
+            onDismiss = { showCoverDesigner = false },
+            onCoverGenerated = { uri ->
+                viewModel.updateCover(uri)
+                showCoverDesigner = false
+            }
         )
     }
 }

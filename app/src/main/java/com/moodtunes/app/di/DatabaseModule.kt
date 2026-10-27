@@ -33,6 +33,7 @@ object DatabaseModule {
             MoodTunesDatabase.DATABASE_NAME
         )
             .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
+            .addMigrations(MoodTunesDatabase.MIGRATION_4_5)
             .fallbackToDestructiveMigration(true)
             .addCallback(object : RoomDatabase.Callback() {
                 override fun onOpen(db: SupportSQLiteDatabase) {

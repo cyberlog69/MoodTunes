@@ -95,6 +95,14 @@ class SettingsViewModel @Inject constructor(
         preferencesRepository.updateDynamicColors(enabled)
     }
 
+    fun onPerformanceModeChanged(enabled: Boolean) {
+        preferencesRepository.updatePerformanceMode(enabled)
+    }
+
+    fun onPlayerDeckStyleChanged(style: com.moodtunes.app.data.local.preferences.PlayerDeckStyle) {
+        preferencesRepository.updatePlayerDeckStyle(style)
+    }
+
     fun onStreamQualityChanged(quality: StreamQuality) {
         preferencesRepository.updateStreamQuality(quality)
     }

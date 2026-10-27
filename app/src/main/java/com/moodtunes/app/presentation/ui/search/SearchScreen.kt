@@ -229,6 +229,10 @@ fun SearchScreen(
                             viewModel.playSong(songs, index)
                             onNavigateToPlayer()
                         },
+                        onLyricMatchClick = { match ->
+                            viewModel.playLyricResult(match)
+                            onNavigateToPlayer()
+                        },
                         onFavoriteClick = viewModel::toggleFavorite,
                         onMoreClick = { song -> selectedSongForAction = song },
                         onArtistClick = { artistName -> viewModel.onQueryChanged(artistName) },
@@ -264,6 +268,7 @@ fun SearchScreen(
 private fun SearchResultsList(
     uiState: SearchUiState,
     onSongClick: (List<Song>, Int) -> Unit,
+    onLyricMatchClick: (com.moodtunes.app.presentation.ui.search.LyricSearchResult) -> Unit,
     onFavoriteClick: (Song) -> Unit,
     onMoreClick: (Song) -> Unit,
     onArtistClick: (String) -> Unit,
@@ -345,7 +350,27 @@ private fun SearchResultsList(
             }
         }
 
-        // ─── 3. Artists ──────────────────────────────────────────────────────
+        // ─── 3. From the Lyrics ──────────────────────────────────────────────
+        if (uiState.selectedFilter == SearchFilter.ALL || uiState.selectedFilter == SearchFilter.LYRICS) {
+            if (uiState.lyricResults.isNotEmpty()) {
+                item {
+                    SectionTitle(
+                        icon = Icons.Rounded.FormatQuote,
+                        title = "From the Lyrics",
+                        count = uiState.lyricResults.size
+                    )
+                }
+                items(uiState.lyricResults, key = { "lyric_${it.song.id}_${it.song.title}" }) { match ->
+                    LyricResultItem(
+                        lyricMatch = match,
+                        isPlaying = uiState.currentSong?.title.equals(match.song.title, ignoreCase = true),
+                        onClick = { onLyricMatchClick(match) }
+                    )
+                }
+            }
+        }
+
+        // ─── 4. Artists ──────────────────────────────────────────────────────
         if (uiState.selectedFilter == SearchFilter.ALL || uiState.selectedFilter == SearchFilter.ARTISTS) {
             if (uiState.artists.isNotEmpty()) {
                 item {
@@ -678,6 +703,74 @@ private fun EmptyQueryContent(
                     )
                 )
             }
+        }
+    }
+}
+
+@Composable
+fun LyricResultItem(
+    lyricMatch: com.moodtunes.app.presentation.ui.search.LyricSearchResult,
+    isPlaying: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(46.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Rounded.FormatQuote,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(24.dp)
+            )
+        }
+
+        Spacer(Modifier.width(12.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = lyricMatch.song.title,
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                color = if (isPlaying) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = lyricMatch.song.artist,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(Modifier.height(3.dp))
+            Text(
+                text = "“${lyricMatch.matchedSnippet}”",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                    fontWeight = FontWeight.Medium
+                ),
+                color = MaterialTheme.colorScheme.primary,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+
+        IconButton(onClick = onClick) {
+            Icon(
+                imageVector = if (isPlaying) Icons.Rounded.Equalizer else Icons.Rounded.PlayCircle,
+                contentDescription = "Play",
+                tint = MaterialTheme.colorScheme.primary
+            )
         }
     }
 }

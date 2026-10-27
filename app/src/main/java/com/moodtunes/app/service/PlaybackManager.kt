@@ -40,7 +40,8 @@ class PlaybackManager @Inject constructor(
     private val listenBrainzService: ListenBrainzService,
     private val songDao: SongDao,
     private val moodHistoryDao: MoodHistoryDao,
-    private val connectivityMonitor: ConnectivityMonitor
+    private val connectivityMonitor: ConnectivityMonitor,
+    private val djSequencer: com.moodtunes.app.service.dj.DjSequencer
 ) {
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
@@ -86,8 +87,28 @@ class PlaybackManager @Inject constructor(
     private val _playbackSpeed = MutableStateFlow(playbackPreferencesRepository.playbackSpeed)
     val playbackSpeed: StateFlow<Float> = _playbackSpeed.asStateFlow()
 
-    private val _playbackPitch = MutableStateFlow(playbackPreferencesRepository.playbackPitch)
+    private val _pitchSemitones = MutableStateFlow(playbackPreferencesRepository.pitchSemitones)
+    val pitchSemitones: StateFlow<Int> = _pitchSemitones.asStateFlow()
+
+    private val _playbackPitch = MutableStateFlow(
+        Math.pow(2.0, playbackPreferencesRepository.pitchSemitones / 12.0).toFloat()
+    )
     val playbackPitch: StateFlow<Float> = _playbackPitch.asStateFlow()
+
+    val vocalAttenuation: StateFlow<Float> = audioEffectsManager.vocalAttenuation
+
+    fun setVocalAttenuation(strength: Float) {
+        audioEffectsManager.setVocalAttenuation(strength)
+    }
+
+    private val _isDjModeEnabled = MutableStateFlow(playbackPreferencesRepository.djModeEnabled)
+    val isDjModeEnabled: StateFlow<Boolean> = _isDjModeEnabled.asStateFlow()
+
+    private val _djVibe = MutableStateFlow(
+        runCatching { com.moodtunes.app.service.dj.DjVibe.valueOf(playbackPreferencesRepository.djVibe) }
+            .getOrDefault(com.moodtunes.app.service.dj.DjVibe.STEADY)
+    )
+    val djVibe: StateFlow<com.moodtunes.app.service.dj.DjVibe> = _djVibe.asStateFlow()
 
     private val _isCrossfadeEnabled = MutableStateFlow(playbackPreferencesRepository.crossfadeEnabled)
     val isCrossfadeEnabled: StateFlow<Boolean> = _isCrossfadeEnabled.asStateFlow()
@@ -141,10 +162,11 @@ class PlaybackManager @Inject constructor(
             try {
                 val controller = controllerFuture.get()
                 mediaController = controller
+                val pitchFactor = Math.pow(2.0, playbackPreferencesRepository.pitchSemitones / 12.0).toFloat()
                 controller.setPlaybackParameters(
                     PlaybackParameters(
                         playbackPreferencesRepository.playbackSpeed,
-                        playbackPreferencesRepository.playbackPitch
+                        pitchFactor
                     )
                 )
                 attachListener(controller)
@@ -316,8 +338,9 @@ class PlaybackManager @Inject constructor(
         playbackPreferencesRepository.playbackSpeed = clamped
         _playbackSpeed.value = clamped
         val controller = mediaController ?: return
+        val pitchFactor = Math.pow(2.0, _pitchSemitones.value / 12.0).toFloat()
         controller.setPlaybackParameters(
-            PlaybackParameters(clamped, controller.playbackParameters.pitch)
+            PlaybackParameters(clamped, pitchFactor)
         )
     }
 
@@ -411,6 +434,57 @@ class PlaybackManager @Inject constructor(
             }
             controller.volume = 1f
         }
+    }
+
+    // ── Pitch & Speed ────────────────────────────────────────────────────────
+    fun setPitchSemitones(semitones: Int) {
+        val clamped = semitones.coerceIn(-6, 6)
+        _pitchSemitones.value = clamped
+        playbackPreferencesRepository.pitchSemitones = clamped
+        val pitchFactor = Math.pow(2.0, clamped / 12.0).toFloat()
+        _playbackPitch.value = pitchFactor
+        mediaController?.playbackParameters = PlaybackParameters(_playbackSpeed.value, pitchFactor)
+    }
+
+    // ── DJ Mode & Harmonic Mixing ────────────────────────────────────────────
+    fun toggleDjMode(enabled: Boolean) {
+        _isDjModeEnabled.value = enabled
+        playbackPreferencesRepository.djModeEnabled = enabled
+        if (enabled) {
+            setCrossfadeEnabled(true)
+            setCrossfadeDurationMs(5000)
+            applyDjHarmonicMix()
+        }
+    }
+
+    fun setDjVibe(vibe: com.moodtunes.app.service.dj.DjVibe) {
+        _djVibe.value = vibe
+        playbackPreferencesRepository.djVibe = vibe.name
+        if (_isDjModeEnabled.value) {
+            applyDjHarmonicMix()
+        }
+    }
+
+    fun applyDjHarmonicMix() {
+        val controller = mediaController ?: return
+        val queue = _playlist.value
+        if (queue.size <= 2) return
+
+        val currentIndex = controller.currentMediaItemIndex
+        val currentSong = queue.getOrNull(currentIndex) ?: return
+        val upcoming = queue.filterIndexed { idx, _ -> idx != currentIndex }
+
+        val sequencedUpcoming = djSequencer.sequenceQueue(currentSong, upcoming, _djVibe.value)
+        val newPlaylist = mutableListOf(currentSong).apply { addAll(sequencedUpcoming) }
+
+        _playlist.value = newPlaylist
+        val items = newPlaylist.map { createMediaItem(it) }
+        controller.setMediaItems(items, 0, controller.currentPosition)
+        controller.prepare()
+    }
+
+    fun getDjTrackInfo(song: Song): com.moodtunes.app.service.dj.DjTrackInfo {
+        return djSequencer.analyzeTrack(song)
     }
 
     // ── Queue editor ─────────────────────────────────────────────────────────

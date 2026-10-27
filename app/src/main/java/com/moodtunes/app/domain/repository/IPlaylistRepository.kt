@@ -20,6 +20,9 @@ interface IPlaylistRepository {
 
     suspend fun renamePlaylist(playlistId: Long, name: String)
 
+    /** Updates the custom procedural or imported cover art URI for a playlist. */
+    suspend fun updatePlaylistCover(playlistId: Long, coverUri: String?)
+
     suspend fun deletePlaylist(playlistId: Long)
 
     /** Appends a song to the end of a playlist. */

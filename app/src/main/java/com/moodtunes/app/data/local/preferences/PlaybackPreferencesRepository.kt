@@ -123,6 +123,30 @@ class PlaybackPreferencesRepository @Inject constructor(
             prefs.edit().putString("selected_eq_preset", value).apply()
         }
 
+    var vocalAttenuation: Float
+        get() = prefs.getFloat("vocal_attenuation", 0f)
+        set(value) {
+            prefs.edit().putFloat("vocal_attenuation", value.coerceIn(0f, 1f)).apply()
+        }
+
+    var pitchSemitones: Int
+        get() = prefs.getInt("pitch_semitones", 0)
+        set(value) {
+            prefs.edit().putInt("pitch_semitones", value.coerceIn(-6, 6)).apply()
+        }
+
+    var djModeEnabled: Boolean
+        get() = prefs.getBoolean("dj_mode_enabled", false)
+        set(value) {
+            prefs.edit().putBoolean("dj_mode_enabled", value).apply()
+        }
+
+    var djVibe: String
+        get() = prefs.getString("dj_vibe", "STEADY") ?: "STEADY"
+        set(value) {
+            prefs.edit().putString("dj_vibe", value).apply()
+        }
+
     fun saveEqualizerLevels(levels: List<Float>) {
         prefs.edit()
             .putString("eq_levels", levels.joinToString(",") { it.toString() })

@@ -30,6 +30,7 @@ class PlaylistRepositoryImpl @Inject constructor(
                     name = playlist.name,
                     moodType = null,
                     songs = songs,
+                    coverUri = playlist.coverUri,
                     createdAt = playlist.createdAt
                 )
             }
@@ -46,6 +47,7 @@ class PlaylistRepositoryImpl @Inject constructor(
                     moodType = null,
                     songs = entries.sortedBy { e -> e.position }
                         .mapNotNull { SongJsonSerializer.deserialize(it.songJson) },
+                    coverUri = it.coverUri,
                     createdAt = it.createdAt
                 )
             }
@@ -57,6 +59,10 @@ class PlaylistRepositoryImpl @Inject constructor(
     override suspend fun renamePlaylist(playlistId: Long, name: String) {
         val existing = playlistDao.getPlaylist(playlistId) ?: return
         playlistDao.updatePlaylist(existing.copy(name = name))
+    }
+
+    override suspend fun updatePlaylistCover(playlistId: Long, coverUri: String?) {
+        playlistDao.updatePlaylistCover(playlistId, coverUri)
     }
 
     override suspend fun deletePlaylist(playlistId: Long) {

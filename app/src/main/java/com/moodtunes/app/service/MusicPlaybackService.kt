@@ -64,6 +64,7 @@ class MusicPlaybackService : MediaLibraryService() {
     @Inject lateinit var audioEffectsManager: AudioEffectsManager
     @Inject lateinit var playbackPreferencesRepository: PlaybackPreferencesRepository
     @Inject lateinit var okHttpDataSourceFactory: androidx.media3.datasource.okhttp.OkHttpDataSource.Factory
+    @Inject lateinit var karaokeAudioProcessor: com.moodtunes.app.service.dsp.KaraokeAudioProcessor
 
     private var mediaSession: MediaLibraryService.MediaLibrarySession? = null
     private val callbackScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -86,19 +87,27 @@ class MusicPlaybackService : MediaLibraryService() {
     override fun onCreate() {
         super.onCreate()
 
+        karaokeAudioProcessor.setVocalAttenuation(playbackPreferencesRepository.vocalAttenuation)
+
         val audioAttributes = AudioAttributes.Builder()
             .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
             .setUsage(C.USAGE_MEDIA)
             .build()
 
-        // 24-bit / 32-bit Float Audio Sink for audiophile-grade Lossless output
-        val audioSink = DefaultAudioSink.Builder(this)
-            .setEnableFloatOutput(true)
-            .setEnableAudioTrackPlaybackParams(true)
-            .build()
-
-        // Decoders for FLAC, ALAC, WAV, AAC, MP3
-        val renderersFactory = DefaultRenderersFactory(this).apply {
+        // Decoders for FLAC, ALAC, WAV, AAC, MP3 with custom 24/32-bit Float AudioSink and Karaoke DSP
+        val renderersFactory = object : DefaultRenderersFactory(this) {
+            override fun buildAudioSink(
+                context: android.content.Context,
+                enableFloatOutput: Boolean,
+                enableAudioTrackPlaybackParams: Boolean
+            ): androidx.media3.exoplayer.audio.AudioSink {
+                return DefaultAudioSink.Builder(context)
+                    .setEnableFloatOutput(enableFloatOutput)
+                    .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                    .setAudioProcessors(arrayOf(karaokeAudioProcessor))
+                    .build()
+            }
+        }.apply {
             setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
             setEnableAudioFloatOutput(true)
         }

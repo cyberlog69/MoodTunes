@@ -34,6 +34,7 @@ class PlaylistDetailViewModel @Inject constructor(
     private val moveSongInPlaylistUseCase: MoveSongInPlaylistUseCase,
     private val renamePlaylistUseCase: RenamePlaylistUseCase,
     private val deletePlaylistUseCase: DeletePlaylistUseCase,
+    private val updatePlaylistCoverUseCase: UpdatePlaylistCoverUseCase,
     private val playbackManager: PlaybackManager,
     private val downloadManager: com.moodtunes.app.data.local.download.SongDownloadManager
 ) : ViewModel() {
@@ -127,6 +128,18 @@ class PlaylistDetailViewModel @Inject constructor(
     fun delete() {
         viewModelScope.launch {
             deletePlaylistUseCase(playlistId)
+        }
+    }
+
+    fun updateCover(uri: android.net.Uri) {
+        viewModelScope.launch {
+            updatePlaylistCoverUseCase(playlistId, uri.toString())
+        }
+    }
+
+    fun removeCover() {
+        viewModelScope.launch {
+            updatePlaylistCoverUseCase(playlistId, null)
         }
     }
 

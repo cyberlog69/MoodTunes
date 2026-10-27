@@ -36,8 +36,17 @@ enum class ReverbPreset(val id: Short, val displayName: String, val icon: String
  */
 @Singleton
 class AudioEffectsManager @Inject constructor(
-    private val playbackPreferencesRepository: PlaybackPreferencesRepository
+    private val playbackPreferencesRepository: PlaybackPreferencesRepository,
+    private val karaokeAudioProcessor: com.moodtunes.app.service.dsp.KaraokeAudioProcessor
 ) {
+    val vocalAttenuation: StateFlow<Float> = karaokeAudioProcessor.vocalAttenuation
+
+    fun setVocalAttenuation(strength: Float) {
+        val clamped = strength.coerceIn(0f, 1f)
+        karaokeAudioProcessor.setVocalAttenuation(clamped)
+        playbackPreferencesRepository.vocalAttenuation = clamped
+    }
+
     companion object {
         // Built-in curated EQ curves (5-band normalized: -1.0f to 1.0f)
         val CURATED_PRESETS: Map<String, List<Float>> = mapOf(

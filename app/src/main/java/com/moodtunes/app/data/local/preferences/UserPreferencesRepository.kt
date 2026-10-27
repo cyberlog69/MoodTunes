@@ -46,9 +46,17 @@ enum class MusicLanguage(
     INSTRUMENTAL("Instrumental", "🎻", "Instrumental")
 }
 
+enum class PlayerDeckStyle(val displayName: String, val icon: String) {
+    VINYL("Vinyl Turntable", "💿"),
+    CASSETTE("Retro Cassette", "📼"),
+    STANDARD("Modern Cover Art", "🖼️")
+}
+
 data class AppUserSettings(
     val darkModeOption: DarkModeOption = DarkModeOption.DARK,
     val useDynamicColors: Boolean = true,
+    val performanceMode: Boolean = false,
+    val playerDeckStyle: PlayerDeckStyle = PlayerDeckStyle.VINYL,
     val streamQuality: StreamQuality = StreamQuality.LOSSLESS,
     val wifiOnlyStreaming: Boolean = false,
     val wifiOnlyDownloads: Boolean = true,
@@ -83,6 +91,7 @@ class UserPreferencesRepository @Inject constructor(
         val modeStr = prefs.getString("dark_mode", DarkModeOption.DARK.name) ?: DarkModeOption.DARK.name
         val qualityStr = prefs.getString("stream_quality", StreamQuality.LOSSLESS.name) ?: StreamQuality.LOSSLESS.name
         val sourceStr = prefs.getString("audio_source_mode", AudioSourceMode.BOTH.name) ?: AudioSourceMode.BOTH.name
+        val deckStr = prefs.getString("player_deck_style", PlayerDeckStyle.VINYL.name) ?: PlayerDeckStyle.VINYL.name
         
         val rawLangs = prefs.getString("preferred_languages", prefs.getString("preferred_language", MusicLanguage.ALL.name)) 
             ?: MusicLanguage.ALL.name
@@ -94,6 +103,8 @@ class UserPreferencesRepository @Inject constructor(
         return AppUserSettings(
             darkModeOption = runCatching { DarkModeOption.valueOf(modeStr) }.getOrDefault(DarkModeOption.DARK),
             useDynamicColors = prefs.getBoolean("dynamic_colors", true),
+            performanceMode = prefs.getBoolean("performance_mode", false),
+            playerDeckStyle = runCatching { PlayerDeckStyle.valueOf(deckStr) }.getOrDefault(PlayerDeckStyle.VINYL),
             streamQuality = runCatching { StreamQuality.valueOf(qualityStr) }.getOrDefault(StreamQuality.LOSSLESS),
             wifiOnlyStreaming = prefs.getBoolean("wifi_only_streaming", false),
             wifiOnlyDownloads = prefs.getBoolean("wifi_only_downloads", true),
@@ -108,6 +119,16 @@ class UserPreferencesRepository @Inject constructor(
             navidromePassword = prefs.getString("navidrome_password", "") ?: "",
             isNavidromeEnabled = prefs.getBoolean("navidrome_enabled", false)
         )
+    }
+
+    fun updatePerformanceMode(enabled: Boolean) {
+        prefs.edit().putBoolean("performance_mode", enabled).apply()
+        _settings.value = _settings.value.copy(performanceMode = enabled)
+    }
+
+    fun updatePlayerDeckStyle(style: PlayerDeckStyle) {
+        prefs.edit().putString("player_deck_style", style.name).apply()
+        _settings.value = _settings.value.copy(playerDeckStyle = style)
     }
 
     fun updateDarkMode(option: DarkModeOption) {

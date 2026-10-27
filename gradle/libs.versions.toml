@@ -60,8 +60,6 @@ espressoCore           = "3.6.1"
 json                   = "20240303"
 kotlinxCoroutinesTest  = "1.10.2"
 robolectric            = "4.16.1"
-kotlinxSerialization   = "1.8.0"
-ktor                   = "3.1.1"
 
 [libraries]
 # Core
@@ -139,21 +137,11 @@ org-json                             = { group = "org.json",                name
 kotlinx-coroutines-test              = { group = "org.jetbrains.kotlinx",   name = "kotlinx-coroutines-test",         version.ref = "kotlinxCoroutinesTest" }
 robolectric                          = { group = "org.robolectric",         name = "robolectric",                     version.ref = "robolectric" }
 
-# Kotlin Multiplatform & Networking
-kotlinx-serialization-json   = { group = "org.jetbrains.kotlinx",   name = "kotlinx-serialization-json",      version.ref = "kotlinxSerialization" }
-ktor-client-core             = { group = "io.ktor",                 name = "ktor-client-core",                version.ref = "ktor" }
-ktor-client-content-negotiation = { group = "io.ktor",              name = "ktor-client-content-negotiation", version.ref = "ktor" }
-ktor-serialization-kotlinx-json = { group = "io.ktor",              name = "ktor-serialization-kotlinx-json", version.ref = "ktor" }
-ktor-client-darwin           = { group = "io.ktor",                 name = "ktor-client-darwin",              version.ref = "ktor" }
-ktor-client-okhttp           = { group = "io.ktor",                 name = "ktor-client-okhttp",              version.ref = "ktor" }
-
 [plugins]
 android-application  = { id = "com.android.application",              version.ref = "agp" }
-android-library      = { id = "com.android.library",                  version.ref = "agp" }
 kotlin-android       = { id = "org.jetbrains.kotlin.android",         version.ref = "kotlin" }
-kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform",   version.ref = "kotlin" }
-kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 kotlin-compose       = { id = "org.jetbrains.kotlin.plugin.compose",  version.ref = "kotlin" }
 hilt                 = { id = "com.google.dagger.hilt.android",       version.ref = "hilt" }
 ksp                  = { id = "com.google.devtools.ksp",              version.ref = "ksp" }
+
 

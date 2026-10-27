@@ -21,10 +21,4 @@ gradle/gradle-daemon-jvm.properties
 ROADMAP.md
 roadmap*.md
 
-# iOS & Xcode
-iosApp/**/xcuserdata/
-iosApp/**/*.xcuserstate
-iosApp/**/DerivedData/
-*.ipa
-release_assets/
 

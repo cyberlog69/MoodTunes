@@ -459,8 +459,10 @@ private fun LyricsSheetContent(
         }
     }
 
-    val gradientStart = selectedMood?.gradientStart ?: EuphoricGradientStart
-    val gradientEnd = selectedMood?.gradientEnd ?: EuphoricGradientEnd
+    val defaultSheetGradientStart = Color(0xFF1E1B2E)
+    val defaultSheetGradientEnd = Color(0xFF0F0E17)
+    val gradientStart = selectedMood?.gradientStart ?: defaultSheetGradientStart
+    val gradientEnd = selectedMood?.gradientEnd ?: defaultSheetGradientEnd
 
     Box(
         modifier = Modifier

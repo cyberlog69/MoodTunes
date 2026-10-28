@@ -73,7 +73,7 @@ class HomeViewModel @Inject constructor(
         state.copy(
             currentSong = song,
             isPlaying = playing,
-            selectedMood = mood ?: state.selectedMood,
+            selectedMood = mood,
             selectedLanguage = language,
             userPlaylists = playlists
         )
@@ -185,34 +185,55 @@ class HomeViewModel @Inject constructor(
         playbackManager.playPause()
     }
 
+    fun clearMood() {
+        _uiState.update { it.copy(selectedMood = null, moodSongs = emptyList()) }
+        playbackManager.clearMood()
+    }
+
     fun playSong(song: Song) {
-        val pool = (uiState.value.forYou + uiState.value.recentlyPlayed).distinctBy { it.id }
-        val index = pool.indexOfFirst { it.id == song.id }
-        if (index >= 0) {
-            playbackManager.playSongs(pool, index)
-        } else {
-            playbackManager.playSongs(listOf(song), 0)
+        _uiState.update { it.copy(selectedMood = null) }
+        playbackManager.clearMood()
+
+        val quickPicks = (uiState.value.forYou.ifEmpty { uiState.value.recentlyPlayed }).take(12)
+        val qIndex = quickPicks.indexOfFirst { it.id == song.id }
+        if (qIndex >= 0) {
+            playbackManager.playSongs(quickPicks, qIndex, mood = null)
+            return
         }
+
+        val rIndex = uiState.value.recentlyPlayed.indexOfFirst { it.id == song.id }
+        if (rIndex >= 0) {
+            playbackManager.playSongs(uiState.value.recentlyPlayed, rIndex, mood = null)
+            return
+        }
+
+        playbackManager.playSongs(listOf(song), 0, mood = null)
     }
 
     fun playForYou(index: Int) {
+        _uiState.update { it.copy(selectedMood = null) }
+        playbackManager.clearMood()
         val songs = uiState.value.forYou
         if (index in songs.indices) {
-            playbackManager.playSongs(songs, index)
+            playbackManager.playSongs(songs, index, mood = null)
         }
     }
 
     fun playRecentlyPlayed(index: Int) {
+        _uiState.update { it.copy(selectedMood = null) }
+        playbackManager.clearMood()
         val songs = uiState.value.recentlyPlayed
         if (index in songs.indices) {
-            playbackManager.playSongs(songs, index)
+            playbackManager.playSongs(songs, index, mood = null)
         }
     }
 
     fun playFavoriteSongs() {
+        _uiState.update { it.copy(selectedMood = null) }
+        playbackManager.clearMood()
         val songs = uiState.value.favoriteSongs
         if (songs.isNotEmpty()) {
-            playbackManager.playSongs(songs, 0)
+            playbackManager.playSongs(songs, 0, mood = null)
         }
     }
 

@@ -592,6 +592,10 @@ class PlayerViewModel @Inject constructor(
         }
     }
 
+    fun exitMoodMode() {
+        playbackManager.clearMood()
+    }
+
     fun clearCastMessage() {
         _uiState.update { it.copy(castMessage = null) }
     }

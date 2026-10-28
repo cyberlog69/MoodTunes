@@ -252,6 +252,12 @@ class AudioEffectsManager @Inject constructor(
         applyPresetByName(presetName)
     }
 
+    fun resetMoodEq() {
+        if (!_isAutoMoodEqEnabled.value) return
+        val savedPreset = playbackPreferencesRepository.selectedPresetName
+        applyPresetByName(savedPreset)
+    }
+
     fun toggleAutoMoodEq(enabled: Boolean) {
         playbackPreferencesRepository.autoMoodEqEnabled = enabled
         _isAutoMoodEqEnabled.value = enabled

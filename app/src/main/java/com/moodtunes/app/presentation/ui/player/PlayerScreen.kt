@@ -66,8 +66,10 @@ fun PlayerScreen(
         }
     }
 
-    val gradientStart = uiState.selectedMood?.gradientStart ?: EuphoricGradientStart
-    val gradientEnd = uiState.selectedMood?.gradientEnd ?: EuphoricGradientEnd
+    val defaultPlayerGradientStart = Color(0xFF1E1B2E)
+    val defaultPlayerGradientEnd = Color(0xFF0F0E17)
+    val gradientStart = uiState.selectedMood?.gradientStart ?: defaultPlayerGradientStart
+    val gradientEnd = uiState.selectedMood?.gradientEnd ?: defaultPlayerGradientEnd
 
     val animatedGradientStart by animateColorAsState(
         targetValue = gradientStart,
@@ -132,13 +134,14 @@ fun PlayerScreen(
 
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        text = "Now Playing",
+                        text = if (uiState.selectedMood != null) "Mood Radio" else "Now Playing",
                         style = MaterialTheme.typography.labelMedium,
                         color = White.copy(alpha = 0.7f)
                     )
                     uiState.selectedMood?.let { mood ->
                         Text(
-                            text = "${mood.emoji} ${mood.displayName} Mood",
+                            text = "${mood.emoji} ${mood.displayName} • Exit",
+                            modifier = Modifier.clickable { viewModel.exitMoodMode() },
                             style = MaterialTheme.typography.labelLarge,
                             color = White
                         )

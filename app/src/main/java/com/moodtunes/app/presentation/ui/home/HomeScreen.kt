@@ -57,6 +57,7 @@ fun HomeScreen(
         MoodSelectorBottomSheet(
             selectedMood = uiState.selectedMood,
             onDismiss = { showMoodSheet = false },
+            onClearMood = { viewModel.clearMood() },
             onMoodSelected = { mood ->
                 viewModel.onMoodSelected(mood)
                 onNavigateToPlayer()

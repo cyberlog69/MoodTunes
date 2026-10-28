@@ -36,6 +36,7 @@ fun MoodSelectorBottomSheet(
     selectedMood: MoodType?,
     onDismiss: () -> Unit,
     onMoodSelected: (MoodType) -> Unit,
+    onClearMood: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     ModalBottomSheet(
@@ -95,6 +96,37 @@ fun MoodSelectorBottomSheet(
             }
 
             Spacer(Modifier.height(18.dp))
+
+            if (selectedMood != null && onClearMood != null) {
+                Surface(
+                    onClick = {
+                        onClearMood()
+                        onDismiss()
+                    },
+                    shape = RoundedCornerShape(14.dp),
+                    color = Color.White.copy(alpha = 0.08f),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 14.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Currently in ${selectedMood.displayName} Mood",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White
+                        )
+                        Text(
+                            text = "Switch to Standard",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                            color = Color(0xFFFF85A1)
+                        )
+                    }
+                }
+            }
 
             // 2-Column Grid of Moods
             LazyVerticalGrid(

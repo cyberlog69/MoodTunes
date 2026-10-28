@@ -56,6 +56,7 @@ data class AppUserSettings(
     val darkModeOption: DarkModeOption = DarkModeOption.DARK,
     val useDynamicColors: Boolean = true,
     val performanceMode: Boolean = false,
+    val isolateMoodFeatures: Boolean = true,
     val playerDeckStyle: PlayerDeckStyle = PlayerDeckStyle.VINYL,
     val streamQuality: StreamQuality = StreamQuality.LOSSLESS,
     val wifiOnlyStreaming: Boolean = false,
@@ -104,6 +105,7 @@ class UserPreferencesRepository @Inject constructor(
             darkModeOption = runCatching { DarkModeOption.valueOf(modeStr) }.getOrDefault(DarkModeOption.DARK),
             useDynamicColors = prefs.getBoolean("dynamic_colors", true),
             performanceMode = prefs.getBoolean("performance_mode", false),
+            isolateMoodFeatures = prefs.getBoolean("isolate_mood_features", true),
             playerDeckStyle = runCatching { PlayerDeckStyle.valueOf(deckStr) }.getOrDefault(PlayerDeckStyle.VINYL),
             streamQuality = runCatching { StreamQuality.valueOf(qualityStr) }.getOrDefault(StreamQuality.LOSSLESS),
             wifiOnlyStreaming = prefs.getBoolean("wifi_only_streaming", false),
@@ -119,6 +121,11 @@ class UserPreferencesRepository @Inject constructor(
             navidromePassword = prefs.getString("navidrome_password", "") ?: "",
             isNavidromeEnabled = prefs.getBoolean("navidrome_enabled", false)
         )
+    }
+
+    fun updateIsolateMoodFeatures(enabled: Boolean) {
+        prefs.edit().putBoolean("isolate_mood_features", enabled).apply()
+        _settings.value = _settings.value.copy(isolateMoodFeatures = enabled)
     }
 
     fun updatePerformanceMode(enabled: Boolean) {

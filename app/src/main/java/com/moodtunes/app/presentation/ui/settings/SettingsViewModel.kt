@@ -131,6 +131,10 @@ class SettingsViewModel @Inject constructor(
         audioEffectsManager.toggleAutoMoodEq(enabled)
     }
 
+    fun onIsolateMoodFeaturesChanged(enabled: Boolean) {
+        preferencesRepository.updateIsolateMoodFeatures(enabled)
+    }
+
     fun onToggleGapless(enabled: Boolean) {
         playbackManager.setGaplessPlaybackEnabled(enabled)
     }

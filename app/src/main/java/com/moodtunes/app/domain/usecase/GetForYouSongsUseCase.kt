@@ -1,5 +1,6 @@
 package com.moodtunes.app.domain.usecase
 
+import com.moodtunes.app.data.local.preferences.UserPreferencesRepository
 import com.moodtunes.app.domain.model.Song
 import com.moodtunes.app.domain.repository.IMusicRepository
 import com.moodtunes.app.domain.repository.IMoodRepository
@@ -13,7 +14,8 @@ import javax.inject.Inject
  */
 class GetForYouSongsUseCase @Inject constructor(
     private val musicRepository: IMusicRepository,
-    private val moodRepository: IMoodRepository
+    private val moodRepository: IMoodRepository,
+    private val preferencesRepository: UserPreferencesRepository? = null
 ) {
     suspend operator fun invoke(limit: Int = 20): List<Song> {
         val allSongs = musicRepository.getAllSongs()
@@ -22,7 +24,8 @@ class GetForYouSongsUseCase @Inject constructor(
             .filter { it.isFavorite }
         val mostPlayed = musicRepository.getMostPlayed(limit * 3)
             .first()
-        val topMood = moodRepository.getTopMood()
+        val isMoodIsolated = preferencesRepository?.settings?.value?.isolateMoodFeatures ?: false
+        val topMood = if (isMoodIsolated) null else moodRepository.getTopMood()
 
         return RecommendationEngine.recommendForYou(
             allSongs = allSongs,

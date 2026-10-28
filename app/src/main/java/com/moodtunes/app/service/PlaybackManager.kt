@@ -209,6 +209,8 @@ class PlaybackManager @Inject constructor(
         _currentSong.value = effectiveSongs.getOrNull(effectiveStart)
         if (mood != null) {
             audioEffectsManager.applyMood(mood)
+        } else {
+            audioEffectsManager.resetMoodEq()
         }
 
         scope.launch {
@@ -256,6 +258,12 @@ class PlaybackManager @Inject constructor(
             controller.play()
             ensureAudioEffectsAttached()
         }
+    }
+
+    fun clearMood() {
+        _currentMood.value = null
+        finalizeMoodSession()
+        audioEffectsManager.resetMoodEq()
     }
 
     fun playPause() {

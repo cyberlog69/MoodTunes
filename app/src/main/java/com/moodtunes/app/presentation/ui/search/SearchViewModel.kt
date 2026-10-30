@@ -27,11 +27,10 @@ import javax.inject.Inject
 enum class SearchFilter(val displayName: String) {
     ALL("All"),
     SONGS("Songs"),
-    LYRICS("From the Lyrics"),
     ARTISTS("Artists"),
     ALBUMS("Albums"),
-    PLAYLISTS("Playlists"),
-    ONLINE("Online Streams")
+    LYRICS("From the Lyrics"),
+    PLAYLISTS("Playlists")
 }
 
 data class LyricSearchResult(
@@ -271,8 +270,27 @@ class SearchViewModel @Inject constructor(
         val serverSongs = serverDeferred.await()
         val lyricMatches = lyricsDeferred.await()
 
-        _onlineSongs.value = (serverSongs + onlineSongs).distinctBy { it.id }
+        val allOnline = (serverSongs + onlineSongs).distinctBy { it.id }
+        _onlineSongs.value = allOnline
         _lyricResults.value = lyricMatches
+
+        val allCombined = (allLocalSongs + allOnline).distinctBy { it.id }
+        val q = query.trim().lowercase()
+
+        val matchedArtists = allCombined
+            .filter { it.artist.lowercase().contains(q) }
+            .groupBy { it.artist }
+            .map { (artist, songs) -> ArtistGroup(artist, songs) }
+        _artists.value = matchedArtists
+
+        val matchedAlbums = allCombined
+            .filter { it.album.lowercase().contains(q) && it.album.isNotBlank() && it.album != "YouTube Music" }
+            .groupBy { "${it.album}___${it.artist}" }
+            .map { (_, songs) ->
+                val first = songs.first()
+                AlbumGroup(first.album, first.artist, songs)
+            }
+        _albums.value = matchedAlbums
     }
 
     private fun findMatchingLyricSnippet(lyrics: String, query: String): String? {

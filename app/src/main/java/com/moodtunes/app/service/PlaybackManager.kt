@@ -17,6 +17,7 @@ import com.moodtunes.app.data.local.db.entity.MoodHistoryEntity
 import com.moodtunes.app.data.local.preferences.PlaybackPreferencesRepository
 import com.moodtunes.app.data.local.preferences.UserPreferencesRepository
 import com.moodtunes.app.data.remote.OnlineStreamRepository
+import com.moodtunes.app.data.remote.api.LastFmService
 import com.moodtunes.app.data.remote.api.ListenBrainzService
 import com.moodtunes.app.domain.model.MoodType
 import com.moodtunes.app.domain.model.Song
@@ -38,6 +39,7 @@ class PlaybackManager @Inject constructor(
     private val playbackPreferencesRepository: PlaybackPreferencesRepository,
     private val userPreferencesRepository: UserPreferencesRepository,
     private val listenBrainzService: ListenBrainzService,
+    private val lastFmService: LastFmService,
     private val songDao: SongDao,
     private val moodHistoryDao: MoodHistoryDao,
     private val connectivityMonitor: ConnectivityMonitor,
@@ -662,11 +664,45 @@ class PlaybackManager @Inject constructor(
                     // Record the listen for Discovery/Personalization.
                     recordPlay(current, reason)
 
-                    // Broadcast "playing_now" to ListenBrainz if enabled
+                    // Broadcast "playing_now" to ListenBrainz & Last.fm if enabled
                     val prefs = userPreferencesRepository.settings.value
                     if (prefs.isListenBrainzScrobblingEnabled && prefs.listenBrainzToken.isNotBlank()) {
                         scope.launch {
                             listenBrainzService.submitPlayingNow(prefs.listenBrainzToken, current)
+                        }
+                    }
+                    if (prefs.isLastFmScrobblingEnabled && prefs.lastFmSessionKey.isNotBlank()) {
+                        scope.launch {
+                            lastFmService.updateNowPlaying(prefs.lastFmSessionKey, current)
+                        }
+                    }
+
+                    // If current track transition occurred while URL was still unresolved watch URL, resolve immediately
+                    val activeUriStr = mediaItem?.localConfiguration?.uri?.toString() ?: current.uri.toString()
+                    if (current.isStream && (activeUriStr.contains("youtube.com/watch") || activeUriStr.contains("youtu.be"))) {
+                        scope.launch {
+                            val direct = onlineStreamRepository.resolveDirectStreamUrl(current.uri.toString())
+                            if (direct.isNotBlank() && direct.startsWith("http") && !direct.contains("youtube.com/watch")) {
+                                val currentItem = MediaItem.Builder()
+                                    .setUri(Uri.parse(direct))
+                                    .setMediaId(current.id.toString())
+                                    .setMediaMetadata(
+                                        MediaMetadata.Builder()
+                                            .setTitle(current.title)
+                                            .setArtist(current.artist)
+                                            .setAlbumTitle(current.album)
+                                            .setArtworkUri(current.albumArtUri)
+                                            .build()
+                                    )
+                                    .build()
+                                if (controller.currentMediaItemIndex == index) {
+                                    controller.replaceMediaItem(index, currentItem)
+                                    if (!controller.isPlaying) {
+                                        controller.prepare()
+                                        controller.play()
+                                    }
+                                }
+                            }
                         }
                     }
 
@@ -820,17 +856,26 @@ class PlaybackManager @Inject constructor(
                     }
                 }
 
-                // Check and trigger ListenBrainz scrobble if threshold (50% or 4 min) is met
+                // Check and trigger ListenBrainz & Last.fm scrobble if threshold (50% or 4 min) is met
                 val prefs = userPreferencesRepository.settings.value
-                if (!currentSongScrobbled && prefs.isListenBrainzScrobblingEnabled && prefs.listenBrainzToken.isNotBlank()) {
+                val shouldScrobbleLB = prefs.isListenBrainzScrobblingEnabled && prefs.listenBrainzToken.isNotBlank()
+                val shouldScrobbleLastFm = prefs.isLastFmScrobblingEnabled && prefs.lastFmSessionKey.isNotBlank()
+                if (!currentSongScrobbled && (shouldScrobbleLB || shouldScrobbleLastFm)) {
                     val duration = _durationMs.value
                     val pos = _currentPositionMs.value
                     val threshold = if (duration > 0) minOf(duration / 2, 240_000L) else 30_000L
                     if (pos >= threshold && pos >= 10_000L) {
                         currentSongScrobbled = true
                         _currentSong.value?.let { songToScrobble ->
-                            scope.launch {
-                                listenBrainzService.submitListen(prefs.listenBrainzToken, songToScrobble)
+                            if (shouldScrobbleLB) {
+                                scope.launch {
+                                    listenBrainzService.submitListen(prefs.listenBrainzToken, songToScrobble)
+                                }
+                            }
+                            if (shouldScrobbleLastFm) {
+                                scope.launch {
+                                    lastFmService.scrobbleTrack(prefs.lastFmSessionKey, songToScrobble)
+                                }
                             }
                         }
                     }

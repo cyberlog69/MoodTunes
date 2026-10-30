@@ -15,6 +15,10 @@ object MoodScoring {
         var score = 0f
         if (mood in song.moodTags) score += 4f
 
+        // Acoustic feature profile extraction (BPM, Energy, Valence)
+        val profile = AudioFeatureExtractor.extractProfile(song)
+        if (profile.detectedMood == mood) score += 2.5f
+
         val text = buildString {
             append(song.title)
             append(' ')

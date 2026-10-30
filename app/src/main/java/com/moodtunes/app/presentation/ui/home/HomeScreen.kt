@@ -5,7 +5,9 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
+import com.moodtunes.app.data.remote.recommendation.DayTimeSlot
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -419,6 +421,69 @@ fun HomeScreen(
                 }
             }
 
+            // ─── 4b. Contextual Time-of-Day Adaptive Rail ────────────────────
+            if (uiState.timeOfDaySongs.isNotEmpty()) {
+                item {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 20.dp, end = 20.dp, top = 26.dp, bottom = 12.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = when (DayTimeSlot.currentSlot()) {
+                                    DayTimeSlot.MORNING -> Icons.Rounded.WbSunny
+                                    DayTimeSlot.AFTERNOON -> Icons.Rounded.Bolt
+                                    DayTimeSlot.EVENING_NIGHT -> Icons.Rounded.NightlightRound
+                                },
+                                contentDescription = null,
+                                tint = when (DayTimeSlot.currentSlot()) {
+                                    DayTimeSlot.MORNING -> Color(0xFFFFB703)
+                                    DayTimeSlot.AFTERNOON -> Color(0xFF00F5D4)
+                                    DayTimeSlot.EVENING_NIGHT -> Color(0xFF9D4EDD)
+                                },
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Text(
+                                text = uiState.timeOfDayTitle,
+                                style = MaterialTheme.typography.titleLarge.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 22.sp
+                                ),
+                                color = Color.White
+                            )
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = uiState.timeOfDaySubtitle,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.White.copy(alpha = 0.65f)
+                        )
+                    }
+                }
+
+                item {
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 20.dp),
+                        horizontalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        itemsIndexed(uiState.timeOfDaySongs, key = { index, song -> "tod_${song.id}_$index" }) { index, song ->
+                            TimeOfDaySongCard(
+                                song = song,
+                                onClick = {
+                                    viewModel.playTimeOfDay(index)
+                                    onNavigateToPlayer()
+                                },
+                                onMoreClick = { selectedSongForAction = song }
+                            )
+                        }
+                    }
+                }
+            }
+
             // ─── 5. Recently Played (if distinct) ───────────────────────────
             if (extraRecent.isNotEmpty()) {
                 item {
@@ -680,6 +745,84 @@ private fun FrostedNavItem(
                 fontSize = 10.sp
             ),
             color = if (isSelected) Color.White else Color.White.copy(alpha = 0.55f)
+        )
+    }
+}
+
+@Composable
+private fun TimeOfDaySongCard(
+    song: Song,
+    onClick: () -> Unit,
+    onMoreClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .width(148.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(Color(0xFF1E1A29).copy(alpha = 0.70f))
+            .clickable(onClick = onClick)
+            .padding(10.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(128.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(Color(0xFF2C243B)),
+            contentAlignment = Alignment.Center
+        ) {
+            if (song.albumArtUri != null) {
+                AsyncImage(
+                    model = song.albumArtUri,
+                    contentDescription = song.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Rounded.MusicNote,
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.40f),
+                    modifier = Modifier.size(36.dp)
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(6.dp)
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.65f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.PlayArrow,
+                    contentDescription = "Play",
+                    tint = Color.White,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = song.title,
+            style = MaterialTheme.typography.bodyMedium.copy(
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 13.sp
+            ),
+            color = Color.White,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            text = song.artist,
+            style = MaterialTheme.typography.bodySmall.copy(
+                fontSize = 11.sp
+            ),
+            color = Color.White.copy(alpha = 0.65f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }

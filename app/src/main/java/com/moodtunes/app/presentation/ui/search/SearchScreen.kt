@@ -306,43 +306,22 @@ private fun SearchResultsList(
             }
         }
 
-        // ─── 1. Local Songs ──────────────────────────────────────────────────
+        // ─── 1. Songs (YouTube Music Streams) ─────────────────────────────────
         if (uiState.selectedFilter == SearchFilter.ALL || uiState.selectedFilter == SearchFilter.SONGS) {
-            if (uiState.localSongs.isNotEmpty()) {
+            val allSongs = (uiState.onlineSongs + uiState.localSongs).distinctBy { it.id }
+            if (allSongs.isNotEmpty()) {
                 item {
                     SectionTitle(
-                        icon = Icons.Rounded.PhoneAndroid,
-                        title = "Local Songs",
-                        count = uiState.localSongs.size
+                        icon = Icons.Rounded.MusicNote,
+                        title = "Songs",
+                        count = allSongs.size
                     )
                 }
-                itemsIndexed(uiState.localSongs, key = { _, song -> "local_${song.id}" }) { index, song ->
+                itemsIndexed(allSongs, key = { index, song -> "song_${song.id}_$index" }) { index, song ->
                     SongItem(
                         song = song,
                         isPlaying = uiState.currentSong?.id == song.id,
-                        onClick = { onSongClick(uiState.localSongs, index) },
-                        onFavoriteClick = { onFavoriteClick(song) },
-                        onMoreClick = { onMoreClick(song) }
-                    )
-                }
-            }
-        }
-
-        // ─── 2. Online Streams ───────────────────────────────────────────────
-        if (uiState.selectedFilter == SearchFilter.ALL || uiState.selectedFilter == SearchFilter.ONLINE) {
-            if (uiState.onlineSongs.isNotEmpty()) {
-                item {
-                    SectionTitle(
-                        icon = Icons.Rounded.Cloud,
-                        title = "Online Music & Streams",
-                        count = uiState.onlineSongs.size
-                    )
-                }
-                itemsIndexed(uiState.onlineSongs, key = { index, song -> "online_${song.id}_$index" }) { index, song ->
-                    SongItem(
-                        song = song,
-                        isPlaying = uiState.currentSong?.id == song.id,
-                        onClick = { onSongClick(uiState.onlineSongs, index) },
+                        onClick = { onSongClick(allSongs, index) },
                         onFavoriteClick = { onFavoriteClick(song) },
                         onMoreClick = { onMoreClick(song) }
                     )

@@ -3,6 +3,8 @@ package com.moodtunes.app.presentation.ui.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.moodtunes.app.data.local.download.SongDownloadManager
+import com.moodtunes.app.data.remote.recommendation.DayTimeSlot
+import com.moodtunes.app.data.remote.recommendation.TimeOfDayRecommender
 import com.moodtunes.app.data.local.preferences.MusicLanguage
 import com.moodtunes.app.data.local.preferences.UserPreferencesRepository
 import com.moodtunes.app.domain.model.MoodEntry
@@ -39,6 +41,9 @@ data class HomeUiState(
     val currentSong: Song? = null,
     val isPlaying: Boolean = false,
     val userPlaylists: List<Playlist> = emptyList(),
+    val timeOfDayTitle: String = DayTimeSlot.currentSlot().title,
+    val timeOfDaySubtitle: String = DayTimeSlot.currentSlot().subtitle,
+    val timeOfDaySongs: List<Song> = emptyList(),
     val error: String? = null
 )
 
@@ -56,7 +61,8 @@ class HomeViewModel @Inject constructor(
     private val musicRepository: IMusicRepository,
     private val playbackManager: PlaybackManager,
     private val preferencesRepository: UserPreferencesRepository,
-    private val downloadManager: SongDownloadManager
+    private val downloadManager: SongDownloadManager,
+    private val timeOfDayRecommender: TimeOfDayRecommender
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -115,6 +121,20 @@ class HomeViewModel @Inject constructor(
 
         // Fetch Replay statistics
         refreshReplayStats()
+
+        // Fetch Contextual Time-of-Day Adaptive recommendations
+        viewModelScope.launch {
+            runCatching { timeOfDayRecommender.getRecommendations(10) }
+                .onSuccess { rec ->
+                    _uiState.update {
+                        it.copy(
+                            timeOfDayTitle = rec.slot.title,
+                            timeOfDaySubtitle = rec.slot.subtitle,
+                            timeOfDaySongs = rec.songs
+                        )
+                    }
+                }
+        }
     }
 
     private fun refreshReplayStats() {
@@ -201,6 +221,12 @@ class HomeViewModel @Inject constructor(
             return
         }
 
+        val tIndex = uiState.value.timeOfDaySongs.indexOfFirst { it.id == song.id }
+        if (tIndex >= 0) {
+            playbackManager.playSongs(uiState.value.timeOfDaySongs, tIndex, mood = null)
+            return
+        }
+
         val rIndex = uiState.value.recentlyPlayed.indexOfFirst { it.id == song.id }
         if (rIndex >= 0) {
             playbackManager.playSongs(uiState.value.recentlyPlayed, rIndex, mood = null)
@@ -208,6 +234,15 @@ class HomeViewModel @Inject constructor(
         }
 
         playbackManager.playSongs(listOf(song), 0, mood = null)
+    }
+
+    fun playTimeOfDay(index: Int) {
+        _uiState.update { it.copy(selectedMood = null) }
+        playbackManager.clearMood()
+        val songs = uiState.value.timeOfDaySongs
+        if (index in songs.indices) {
+            playbackManager.playSongs(songs, index, mood = null)
+        }
     }
 
     fun playForYou(index: Int) {

@@ -21,10 +21,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.moodtunes.app.data.local.preferences.AudioSourceMode
+// Online-first streaming mode
 import com.moodtunes.app.data.local.preferences.DarkModeOption
 import com.moodtunes.app.data.local.preferences.StreamQuality
 import com.moodtunes.app.presentation.ui.theme.*
@@ -44,6 +45,8 @@ fun SettingsScreen(
 
     var listenBrainzToken by remember(settings.listenBrainzToken) { mutableStateOf(settings.listenBrainzToken) }
     var listenBrainzUser by remember(settings.listenBrainzUsername) { mutableStateOf(settings.listenBrainzUsername) }
+    var lastFmSessionKey by remember(settings.lastFmSessionKey) { mutableStateOf(settings.lastFmSessionKey) }
+    var lastFmUser by remember(settings.lastFmUsername) { mutableStateOf(settings.lastFmUsername) }
 
     var navidromeUrl by remember(settings.navidromeServerUrl) { mutableStateOf(settings.navidromeServerUrl) }
     var navidromeUser by remember(settings.navidromeUsername) { mutableStateOf(settings.navidromeUsername) }
@@ -253,8 +256,8 @@ fun SettingsScreen(
                     }
                 }
 
-                // ─── SECTION 2: Audio Source & Streaming Providers ────────────
-                SettingsSectionHeader(title = "Audio Source & Streaming Providers", icon = Icons.Rounded.Tune)
+                // ─── SECTION 2: Online Streaming Engine ───────────────────────────
+                SettingsSectionHeader(title = "Streaming Engine", icon = Icons.Rounded.Tune)
 
                 Card(
                     shape = RoundedCornerShape(20.dp),
@@ -262,107 +265,50 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        Text(
-                            text = "Audio Source Mode",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "Switch between local storage audio files, online streams, or both combined.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            AudioSourceMode.entries.forEach { mode ->
-                                val isSelected = settings.audioSourceMode == mode
-                                FilterChip(
-                                    selected = isSelected,
-                                    onClick = { viewModel.onAudioSourceModeChanged(mode) },
-                                    label = { Text(mode.displayName, style = MaterialTheme.typography.labelMedium) },
-                                    leadingIcon = if (isSelected) {
-                                        { Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                                    } else null,
-                                    colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
-                                        containerColor = MaterialTheme.colorScheme.surface,
-                                        labelColor = MaterialTheme.colorScheme.onSurfaceVariant
-                                    ),
-                                    modifier = Modifier.fillMaxWidth()
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(
+                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                                    RoundedCornerShape(16.dp)
                                 )
-                            }
-                        }
-
-                        if (settings.audioSourceMode != AudioSourceMode.LOCAL_ONLY) {
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(
-                                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                                        RoundedCornerShape(16.dp)
-                                    )
-                                    .padding(16.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    Icons.Rounded.PlayCircle,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(36.dp)
-                                )
-                                Spacer(Modifier.width(12.dp))
-                                Column(modifier = Modifier.weight(1f)) {
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Rounded.PlayCircle,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(36.dp)
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
                                     Text(
                                         text = "YouTube Music Engine",
                                         style = MaterialTheme.typography.titleMedium,
                                         color = MaterialTheme.colorScheme.onPrimaryContainer
                                     )
-                                    Text(
-                                        text = "High-fidelity Opus/AAC full-song streaming with global catalog, charts, and instant discovery.",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                                    )
+                                    Surface(
+                                        color = MaterialTheme.colorScheme.primary,
+                                        shape = RoundedCornerShape(6.dp)
+                                    ) {
+                                        Text(
+                                            text = "ONLINE",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onPrimary,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
                                 }
-                            }
-                        }
-
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
-                        Text(
-                            text = "Music Language Preferences (Multi-Select)",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "Select one or multiple languages. Your online streams and mood playlists will be personalized to your selection.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-
-                        @OptIn(ExperimentalLayoutApi::class)
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            com.moodtunes.app.data.local.preferences.MusicLanguage.entries.forEach { language ->
-                                val isSelected = settings.preferredLanguages.contains(language)
-                                FilterChip(
-                                    selected = isSelected,
-                                    onClick = { viewModel.onTogglePreferredLanguage(language) },
-                                    label = { Text("${language.flagEmoji} ${language.displayName}") },
-                                    leadingIcon = if (isSelected) {
-                                        { Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                                    } else null,
-                                    colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
-                                        containerColor = MaterialTheme.colorScheme.surface,
-                                        labelColor = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    text = "High-fidelity Opus/AAC studio-grade streaming with global catalog, charts, and instant search discovery.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                                 )
                             }
                         }
@@ -658,6 +604,80 @@ fun SettingsScreen(
                                 Spacer(Modifier.width(6.dp))
                                 Text("Save Token", style = MaterialTheme.typography.labelMedium)
                             }
+                        }
+                    }
+                }
+
+                // ─── SECTION 5b: 📻 Last.fm Scrobbler ──────────────────────────
+                SettingsSectionHeader(title = "Last.fm Scrobbler", icon = Icons.Rounded.Radio)
+
+                Card(
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Enable Last.fm Scrobbling",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = "Submit listening history and Now Playing status to your Last.fm profile",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Switch(
+                                checked = settings.isLastFmScrobblingEnabled,
+                                onCheckedChange = { viewModel.onToggleLastFmScrobbling(it) },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = MaterialTheme.colorScheme.primary,
+                                    checkedTrackColor = MaterialTheme.colorScheme.primaryContainer
+                                )
+                            )
+                        }
+
+                        OutlinedTextField(
+                            value = lastFmUser,
+                            onValueChange = { lastFmUser = it },
+                            label = { Text("Last.fm Username") },
+                            placeholder = { Text("e.g. musiclover99") },
+                            leadingIcon = { Icon(Icons.Rounded.Person, contentDescription = null) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        OutlinedTextField(
+                            value = lastFmSessionKey,
+                            onValueChange = { lastFmSessionKey = it },
+                            label = { Text("Last.fm Session Key / API Key") },
+                            placeholder = { Text("Paste session key") },
+                            leadingIcon = { Icon(Icons.Rounded.Key, contentDescription = null) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Button(
+                            onClick = {
+                                viewModel.onSaveLastFm(
+                                    sessionKey = lastFmSessionKey.trim(),
+                                    username = lastFmUser.trim(),
+                                    enabled = settings.isLastFmScrobblingEnabled || lastFmSessionKey.isNotBlank()
+                                )
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Rounded.Save, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Save Last.fm Settings", style = MaterialTheme.typography.labelMedium)
                         }
                     }
                 }

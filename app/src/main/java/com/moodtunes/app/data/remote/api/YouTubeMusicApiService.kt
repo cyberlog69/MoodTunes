@@ -261,9 +261,9 @@ class YouTubeMusicApiService @Inject constructor() {
                 val streamingData = root.optJSONObject("streamingData") ?: return null
                 val adaptiveFormats = streamingData.optJSONArray("adaptiveFormats") ?: return null
 
-                // Filter for audio streams and find best bitrate
+                // Filter for audio streams: prioritize Opus (ITAG 251 @ 48kHz, 160 kbps studio quality) and highest bitrate
                 var bestUrl: String? = null
-                var maxBitrate = 0
+                var maxScore = -1
 
                 for (i in 0 until adaptiveFormats.length()) {
                     val format = adaptiveFormats.getJSONObject(i)
@@ -272,8 +272,11 @@ class YouTubeMusicApiService @Inject constructor() {
 
                     if (mimeType.startsWith("audio/") && url.isNotBlank()) {
                         val bitrate = format.optInt("bitrate", 0)
-                        if (bitrate > maxBitrate) {
-                            maxBitrate = bitrate
+                        val isOpus = mimeType.contains("webm") || mimeType.contains("opus")
+                        // Heavily favor Opus 48kHz transparent audio over AAC
+                        val score = bitrate + if (isOpus) 50000 else 0
+                        if (score > maxScore) {
+                            maxScore = score
                             bestUrl = url
                         }
                     }

@@ -195,6 +195,16 @@ class SettingsViewModel @Inject constructor(
         preferencesRepository.updateListenBrainzScrobbling(enabled)
     }
 
+    // ── Last.fm Controls ──────────────────────────────────────────────────────
+    fun onSaveLastFm(sessionKey: String, username: String, enabled: Boolean) {
+        preferencesRepository.updateLastFm(sessionKey, username, enabled)
+        _uiState.update { it.copy(message = "Last.fm configuration saved ✅") }
+    }
+
+    fun onToggleLastFmScrobbling(enabled: Boolean) {
+        preferencesRepository.toggleLastFmScrobbling(enabled)
+    }
+
     // ── Navidrome / Subsonic Controls ─────────────────────────────────────────
     fun onSaveNavidrome(serverUrl: String, username: String, password: String, enabled: Boolean) {
         preferencesRepository.updateNavidromeConfig(serverUrl, username, password, enabled)

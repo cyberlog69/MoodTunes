@@ -54,6 +54,16 @@ fun LibraryScreen(
 
     var showCreateDialog by remember { mutableStateOf(false) }
     var newPlaylistName by remember { mutableStateOf("") }
+    var showImportDialog by remember { mutableStateOf(false) }
+    var importUrl by remember { mutableStateOf("") }
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(uiState.userMessage) {
+        uiState.userMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearUserMessage()
+        }
+    }
 
     // Song Context Menu Sheet
     SongActionBottomSheet(
@@ -259,6 +269,7 @@ fun LibraryScreen(
                 LibraryTab.PLAYLISTS -> PlaylistsContent(
                     playlists = uiState.playlists,
                     onCreateClick = { newPlaylistName = ""; showCreateDialog = true },
+                    onImportClick = { importUrl = ""; showImportDialog = true },
                     onPlaylistClick = onNavigateToPlaylist
                 )
                 LibraryTab.ALBUMS -> AlbumsContent(
@@ -326,6 +337,44 @@ fun LibraryScreen(
             }
         )
     }
+
+    if (showImportDialog) {
+        AlertDialog(
+            onDismissRequest = { showImportDialog = false },
+            title = { Text("Import Playlist or Link") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "Paste a Spotify, Apple Music, or YouTube link to convert and import into MoodTunes:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedTextField(
+                        value = importUrl,
+                        onValueChange = { importUrl = it },
+                        placeholder = { Text("https://open.spotify.com/track/...") },
+                        singleLine = true,
+                        leadingIcon = { Icon(Icons.Rounded.Link, contentDescription = null) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (importUrl.isNotBlank()) {
+                            viewModel.importExternalLink(importUrl.trim())
+                            showImportDialog = false
+                            importUrl = ""
+                        }
+                    }
+                ) { Text("Import") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showImportDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
 }
 
 // â”€â”€â”€ Playlists tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -334,20 +383,35 @@ fun LibraryScreen(
 private fun PlaylistsContent(
     playlists: List<Playlist>,
     onCreateClick: () -> Unit,
+    onImportClick: () -> Unit,
     onPlaylistClick: (Long) -> Unit
 ) {
     Column {
-        Button(
-            onClick = onCreateClick,
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            shape = RoundedCornerShape(14.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Icon(Icons.Rounded.Add, contentDescription = null)
-            Spacer(Modifier.width(6.dp))
-            Text("Create New Playlist")
+            Button(
+                onClick = onCreateClick,
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+            ) {
+                Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("New Playlist")
+            }
+            OutlinedButton(
+                onClick = onImportClick,
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Icon(Icons.Rounded.Link, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Import Link")
+            }
         }
         if (playlists.isEmpty()) {
             Box(

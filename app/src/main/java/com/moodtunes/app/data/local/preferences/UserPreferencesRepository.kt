@@ -62,12 +62,16 @@ data class AppUserSettings(
     val wifiOnlyStreaming: Boolean = false,
     val wifiOnlyDownloads: Boolean = true,
     val mobileDataHighQuality: Boolean = true,
-    val audioSourceMode: AudioSourceMode = AudioSourceMode.BOTH,
+    val audioSourceMode: AudioSourceMode = AudioSourceMode.STREAM_ONLY,
     val preferredLanguages: Set<MusicLanguage> = setOf(MusicLanguage.ALL),
     // 🧠 ListenBrainz
     val listenBrainzToken: String = "",
     val listenBrainzUsername: String = "",
     val isListenBrainzScrobblingEnabled: Boolean = false,
+    // 📻 Last.fm
+    val lastFmSessionKey: String = "",
+    val lastFmUsername: String = "",
+    val isLastFmScrobblingEnabled: Boolean = false,
     // 🏠 Navidrome / Subsonic
     val navidromeServerUrl: String = "",
     val navidromeUsername: String = "",
@@ -91,7 +95,7 @@ class UserPreferencesRepository @Inject constructor(
     private fun loadSettings(): AppUserSettings {
         val modeStr = prefs.getString("dark_mode", DarkModeOption.DARK.name) ?: DarkModeOption.DARK.name
         val qualityStr = prefs.getString("stream_quality", StreamQuality.LOSSLESS.name) ?: StreamQuality.LOSSLESS.name
-        val sourceStr = prefs.getString("audio_source_mode", AudioSourceMode.BOTH.name) ?: AudioSourceMode.BOTH.name
+        val sourceStr = prefs.getString("audio_source_mode", AudioSourceMode.STREAM_ONLY.name) ?: AudioSourceMode.STREAM_ONLY.name
         val deckStr = prefs.getString("player_deck_style", PlayerDeckStyle.VINYL.name) ?: PlayerDeckStyle.VINYL.name
         
         val rawLangs = prefs.getString("preferred_languages", prefs.getString("preferred_language", MusicLanguage.ALL.name)) 
@@ -111,11 +115,14 @@ class UserPreferencesRepository @Inject constructor(
             wifiOnlyStreaming = prefs.getBoolean("wifi_only_streaming", false),
             wifiOnlyDownloads = prefs.getBoolean("wifi_only_downloads", true),
             mobileDataHighQuality = prefs.getBoolean("mobile_data_hq", true),
-            audioSourceMode = runCatching { AudioSourceMode.valueOf(sourceStr) }.getOrDefault(AudioSourceMode.BOTH),
+            audioSourceMode = runCatching { AudioSourceMode.valueOf(sourceStr) }.getOrDefault(AudioSourceMode.STREAM_ONLY),
             preferredLanguages = parsedLangs,
             listenBrainzToken = prefs.getString("listenbrainz_token", "") ?: "",
             listenBrainzUsername = prefs.getString("listenbrainz_username", "") ?: "",
             isListenBrainzScrobblingEnabled = prefs.getBoolean("listenbrainz_scrobble_enabled", false),
+            lastFmSessionKey = prefs.getString("lastfm_session_key", "") ?: "",
+            lastFmUsername = prefs.getString("lastfm_username", "") ?: "",
+            isLastFmScrobblingEnabled = prefs.getBoolean("lastfm_scrobble_enabled", false),
             navidromeServerUrl = prefs.getString("navidrome_server_url", "") ?: "",
             navidromeUsername = prefs.getString("navidrome_username", "") ?: "",
             navidromePassword = prefs.getString("navidrome_password", "") ?: "",
@@ -282,5 +289,24 @@ class UserPreferencesRepository @Inject constructor(
 
     fun clearRecentSearches() {
         prefs.edit().remove("recent_searches").apply()
+    }
+
+    // ── Last.fm Scrobbling ───────────────────────────────────────────────────
+    fun updateLastFm(sessionKey: String, username: String, enabled: Boolean) {
+        prefs.edit()
+            .putString("lastfm_session_key", sessionKey)
+            .putString("lastfm_username", username)
+            .putBoolean("lastfm_scrobble_enabled", enabled)
+            .apply()
+        _settings.value = _settings.value.copy(
+            lastFmSessionKey = sessionKey,
+            lastFmUsername = username,
+            isLastFmScrobblingEnabled = enabled
+        )
+    }
+
+    fun toggleLastFmScrobbling(enabled: Boolean) {
+        prefs.edit().putBoolean("lastfm_scrobble_enabled", enabled).apply()
+        _settings.value = _settings.value.copy(isLastFmScrobblingEnabled = enabled)
     }
 }

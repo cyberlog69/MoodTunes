@@ -8,6 +8,9 @@ import com.moodtunes.app.data.remote.OnlineStreamRepository
 import com.moodtunes.app.domain.model.Playlist
 import com.moodtunes.app.domain.model.Song
 import com.moodtunes.app.domain.usecase.AddSongToPlaylistUseCase
+import com.moodtunes.app.data.local.playlist.PlaylistFileImporter
+import com.moodtunes.app.data.remote.link.UniversalLinkConverter
+import com.moodtunes.app.data.remote.link.UniversalLinkResult
 import com.moodtunes.app.domain.usecase.CreatePlaylistUseCase
 import com.moodtunes.app.domain.usecase.GetAllSongsUseCase
 import com.moodtunes.app.domain.usecase.GetFavoriteSongsUseCase
@@ -50,7 +53,8 @@ data class LibraryUiState(
     val selectedTab: LibraryTab = LibraryTab.ONLINE_STREAM,
     val selectedCategory: String = "Top Hits",
     val currentSongId: Long? = null,
-    val isPlaying: Boolean = false
+    val isPlaying: Boolean = false,
+    val userMessage: String? = null
 )
 
 enum class LibraryTab(val label: String) {
@@ -78,7 +82,9 @@ class LibraryViewModel @Inject constructor(
     private val subsonicApiService: SubsonicApiService,
     private val userPreferencesRepository: UserPreferencesRepository,
     private val tagEditorManager: TagEditorManager,
-    private val downloadManager: com.moodtunes.app.data.local.download.SongDownloadManager
+    private val downloadManager: com.moodtunes.app.data.local.download.SongDownloadManager,
+    private val universalLinkConverter: UniversalLinkConverter,
+    private val playlistFileImporter: PlaylistFileImporter
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LibraryUiState())
@@ -314,6 +320,42 @@ class LibraryViewModel @Inject constructor(
                 loadSongs()
             }
         }
+    }
+
+    fun importExternalLink(url: String) {
+        if (url.isBlank()) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, userMessage = null) }
+            when (val result = universalLinkConverter.convertUrl(url)) {
+                is UniversalLinkResult.SingleTrack -> {
+                    val id = createPlaylistUseCase("Imported Track")
+                    addSongToPlaylistUseCase(id, result.song)
+                    _uiState.update { it.copy(isLoading = false, userMessage = "Imported '${result.song.title}' to playlist! 🎉") }
+                }
+                is UniversalLinkResult.TrackList -> {
+                    val id = createPlaylistUseCase(result.title)
+                    for (song in result.songs) {
+                        addSongToPlaylistUseCase(id, song)
+                    }
+                    _uiState.update { it.copy(isLoading = false, userMessage = "Imported ${result.songs.size} tracks into '${result.title}'! 🎉") }
+                }
+                is UniversalLinkResult.Error -> {
+                    _uiState.update { it.copy(isLoading = false, userMessage = result.message) }
+                }
+            }
+        }
+    }
+
+    fun importM3U(name: String, inputStream: java.io.InputStream) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, userMessage = null) }
+            val result = playlistFileImporter.importPlaylistFromM3U(name, inputStream)
+            _uiState.update { it.copy(isLoading = false, userMessage = "Imported playlist '${result.playlistName}' (${result.trackCount} tracks)! 🎉") }
+        }
+    }
+
+    fun clearUserMessage() {
+        _uiState.update { it.copy(userMessage = null) }
     }
 
     fun onSongSelected(song: Song) {

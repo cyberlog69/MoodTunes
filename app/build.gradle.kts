@@ -27,15 +27,19 @@ android {
 
     signingConfigs {
         create("release") {
-            val keystorePath = System.getenv("KEYSTORE_FILE") ?: "release.keystore"
-            val keystoreFile = file(keystorePath)
-            if (keystoreFile.exists()) {
+            val envPath = System.getenv("KEYSTORE_FILE")?.trim()
+            val keystoreFile = if (!envPath.isNullOrEmpty()) file(envPath) else file("release.keystore")
+            val pass = System.getenv("KEYSTORE_PASSWORD")?.trim()
+            val alias = System.getenv("KEY_ALIAS")?.trim()
+            val keyPass = System.getenv("KEY_PASSWORD")?.trim()
+
+            if (keystoreFile.exists() && !pass.isNullOrEmpty() && !alias.isNullOrEmpty() && !keyPass.isNullOrEmpty()) {
                 storeFile = keystoreFile
-                storePassword = System.getenv("KEYSTORE_PASSWORD") ?: ""
-                keyAlias = System.getenv("KEY_ALIAS") ?: ""
-                keyPassword = System.getenv("KEY_PASSWORD") ?: ""
+                storePassword = pass
+                keyAlias = alias
+                keyPassword = keyPass
             } else {
-                // Fallback to debug signature for local developer builds without secrets
+                // Fallback to debug signature for local developer builds or when release secrets are absent
                 initWith(getByName("debug"))
             }
         }

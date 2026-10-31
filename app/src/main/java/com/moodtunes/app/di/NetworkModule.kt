@@ -1,6 +1,7 @@
 package com.moodtunes.app.di
 
 import androidx.media3.datasource.okhttp.OkHttpDataSource
+import com.moodtunes.app.data.remote.stream.StreamResolver
 import com.moodtunes.app.data.remote.stream.YouTubeStreamInterceptor
 import dagger.Module
 import dagger.Provides
@@ -9,6 +10,7 @@ import dagger.hilt.components.SingletonComponent
 import okhttp3.ConnectionPool
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
+import javax.inject.Provider
 import javax.inject.Qualifier
 import javax.inject.Singleton
 
@@ -35,7 +37,9 @@ object NetworkModule {
     @Provides
     @Singleton
     @StreamingClient
-    fun provideStreamingOkHttpClient(): OkHttpClient {
+    fun provideStreamingOkHttpClient(
+        streamResolverProvider: Provider<StreamResolver>
+    ): OkHttpClient {
         // Underlying bare client for executing short ranged chunk requests
         val chunkClient = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
@@ -45,14 +49,19 @@ object NetworkModule {
             .followSslRedirects(true)
             .build()
 
-        // Outer client wrapping YouTubeStreamInterceptor with 1MB chunked prefetch
+        // Outer client wrapping YouTubeStreamInterceptor with 1MB chunked prefetch and transparent stream resolution
         return OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .connectionPool(ConnectionPool(16, 5, TimeUnit.MINUTES))
             .followRedirects(true)
             .followSslRedirects(true)
-            .addInterceptor(YouTubeStreamInterceptor(chunkClient = chunkClient))
+            .addInterceptor(
+                YouTubeStreamInterceptor(
+                    chunkClient = chunkClient,
+                    streamResolverProvider = streamResolverProvider
+                )
+            )
             .build()
     }
 

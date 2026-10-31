@@ -39,6 +39,20 @@ class OnlineStreamRepository @Inject constructor(
     }
 
     /**
+     * Evicts the cached stream URL for [targetUrlOrVideoId] so that subsequent resolution fetches a fresh URL.
+     */
+    fun evictStreamCache(targetUrlOrVideoId: String) {
+        streamResolver.evict(targetUrlOrVideoId)
+    }
+
+    /**
+     * Returns an active cached direct stream URL if available, or null if absent or expired.
+     */
+    fun getCachedStreamUrl(targetUrlOrVideoId: String): String? {
+        return streamResolver.getCached(targetUrlOrVideoId)?.url
+    }
+
+    /**
      * Searches YouTube Music for full-length tracks matching [query].
      */
     suspend fun searchSongs(query: String, limit: Int = 20): List<Song> = withContext(Dispatchers.IO) {

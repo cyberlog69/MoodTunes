@@ -160,7 +160,17 @@ class MusicLibraryCallback(
             // Already a concrete, playable leaf item (has a real uri).
             else -> {
                 val uri = item.localConfiguration?.uri
-                if (uri != null) listOf(item) else emptyList()
+                if (uri != null) {
+                    val uriStr = uri.toString()
+                    val cached = if (uriStr.contains("youtube.com/watch") || uriStr.contains("youtu.be")) {
+                        onlineStreamRepository.getCachedStreamUrl(uriStr)
+                    } else null
+                    if (cached != null) {
+                        listOf(item.buildUpon().setUri(android.net.Uri.parse(cached)).build())
+                    } else {
+                        listOf(item)
+                    }
+                } else emptyList()
             }
         }
     }

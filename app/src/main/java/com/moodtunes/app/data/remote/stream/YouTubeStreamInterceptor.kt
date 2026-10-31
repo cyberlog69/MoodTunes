@@ -3,6 +3,7 @@ package com.moodtunes.app.data.remote.stream
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -19,24 +20,36 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.Future
 import java.util.concurrent.atomic.AtomicInteger
+import javax.inject.Provider
 
 const val DESKTOP_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0"
 const val VISIONOS_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15"
 
 /**
- * Intercepts googlevideo "videoplayback" requests on top of OkHttp:
- * - Sends POST with request counter (`rn`) and client-appropriate headers.
+ * Intercepts audio playback requests on top of OkHttp:
+ * - Transparently intercepts YouTube watch URLs (`music.youtube.com/watch`, `youtube.com/watch`, `youtu.be`)
+ *   and resolves them synchronously into direct googlevideo audio streams using [StreamResolver],
+ *   preventing ExoPlayer container parsing errors on queue, shuffle, and DJ mix transitions.
+ * - Sends POST with request counter (`rn`) and client-appropriate headers for googlevideo streams.
  * - Converts open-ended long reads into 1 MB chunks with immediate pre-fetching of the next chunk,
  *   completely bypassing YouTube/GoogleVideo streaming speed throttling (which limits open-ended reads to 1x playback speed).
  * - Reports range responses as 206 so ExoPlayer smoothly streams without byte skips.
- * - Retries transient 403 errors with a brief delay and updated request counter.
+ * - Retries transient 403/410 errors with a brief delay, updated request counter, and automatic stream token refresh.
  */
 class YouTubeStreamInterceptor(
     private val chunkClient: OkHttpClient? = null,
+    private val streamResolverProvider: Provider<StreamResolver>? = null,
     private val chunkSize: Long = 1L shl 20 // 1 MB
 ) : Interceptor {
 
     private val requestNumber = AtomicInteger(0)
+
+    private fun isYouTubeWatchUrl(url: HttpUrl): Boolean {
+        val host = url.host
+        val path = url.encodedPath
+        return (host.contains("youtube.com") && (path.startsWith("/watch") || path.startsWith("/shorts/"))) ||
+                host == "youtu.be"
+    }
 
     private fun isStream(url: HttpUrl): Boolean =
         url.host.endsWith("googlevideo.com") && url.encodedPath.startsWith("/videoplayback")
@@ -66,29 +79,86 @@ class YouTubeStreamInterceptor(
         return builder.build()
     }
 
-    private inline fun withRetry(request: Request, send: (Request) -> Response): Response {
+    private fun withRetry(
+        request: Request,
+        resolvedFromWatch: String?,
+        send: (Request) -> Response
+    ): Response {
         val resp = send(request)
-        if (resp.code != 403) return resp
+        if (resp.code != 403 && resp.code != 410) return resp
         resp.close()
         try {
             Thread.sleep(350)
         } catch (_: InterruptedException) {
-            // Restore interrupt status
             Thread.currentThread().interrupt()
         }
         val retryUrl = request.url.newBuilder()
             .setQueryParameter("rn", requestNumber.incrementAndGet().toString())
             .build()
-        return send(request.newBuilder().url(retryUrl).build())
+        val retryResp = send(request.newBuilder().url(retryUrl).build())
+        if (retryResp.code != 403 && retryResp.code != 410) return retryResp
+
+        // If retry still returned 403/410, and stream resolver is available, refresh the stream URL
+        val resolver = streamResolverProvider?.get()
+        if (resolver != null) {
+            val videoId = request.url.queryParameter("docid")
+                ?: resolvedFromWatch?.let { resolver.extractVideoId(it) }
+            if (!videoId.isNullOrBlank()) {
+                retryResp.close()
+                Timber.w("Stream token expired for videoId=%s (HTTP 403/410), refreshing stream...", videoId)
+                resolver.evict(videoId)
+                return runCatching {
+                    val freshResult = resolver.resolveSync(videoId)
+                    val freshHttpUrl = freshResult.url.toHttpUrlOrNull()
+                    if (freshHttpUrl != null) {
+                        val freshReq = streamRequest(
+                            request.newBuilder().url(freshHttpUrl).build(),
+                            0,
+                            null,
+                            request.url.queryParameter("range") != null
+                        )
+                        send(freshReq)
+                    } else {
+                        retryResp
+                    }
+                }.getOrElse {
+                    send(request)
+                }
+            }
+        }
+        return retryResp
     }
 
     override fun intercept(chain: Interceptor.Chain): Response {
-        val req = chain.request()
-        val url = req.url
+        var req = chain.request()
+        var url = req.url
+        var resolvedFromWatch: String? = null
+
+        // Transparently resolve YouTube watch URLs if requested directly by ExoPlayer
+        if (isYouTubeWatchUrl(url)) {
+            val watchUrl = url.toString()
+            val resolver = streamResolverProvider?.get()
+            if (resolver != null) {
+                try {
+                    val streamResult = resolver.resolveSync(watchUrl)
+                    val targetHttpUrl = streamResult.url.toHttpUrlOrNull()
+                    if (targetHttpUrl != null) {
+                        resolvedFromWatch = watchUrl
+                        req = req.newBuilder().url(targetHttpUrl).build()
+                        url = req.url
+                        Timber.i("Transparently resolved YouTube watch URL to direct audio stream: %s", watchUrl)
+                    }
+                } catch (e: Exception) {
+                    Timber.e(e, "YouTubeStreamInterceptor: Failed to resolve watch URL: %s", url)
+                    throw IOException("Failed to resolve stream for YouTube URL: $url", e)
+                }
+            }
+        }
+
         if (!isStream(url)) return chain.proceed(req)
 
         if (url.queryParameter("range") != null) {
-            return withRetry(streamRequest(req, 0, null, false), chain::proceed)
+            return withRetry(streamRequest(req, 0, null, false), resolvedFromWatch, chain::proceed)
         }
 
         val rangeHeader = req.header("Range")
@@ -102,7 +172,7 @@ class YouTubeStreamInterceptor(
         // If chunkClient is present and request is larger than chunkSize, serve via ChunkedBody with prefetch
         if (chunkClient != null && clen != null && end != null && (end - start + 1) > chunkSize) {
             val firstEnd = minOf(end, start + chunkSize - 1)
-            val first = withRetry(streamRequest(req, start, firstEnd, true), chain::proceed)
+            val first = withRetry(streamRequest(req, start, firstEnd, true), resolvedFromWatch, chain::proceed)
             if (!first.isSuccessful) return first
             val len = end - start + 1
             val body = ChunkedBody(first, start, end, req)
@@ -125,7 +195,11 @@ class YouTubeStreamInterceptor(
         }
 
         val translated = m != null && !(start == 0L && m.groupValues[2].isEmpty())
-        val resp = withRetry(streamRequest(req, start, m?.groupValues?.get(2)?.toLongOrNull(), translated), chain::proceed)
+        val resp = withRetry(
+            streamRequest(req, start, m?.groupValues?.get(2)?.toLongOrNull(), translated),
+            resolvedFromWatch,
+            chain::proceed
+        )
         if (translated && resp.code == 200) {
             val len = resp.header("Content-Length")?.toLongOrNull()
             val rb = resp.newBuilder().code(206).message("Partial Content")

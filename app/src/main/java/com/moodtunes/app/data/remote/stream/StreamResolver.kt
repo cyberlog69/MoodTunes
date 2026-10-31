@@ -234,10 +234,41 @@ class StreamResolver @Inject constructor(
         }
     }
 
-    private fun extractVideoId(target: String): String {
+    /**
+     * Evicts a cached stream result for [videoIdOrUrl], allowing a fresh stream to be fetched.
+     */
+    fun evict(videoIdOrUrl: String) {
+        val videoId = extractVideoId(videoIdOrUrl)
+        if (videoId.isNotBlank()) {
+            cache.remove(videoId)
+        }
+    }
+
+    /**
+     * Returns a valid cached stream result for [videoIdOrUrl], or null if absent or expired.
+     */
+    fun getCached(videoIdOrUrl: String): StreamResult? {
+        val videoId = extractVideoId(videoIdOrUrl)
+        if (videoId.isBlank()) return null
+        val now = System.currentTimeMillis()
+        val cached = cache[videoId] ?: return null
+        return if (now < cached.expiresAtMs) {
+            cached
+        } else {
+            cache.remove(videoId)
+            null
+        }
+    }
+
+    fun extractVideoId(target: String): String {
         val trimmed = target.trim()
-        if (trimmed.length == 11 && !trimmed.contains("/") && !trimmed.contains("?")) {
+        if (trimmed.length == 11 && !trimmed.contains("/") && !trimmed.contains("?") && !trimmed.contains("&")) {
             return trimmed
+        }
+        runCatching {
+            val uri = Uri.parse(trimmed)
+            val v = uri.getQueryParameter("v")
+            if (!v.isNullOrBlank() && v.length == 11) return v
         }
         val videoIdRegex = Regex("""(?:v=|youtu\.be/|vi/|embed/|shorts/|music\.youtube\.com/watch\?v=)([a-zA-Z0-9_-]{11})""")
         return videoIdRegex.find(trimmed)?.groupValues?.get(1) ?: trimmed

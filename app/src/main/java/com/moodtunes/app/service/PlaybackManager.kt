@@ -240,7 +240,12 @@ class PlaybackManager @Inject constructor(
             }
 
             val mediaItems = effectiveSongs.mapIndexed { index, song ->
-                val itemUri = if (index == effectiveStart && resolvedUri != null) resolvedUri else song.uri
+                val cached = if (song.isStream) onlineStreamRepository.getCachedStreamUrl(song.uri.toString()) else null
+                val itemUri = when {
+                    index == effectiveStart && resolvedUri != null -> resolvedUri
+                    cached != null -> Uri.parse(cached)
+                    else -> song.uri
+                }
                 MediaItem.Builder()
                     .setUri(itemUri)
                     .setMediaId(song.id.toString())
@@ -259,6 +264,18 @@ class PlaybackManager @Inject constructor(
             controller.prepare()
             controller.play()
             ensureAudioEffectsAttached()
+
+            // Asynchronously pre-warm upcoming songs so subsequent tracks are cached in advance
+            scope.launch {
+                val upcoming = effectiveSongs.drop(effectiveStart + 1).take(5)
+                for (s in upcoming) {
+                    if (s.isStream) {
+                        runCatching {
+                            onlineStreamRepository.resolveDirectStreamUrl(s.uri.toString())
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -488,9 +505,26 @@ class PlaybackManager @Inject constructor(
         val newPlaylist = mutableListOf(currentSong).apply { addAll(sequencedUpcoming) }
 
         _playlist.value = newPlaylist
-        val items = newPlaylist.map { createMediaItem(it) }
-        controller.setMediaItems(items, 0, controller.currentPosition)
-        controller.prepare()
+
+        // Seamless queue update: do NOT interrupt the currently playing track!
+        val upcomingItems = sequencedUpcoming.map { createMediaItem(it) }
+        val currentQueueCount = controller.mediaItemCount
+        if (currentQueueCount > currentIndex + 1) {
+            controller.removeMediaItems(currentIndex + 1, currentQueueCount)
+        }
+        if (upcomingItems.isNotEmpty()) {
+            controller.addMediaItems(currentIndex + 1, upcomingItems)
+        }
+
+        // Asynchronously warm the next DJ track in cache
+        val nextTrack = sequencedUpcoming.firstOrNull()
+        if (nextTrack != null && nextTrack.isStream) {
+            scope.launch {
+                runCatching {
+                    onlineStreamRepository.resolveDirectStreamUrl(nextTrack.uri.toString())
+                }
+            }
+        }
     }
 
     fun getDjTrackInfo(song: Song): com.moodtunes.app.service.dj.DjTrackInfo {
@@ -499,8 +533,9 @@ class PlaybackManager @Inject constructor(
 
     // ── Queue editor ─────────────────────────────────────────────────────────
     private fun createMediaItem(song: Song): MediaItem {
+        val cached = if (song.isStream) onlineStreamRepository.getCachedStreamUrl(song.uri.toString()) else null
         return MediaItem.Builder()
-            .setUri(song.uri)
+            .setUri(cached?.let { Uri.parse(it) } ?: song.uri)
             .setMediaId(song.id.toString())
             .setMediaMetadata(
                 MediaMetadata.Builder()
@@ -532,6 +567,11 @@ class PlaybackManager @Inject constructor(
         val mediaItem = createMediaItem(song)
         controller.addMediaItem(mediaItem)
         _playlist.value = queue + song
+        if (song.isStream) {
+            scope.launch {
+                runCatching { onlineStreamRepository.resolveDirectStreamUrl(song.uri.toString()) }
+            }
+        }
     }
 
     fun playNext(song: Song) {
@@ -548,6 +588,11 @@ class PlaybackManager @Inject constructor(
         val mutable = queue.toMutableList()
         mutable.add(insertIndex, song)
         _playlist.value = mutable
+        if (song.isStream) {
+            scope.launch {
+                runCatching { onlineStreamRepository.resolveDirectStreamUrl(song.uri.toString()) }
+            }
+        }
     }
 
     fun removeFromQueue(index: Int) {
@@ -677,42 +722,13 @@ class PlaybackManager @Inject constructor(
                         }
                     }
 
-                    // If current track transition occurred while URL was still unresolved watch URL, resolve immediately
-                    val activeUriStr = mediaItem?.localConfiguration?.uri?.toString() ?: current.uri.toString()
-                    if (current.isStream && (activeUriStr.contains("youtube.com/watch") || activeUriStr.contains("youtu.be"))) {
-                        scope.launch {
-                            val direct = onlineStreamRepository.resolveDirectStreamUrl(current.uri.toString())
-                            if (direct.isNotBlank() && direct.startsWith("http") && !direct.contains("youtube.com/watch")) {
-                                val currentItem = MediaItem.Builder()
-                                    .setUri(Uri.parse(direct))
-                                    .setMediaId(current.id.toString())
-                                    .setMediaMetadata(
-                                        MediaMetadata.Builder()
-                                            .setTitle(current.title)
-                                            .setArtist(current.artist)
-                                            .setAlbumTitle(current.album)
-                                            .setArtworkUri(current.albumArtUri)
-                                            .build()
-                                    )
-                                    .build()
-                                if (controller.currentMediaItemIndex == index) {
-                                    controller.replaceMediaItem(index, currentItem)
-                                    if (!controller.isPlaying) {
-                                        controller.prepare()
-                                        controller.play()
-                                    }
-                                }
-                            }
-                        }
-                    }
-
                     // Pre-resolve next stream track in the queue for seamless playback transitions
                     val nextIndex = index + 1
                     val nextSong = _playlist.value.getOrNull(nextIndex)
                     if (nextSong != null && nextSong.isStream) {
                         scope.launch {
                             val direct = onlineStreamRepository.resolveDirectStreamUrl(nextSong.uri.toString())
-                            if (direct.isNotBlank() && direct != nextSong.uri.toString()) {
+                            if (direct.isNotBlank() && direct != nextSong.uri.toString() && !direct.contains("youtube.com/watch")) {
                                 val nextItem = MediaItem.Builder()
                                     .setUri(Uri.parse(direct))
                                     .setMediaId(nextSong.id.toString())
@@ -758,7 +774,52 @@ class PlaybackManager @Inject constructor(
                 val isNetworkError = code in NETWORK_ERROR_CODES
                 val isFatalDecode = code in FATAL_ERROR_CODES
                 val message = friendlyErrorMessage(code, error.message)
+                val current = _currentSong.value
 
+                // If this is an online stream track and retries are available,
+                // evict the expired/invalid stream URL and resolve a fresh direct URL.
+                if (current != null && current.isStream && retryAttempts < MAX_RETRY_ATTEMPTS) {
+                    retryAttempts++
+                    Timber.w(error, "Stream playback error (code=%d), refreshing stream (%d/%d)", code, retryAttempts, MAX_RETRY_ATTEMPTS)
+                    _playbackError.value = PlaybackError(
+                        message = "Optimizing audio stream... ($retryAttempts/$MAX_RETRY_ATTEMPTS)",
+                        isRetryable = true
+                    )
+                    retryJob = scope.launch {
+                        delay(400L * retryAttempts)
+                        onlineStreamRepository.evictStreamCache(current.uri.toString())
+                        val direct = onlineStreamRepository.resolveDirectStreamUrl(current.uri.toString())
+                        val currentIndex = controller.currentMediaItemIndex
+                        if (direct.isNotBlank() && direct.startsWith("http") && !direct.contains("youtube.com/watch")) {
+                            val freshItem = MediaItem.Builder()
+                                .setUri(Uri.parse(direct))
+                                .setMediaId(current.id.toString())
+                                .setMediaMetadata(
+                                    MediaMetadata.Builder()
+                                        .setTitle(current.title)
+                                        .setArtist(current.artist)
+                                        .setAlbumTitle(current.album)
+                                        .setArtworkUri(current.albumArtUri)
+                                        .build()
+                                )
+                                .build()
+                            if (controller.mediaItemCount > currentIndex) {
+                                controller.replaceMediaItem(currentIndex, freshItem)
+                                controller.prepare()
+                                controller.play()
+                                _playbackError.value = null
+                                return@launch
+                            }
+                        }
+                        handleTerminalError(code, message, isFatalDecode, isNetworkError)
+                    }
+                    return
+                }
+
+                handleTerminalError(code, message, isFatalDecode, isNetworkError)
+            }
+
+            private fun handleTerminalError(code: Int, message: String, isFatalDecode: Boolean, isNetworkError: Boolean) {
                 when {
                     isFatalDecode && consecutiveAutoSkips < MAX_AUTO_SKIPS -> {
                         consecutiveAutoSkips++
@@ -766,7 +827,7 @@ class PlaybackManager @Inject constructor(
                             message = "$message — skipping to next track",
                             isRetryable = false
                         )
-                        Timber.w(error, "Playback decode error, auto-skipping (#%d)", consecutiveAutoSkips)
+                        Timber.w("Playback decode error, auto-skipping (#%d)", consecutiveAutoSkips)
                         mediaController?.seekToNextMediaItem()
                     }
                     isNetworkError && connectivityMonitor.isOnline.value &&
@@ -789,19 +850,49 @@ class PlaybackManager @Inject constructor(
                         )
                     }
                 }
-                Timber.e(error, "Playback error code=%d", code)
+                Timber.e("Playback error code=%d", code)
             }
         })
     }
 
-    /** Retries the current item after a transient (usually network) error. */
+    /** Retries the current item after a transient error or stream refresh. */
     fun retryPlayback() {
         val controller = mediaController ?: return
+        val current = _currentSong.value
         retryJob?.cancel()
-        controller.prepare()
-        controller.play()
-        ensureAudioEffectsAttached()
-        _playbackError.value = null
+        if (current != null && current.isStream) {
+            scope.launch {
+                onlineStreamRepository.evictStreamCache(current.uri.toString())
+                val direct = onlineStreamRepository.resolveDirectStreamUrl(current.uri.toString())
+                val currentIndex = controller.currentMediaItemIndex
+                if (direct.isNotBlank() && direct.startsWith("http") && !direct.contains("youtube.com/watch")) {
+                    val freshItem = MediaItem.Builder()
+                        .setUri(Uri.parse(direct))
+                        .setMediaId(current.id.toString())
+                        .setMediaMetadata(
+                            MediaMetadata.Builder()
+                                .setTitle(current.title)
+                                .setArtist(current.artist)
+                                .setAlbumTitle(current.album)
+                                .setArtworkUri(current.albumArtUri)
+                                .build()
+                        )
+                        .build()
+                    if (controller.mediaItemCount > currentIndex) {
+                        controller.replaceMediaItem(currentIndex, freshItem)
+                    }
+                }
+                controller.prepare()
+                controller.play()
+                ensureAudioEffectsAttached()
+                _playbackError.value = null
+            }
+        } else {
+            controller.prepare()
+            controller.play()
+            ensureAudioEffectsAttached()
+            _playbackError.value = null
+        }
     }
 
     /** Manually skips past the errored item. */

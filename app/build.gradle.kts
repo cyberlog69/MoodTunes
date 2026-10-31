@@ -25,22 +25,20 @@ android {
         }
     }
 
-    signingConfigs {
-        create("release") {
-            val envPath = System.getenv("KEYSTORE_FILE")?.trim()
-            val keystoreFile = if (!envPath.isNullOrEmpty()) file(envPath) else file("release.keystore")
-            val pass = System.getenv("KEYSTORE_PASSWORD")?.trim()
-            val alias = System.getenv("KEY_ALIAS")?.trim()
-            val keyPass = System.getenv("KEY_PASSWORD")?.trim()
+    val envPath = System.getenv("KEYSTORE_FILE")?.trim()
+    val keystoreFile = if (!envPath.isNullOrEmpty()) file(envPath) else file("release.keystore")
+    val pass = System.getenv("KEYSTORE_PASSWORD")?.trim()
+    val alias = System.getenv("KEY_ALIAS")?.trim()
+    val keyPass = System.getenv("KEY_PASSWORD")?.trim()
+    val hasReleaseKeystore = keystoreFile.exists() && !pass.isNullOrEmpty() && !alias.isNullOrEmpty() && !keyPass.isNullOrEmpty()
 
-            if (keystoreFile.exists() && !pass.isNullOrEmpty() && !alias.isNullOrEmpty() && !keyPass.isNullOrEmpty()) {
+    if (hasReleaseKeystore) {
+        signingConfigs {
+            create("release") {
                 storeFile = keystoreFile
                 storePassword = pass
                 keyAlias = alias
                 keyPassword = keyPass
-            } else {
-                // Fallback to debug signature for local developer builds or when release secrets are absent
-                initWith(getByName("debug"))
             }
         }
     }
@@ -48,7 +46,11 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = true
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = if (hasReleaseKeystore) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

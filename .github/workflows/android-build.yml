@@ -33,10 +33,11 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Configure Release Keystore
-        if: ${{ secrets.RELEASE_KEYSTORE_BASE64 != '' }}
         run: |
-          echo "$RELEASE_KEYSTORE_BASE64" | base64 --decode > app/release.keystore
-          echo "KEYSTORE_FILE=app/release.keystore" >> $GITHUB_ENV
+          if [ -n "$RELEASE_KEYSTORE_BASE64" ]; then
+            echo "$RELEASE_KEYSTORE_BASE64" | base64 --decode > app/release.keystore
+            echo "KEYSTORE_FILE=app/release.keystore" >> $GITHUB_ENV
+          fi
         env:
           RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
 

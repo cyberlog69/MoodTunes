@@ -14,8 +14,8 @@ android {
         applicationId = "com.moodtunes.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 14
-        versionName = "1.9.1"
+        versionCode = 15
+        versionName = "1.9.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -25,36 +25,38 @@ android {
         }
     }
 
+    val defaultKeystore = file("keystore/moodtunes-release.keystore")
     val envPath = System.getenv("KEYSTORE_FILE")?.trim()
-    val keystoreFile = if (!envPath.isNullOrEmpty()) file(envPath) else file("release.keystore")
-    val pass = System.getenv("KEYSTORE_PASSWORD")?.trim()
-    val alias = System.getenv("KEY_ALIAS")?.trim()
-    val keyPass = System.getenv("KEY_PASSWORD")?.trim()
-    val hasReleaseKeystore = keystoreFile.exists() && !pass.isNullOrEmpty() && !alias.isNullOrEmpty() && !keyPass.isNullOrEmpty()
+    val keystoreFile = if (!envPath.isNullOrEmpty()) file(envPath) else defaultKeystore
+    val pass = System.getenv("KEYSTORE_PASSWORD")?.trim()?.ifEmpty { null } ?: "moodtunes123"
+    val alias = System.getenv("KEY_ALIAS")?.trim()?.ifEmpty { null } ?: "moodtunes"
+    val keyPass = System.getenv("KEY_PASSWORD")?.trim()?.ifEmpty { null } ?: "moodtunes123"
 
-    if (hasReleaseKeystore) {
-        signingConfigs {
-            create("release") {
-                storeFile = keystoreFile
-                storePassword = pass
-                keyAlias = alias
-                keyPassword = keyPass
-            }
+    signingConfigs {
+        create("release") {
+            storeFile = keystoreFile
+            storePassword = pass
+            keyAlias = alias
+            keyPassword = keyPass
+            enableV1Signing = true
+            enableV2Signing = true
+            enableV3Signing = true
+            enableV4Signing = true
         }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = true
-            signingConfig = if (hasReleaseKeystore) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
-            }
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+        }
+        debug {
+            // Unify debug signing with release keystore so dev and CI builds share the exact same signature
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 

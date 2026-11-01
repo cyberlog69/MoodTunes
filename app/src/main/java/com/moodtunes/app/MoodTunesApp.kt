@@ -7,9 +7,13 @@ import android.os.Build
 import com.moodtunes.app.platform.CrashHandler
 import dagger.hilt.android.HiltAndroidApp
 import timber.log.Timber
+import javax.inject.Inject
 
 @HiltAndroidApp
 class MoodTunesApp : Application() {
+
+    @Inject
+    lateinit var crashHandler: CrashHandler
 
     override fun onCreate() {
         super.onCreate()
@@ -18,7 +22,7 @@ class MoodTunesApp : Application() {
         } else {
             Timber.plant(ReleaseTree())
         }
-        CrashHandler(this).install()
+        crashHandler.install()
         createNotificationChannel()
         com.moodtunes.app.platform.UpdateCheckJobService.schedule(this)
     }

@@ -2,6 +2,8 @@ package com.moodtunes.app.data.remote
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageInfo
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -15,6 +17,7 @@ import okhttp3.Request
 import timber.log.Timber
 import java.io.File
 import java.io.FileOutputStream
+import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -35,6 +38,10 @@ class AppUpdateManager @Inject constructor() {
         onProgress: (Int) -> Unit
     ): File? = withContext(Dispatchers.IO) {
         try {
+            if (!UpdateEndpointPolicy.isTrustedReleaseUrl(apkUrl)) {
+                Timber.e("AppUpdateManager: refusing untrusted update URL: %s", apkUrl)
+                return@withContext null
+            }
             Timber.i("AppUpdateManager: Starting APK download from: %s", apkUrl)
             val request = Request.Builder()
                 .url(apkUrl)
@@ -44,6 +51,10 @@ class AppUpdateManager @Inject constructor() {
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
                     Timber.e("AppUpdateManager: HTTP download failed with status code %d", response.code)
+                    return@withContext null
+                }
+                if (!UpdateEndpointPolicy.isTrustedReleaseUrl(response.request.url.toString())) {
+                    Timber.e("AppUpdateManager: update redirected to an untrusted host: %s", response.request.url)
                     return@withContext null
                 }
                 val body = response.body ?: return@withContext null
@@ -76,12 +87,73 @@ class AppUpdateManager @Inject constructor() {
 
                 apkFile.setReadable(true, false)
                 Timber.i("AppUpdateManager: APK download finished (%d bytes) at %s", apkFile.length(), apkFile.absolutePath)
+
+                if (!isAuthenticUpdate(context, apkFile)) {
+                    Timber.e("AppUpdateManager: downloaded APK failed signature/package verification — discarding")
+                    apkFile.delete()
+                    return@withContext null
+                }
+
                 return@withContext apkFile
             }
         } catch (e: Exception) {
             Timber.e(e, "AppUpdateManager: Failed to download update APK")
             return@withContext null
         }
+    }
+
+    /**
+     * Confirms that [apkFile] is a MoodTunes package signed with the same
+     * certificate as the currently installed app. A mismatched package name or
+     * signer means the download must never be handed to the installer.
+     */
+    private fun isAuthenticUpdate(context: Context, apkFile: File): Boolean {
+        return runCatching {
+            val pm = context.packageManager
+            val flags = archiveFlags()
+            val archiveInfo = pm.getPackageArchiveInfo(apkFile.absolutePath, flags)
+
+            if (archiveInfo == null || archiveInfo.packageName != context.packageName) {
+                false
+            } else {
+                val installedInfo = pm.getPackageInfo(context.packageName, flags)
+                val archiveSigners = signerFingerprints(archiveInfo)
+                archiveSigners.isNotEmpty() && archiveSigners == signerFingerprints(installedInfo)
+            }
+        }.getOrElse { error ->
+            Timber.e(error, "AppUpdateManager: signature verification failed")
+            false
+        }
+    }
+
+    private fun archiveFlags(): Int =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            PackageManager.GET_SIGNING_CERTIFICATES
+        } else {
+            @Suppress("DEPRECATION")
+            PackageManager.GET_SIGNATURES
+        }
+
+    private fun signerFingerprints(info: PackageInfo): Set<String> {
+        val certificates = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            val signingInfo = info.signingInfo ?: return emptySet()
+            if (signingInfo.hasMultipleSigners()) {
+                signingInfo.apkContentsSigners
+            } else {
+                signingInfo.signingCertificateHistory
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            info.signatures ?: return emptySet()
+        }
+
+        return certificates
+            .map { cert ->
+                MessageDigest.getInstance("SHA-256")
+                    .digest(cert.toByteArray())
+                    .joinToString("") { byte -> "%02x".format(byte) }
+            }
+            .toSet()
     }
 
     fun installApk(context: Context, apkFile: File) {

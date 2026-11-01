@@ -34,7 +34,9 @@ object DatabaseModule {
         )
             .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
             .addMigrations(MoodTunesDatabase.MIGRATION_4_5)
-            .fallbackToDestructiveMigration(true)
+            // No destructive fallback: unknown schema transitions must fail loudly
+            // (and be covered by an explicit Migration) instead of silently wiping
+            // the user's library, favourites, playlists and mood history.
             .addCallback(object : RoomDatabase.Callback() {
                 override fun onOpen(db: SupportSQLiteDatabase) {
                     super.onOpen(db)

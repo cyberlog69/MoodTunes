@@ -16,7 +16,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 @Database(
     entities = [SongEntity::class, MoodHistoryEntity::class, PlaylistEntity::class, PlaylistSongEntity::class],
     version = 5,
-    exportSchema = false
+    exportSchema = true
 )
 abstract class MoodTunesDatabase : RoomDatabase() {
     abstract fun songDao(): SongDao

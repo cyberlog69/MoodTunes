@@ -8,6 +8,9 @@ import kotlin.random.Random
  * Scores and orders songs by how well they match a mood, enabling
  * mood-weighted ("smart") shuffling. Songs explicitly tagged with the mood are
  * strongly preferred; keyword matches in title/artist/album/genre add weight.
+ *
+ * Note: scoring is metadata-based. [TrackProfileEstimator] contributes a
+ * heuristic multiplier, not measured audio features.
  */
 object MoodScoring {
 
@@ -15,8 +18,8 @@ object MoodScoring {
         var score = 0f
         if (mood in song.moodTags) score += 4f
 
-        // Acoustic feature profile extraction (BPM, Energy, Valence)
-        val profile = AudioFeatureExtractor.extractProfile(song)
+        // Heuristic metadata profile (estimated BPM/energy/valence, not analysis)
+        val profile = TrackProfileEstimator.estimate(song)
         if (profile.detectedMood == mood) score += 2.5f
 
         val text = buildString {

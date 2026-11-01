@@ -14,15 +14,19 @@ enum class DjVibe(val displayName: String, val icon: String, val description: St
 
 data class DjTrackInfo(
     val song: Song,
-    val camelotKey: String, // e.g. "8A", "8B", "11B"
-    val bpm: Int,           // e.g. 124
+    val camelotKey: String, // e.g. "8A", "8B", "11B" — estimated from metadata
+    val bpm: Int,           // e.g. 124 — estimated from metadata
     val energy: Float       // 0.0f to 1.0f
 )
 
 /**
- * Intelligent DJ Harmonic Mixing Engine.
- * Implements Camelot Wheel harmonic key matching, tempo (BPM) trajectory optimization,
- * and smart transition sequencing modeled after professional DJ mixing workflows.
+ * Harmonic-mixing-style queue sequencer.
+ *
+ * Keys and BPM are *estimated from metadata* (see
+ * [com.moodtunes.app.domain.util.TrackProfileEstimator]), not extracted from the
+ * decoded audio. The Camelot-wheel ordering produces a deterministic, musically
+ * plausible progression, but it is a heuristic — it must not be described as
+ * measured key or tempo detection.
  */
 @Singleton
 class DjSequencer @Inject constructor() {
@@ -36,11 +40,10 @@ class DjSequencer @Inject constructor() {
     }
 
     /**
-     * Extracts or estimates the Camelot musical key and BPM for a given song.
-     * Uses audio duration, title/artist acoustic hash, and mood characteristics
-     * to provide reliable, deterministic harmonic tags.
+     * Estimates the Camelot key and BPM for a song from its metadata and mood
+     * tags. Deterministic per song, but not a measurement of the audio.
      */
-    fun analyzeTrack(song: Song): DjTrackInfo {
+    fun estimateTrack(song: Song): DjTrackInfo {
         val hash = abs(("${song.artist}_${song.title}").hashCode())
 
         // Estimate Camelot Key
@@ -116,7 +119,7 @@ class DjSequencer @Inject constructor() {
         val remaining = upcomingSongs.toMutableList()
         val sequenced = mutableListOf<Song>()
 
-        var currentInfo = analyzeTrack(currentSong)
+        var currentInfo = estimateTrack(currentSong)
 
         while (remaining.isNotEmpty()) {
             var bestCandidate: Song? = null
@@ -124,7 +127,7 @@ class DjSequencer @Inject constructor() {
             var bestInfo: DjTrackInfo? = null
 
             for (candidate in remaining) {
-                val candidateInfo = analyzeTrack(candidate)
+                val candidateInfo = estimateTrack(candidate)
 
                 val harmonicScore = getHarmonicScore(currentInfo.camelotKey, candidateInfo.camelotKey)
                 val bpmDiff = abs(candidateInfo.bpm - currentInfo.bpm)

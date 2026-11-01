@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -14,49 +16,72 @@ android {
         applicationId = "com.moodtunes.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 15
-        versionName = "1.9.2"
+        versionCode = 16
+        versionName = "1.9.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
 
-        // Room: export schema for migrations
-        ksp {
-            arg("room.schemaLocation", "$projectDir/schemas")
+    // ── Release signing ──────────────────────────────────────────────────────
+    // Credentials are supplied via environment variables (CI) or a local,
+    // git-ignored `keystore.properties` file. There is deliberately NO
+    // hard-coded fallback: a missing configuration produces an unsigned
+    // release build instead of silently reusing a published key.
+    val keystorePropertiesFile = rootProject.file("keystore.properties")
+    val keystoreProperties = Properties().apply {
+        if (keystorePropertiesFile.exists()) {
+            keystorePropertiesFile.inputStream().use { load(it) }
         }
     }
 
-    val defaultKeystore = file("keystore/moodtunes-release.keystore")
-    val envPath = System.getenv("KEYSTORE_FILE")?.trim()
-    val keystoreFile = if (!envPath.isNullOrEmpty()) file(envPath) else defaultKeystore
-    val pass = System.getenv("KEYSTORE_PASSWORD")?.trim()?.ifEmpty { null } ?: "moodtunes123"
-    val alias = System.getenv("KEY_ALIAS")?.trim()?.ifEmpty { null } ?: "moodtunes"
-    val keyPass = System.getenv("KEY_PASSWORD")?.trim()?.ifEmpty { null } ?: "moodtunes123"
+    fun signingValue(envName: String, propertyName: String): String? =
+        System.getenv(envName)?.trim()?.takeIf { it.isNotEmpty() }
+            ?: keystoreProperties.getProperty(propertyName)?.trim()?.takeIf { it.isNotEmpty() }
+
+    val storePath = signingValue("KEYSTORE_FILE", "storeFile")
+    val storePasswordValue = signingValue("KEYSTORE_PASSWORD", "storePassword")
+    val keyAliasValue = signingValue("KEY_ALIAS", "keyAlias")
+    val keyPasswordValue = signingValue("KEY_PASSWORD", "keyPassword")
+    val releaseKeystore = storePath?.let { rootProject.file(it) }?.takeIf { it.exists() }
+    val hasReleaseSigning = releaseKeystore != null &&
+        storePasswordValue != null && keyAliasValue != null && keyPasswordValue != null
 
     signingConfigs {
-        create("release") {
-            storeFile = keystoreFile
-            storePassword = pass
-            keyAlias = alias
-            keyPassword = keyPass
-            enableV1Signing = true
-            enableV2Signing = true
-            enableV3Signing = true
-            enableV4Signing = true
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = releaseKeystore
+                storePassword = storePasswordValue
+                keyAlias = keyAliasValue
+                keyPassword = keyPasswordValue
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+                enableV4Signing = true
+            }
         }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = true
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = signingConfigs.findByName("release")
+            if (!hasReleaseSigning) {
+                logger.warn(
+                    "MoodTunes: release signing is not configured. Set KEYSTORE_FILE/" +
+                        "KEYSTORE_PASSWORD/KEY_ALIAS/KEY_PASSWORD or create keystore.properties. " +
+                        "The release APK will be UNSIGNED."
+                )
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
         }
         debug {
-            // Unify debug signing with release keystore so dev and CI builds share the exact same signature
-            signingConfig = signingConfigs.getByName("release")
+            // When the release key is available locally, debug builds share its
+            // signature so debug/release APKs can be swapped in place. Otherwise
+            // the standard debug key is used.
+            signingConfigs.findByName("release")?.let { signingConfig = it }
         }
     }
 
@@ -102,6 +127,12 @@ android {
                 "MoodTunes-v${defaultConfig.versionName}.apk"
         }
     }
+}
+
+// Room: export the schema so migrations are reviewable and testable.
+// Committed JSON files live in app/schemas/.
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 dependencies {

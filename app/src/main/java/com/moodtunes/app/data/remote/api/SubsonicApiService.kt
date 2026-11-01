@@ -38,6 +38,9 @@ class SubsonicApiService @Inject constructor() {
         if (cleanUrl.isEmpty() || username.isBlank()) {
             return@withContext Result.failure(IllegalArgumentException("Server URL and username cannot be empty"))
         }
+        validateServerUrl(cleanUrl).onFailure { error ->
+            return@withContext Result.failure(error)
+        }
 
         try {
             val authParams = buildAuthQueryParams(username, password)
@@ -210,6 +213,37 @@ class SubsonicApiService @Inject constructor() {
 
     private fun sanitizeUrl(url: String): String {
         return url.trim().trimEnd('/')
+    }
+
+    /**
+     * The app's network security config blocks cleartext HTTP, so a plain
+     * `http://` server URL can never work. Fail early with an actionable
+     * message instead of surfacing an opaque socket error later.
+     */
+    internal fun validateServerUrl(serverUrl: String): Result<Unit> {
+        val url = sanitizeUrl(serverUrl)
+        if (url.isEmpty()) {
+            return Result.failure(IllegalArgumentException("Server URL cannot be empty"))
+        }
+        if (url.startsWith("https://", ignoreCase = true)) {
+            return Result.success(Unit)
+        }
+        if (url.startsWith("http://", ignoreCase = true) && isLoopbackHost(url)) {
+            return Result.success(Unit)
+        }
+        if (url.startsWith("http://", ignoreCase = true)) {
+            return Result.failure(
+                IllegalArgumentException(
+                    "Plain HTTP is blocked. Use https:// (reverse proxy or VPN) for your server address."
+                )
+            )
+        }
+        return Result.failure(IllegalArgumentException("Server URL must start with https://"))
+    }
+
+    private fun isLoopbackHost(url: String): Boolean {
+        val host = Uri.parse(url).host?.lowercase() ?: return false
+        return host == "localhost" || host == "127.0.0.1" || host == "10.0.2.2"
     }
 
     private fun buildAuthQueryParams(username: String, password: String): String {

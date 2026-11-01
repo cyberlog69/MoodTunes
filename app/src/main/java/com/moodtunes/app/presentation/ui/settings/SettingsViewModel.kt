@@ -207,6 +207,10 @@ class SettingsViewModel @Inject constructor(
 
     // ── Navidrome / Subsonic Controls ─────────────────────────────────────────
     fun onSaveNavidrome(serverUrl: String, username: String, password: String, enabled: Boolean) {
+        subsonicApiService.validateServerUrl(serverUrl).onFailure { error ->
+            _uiState.update { it.copy(message = "${error.message}") }
+            return
+        }
         preferencesRepository.updateNavidromeConfig(serverUrl, username, password, enabled)
         _uiState.update { it.copy(message = "Music server configuration saved ✅") }
     }

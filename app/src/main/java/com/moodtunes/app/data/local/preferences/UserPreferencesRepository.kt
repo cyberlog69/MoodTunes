@@ -6,6 +6,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -89,8 +90,39 @@ class UserPreferencesRepository @Inject constructor(
     private val prefs: SharedPreferences =
         context.getSharedPreferences("moodtunes_settings", Context.MODE_PRIVATE)
 
+    private val secretCipher = SecretCipher()
+
     private val _settings = MutableStateFlow(loadSettings())
     val settings: StateFlow<AppUserSettings> = _settings.asStateFlow()
+
+    /** Reads a secret, transparently migrating legacy plaintext values. */
+    private fun readSecret(key: String): String {
+        val stored = prefs.getString(key, "") ?: ""
+        if (stored.isEmpty()) return ""
+        if (secretCipher.isEncrypted(stored)) return secretCipher.decrypt(stored) ?: ""
+
+        secretCipher.encrypt(stored)?.let { encrypted ->
+            prefs.edit().putString(key, encrypted).apply()
+        }
+        return stored
+    }
+
+    /** Writes a secret encrypted at rest; never persists plaintext. */
+    private fun putSecret(
+        editor: SharedPreferences.Editor,
+        key: String,
+        value: String
+    ): SharedPreferences.Editor {
+        val trimmed = value.trim()
+        if (trimmed.isEmpty()) return editor.putString(key, "")
+
+        val encrypted = secretCipher.encrypt(trimmed)
+        if (encrypted == null) {
+            Timber.e("refusing to persist %s in plaintext", key)
+            return editor.remove(key)
+        }
+        return editor.putString(key, encrypted)
+    }
 
     private fun loadSettings(): AppUserSettings {
         val modeStr = prefs.getString("dark_mode", DarkModeOption.DARK.name) ?: DarkModeOption.DARK.name
@@ -117,15 +149,15 @@ class UserPreferencesRepository @Inject constructor(
             mobileDataHighQuality = prefs.getBoolean("mobile_data_hq", true),
             audioSourceMode = runCatching { AudioSourceMode.valueOf(sourceStr) }.getOrDefault(AudioSourceMode.STREAM_ONLY),
             preferredLanguages = parsedLangs,
-            listenBrainzToken = prefs.getString("listenbrainz_token", "") ?: "",
+            listenBrainzToken = readSecret("listenbrainz_token"),
             listenBrainzUsername = prefs.getString("listenbrainz_username", "") ?: "",
             isListenBrainzScrobblingEnabled = prefs.getBoolean("listenbrainz_scrobble_enabled", false),
-            lastFmSessionKey = prefs.getString("lastfm_session_key", "") ?: "",
+            lastFmSessionKey = readSecret("lastfm_session_key"),
             lastFmUsername = prefs.getString("lastfm_username", "") ?: "",
             isLastFmScrobblingEnabled = prefs.getBoolean("lastfm_scrobble_enabled", false),
             navidromeServerUrl = prefs.getString("navidrome_server_url", "") ?: "",
             navidromeUsername = prefs.getString("navidrome_username", "") ?: "",
-            navidromePassword = prefs.getString("navidrome_password", "") ?: "",
+            navidromePassword = readSecret("navidrome_password"),
             isNavidromeEnabled = prefs.getBoolean("navidrome_enabled", false)
         )
     }
@@ -209,7 +241,7 @@ class UserPreferencesRepository @Inject constructor(
     // ── ListenBrainz Preferences ─────────────────────────────────────────────
     fun updateListenBrainzConfig(token: String, username: String, enabled: Boolean) {
         prefs.edit()
-            .putString("listenbrainz_token", token.trim())
+            .let { putSecret(it, "listenbrainz_token", token) }
             .putString("listenbrainz_username", username.trim())
             .putBoolean("listenbrainz_scrobble_enabled", enabled)
             .apply()
@@ -230,7 +262,7 @@ class UserPreferencesRepository @Inject constructor(
         prefs.edit()
             .putString("navidrome_server_url", serverUrl.trim())
             .putString("navidrome_username", username.trim())
-            .putString("navidrome_password", password.trim())
+            .let { putSecret(it, "navidrome_password", password) }
             .putBoolean("navidrome_enabled", enabled)
             .apply()
         _settings.value = _settings.value.copy(
@@ -294,12 +326,12 @@ class UserPreferencesRepository @Inject constructor(
     // ── Last.fm Scrobbling ───────────────────────────────────────────────────
     fun updateLastFm(sessionKey: String, username: String, enabled: Boolean) {
         prefs.edit()
-            .putString("lastfm_session_key", sessionKey)
+            .let { putSecret(it, "lastfm_session_key", sessionKey) }
             .putString("lastfm_username", username)
             .putBoolean("lastfm_scrobble_enabled", enabled)
             .apply()
         _settings.value = _settings.value.copy(
-            lastFmSessionKey = sessionKey,
+            lastFmSessionKey = sessionKey.trim(),
             lastFmUsername = username,
             isLastFmScrobblingEnabled = enabled
         )

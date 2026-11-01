@@ -21,4 +21,10 @@ gradle/gradle-daemon-jvm.properties
 ROADMAP.md
 roadmap*.md
 
+# Signing material — NEVER commit private keys or their passwords
+*.keystore
+*.jks
+keystore.properties
+app/release.keystore
+
 

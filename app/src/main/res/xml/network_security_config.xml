@@ -1,8 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
     Network Security Configuration for MoodTunes.
-    Enforces HTTPS-only for all traffic to protect user data in transit.
-    Disables cleartext HTTP to prevent downgrade attacks on streaming URLs.
+
+    Cleartext HTTP is blocked by default. Two narrowly scoped exceptions exist
+    for local development (loopback and the Android emulator host), which are
+    also the only cleartext hosts the user-configurable Subsonic client accepts.
+
+    Self-hosted Navidrome / Subsonic servers must therefore be reached over
+    HTTPS (reverse proxy, VPN such as Tailscale, or a trusted certificate).
+    See README → "Self-hosted music server".
 -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="false">
@@ -10,4 +16,11 @@
             <certificates src="system" />
         </trust-anchors>
     </base-config>
+
+    <!-- Development-only cleartext exceptions -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">10.0.2.2</domain>
+    </domain-config>
 </network-security-config>

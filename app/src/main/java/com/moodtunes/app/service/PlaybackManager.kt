@@ -22,6 +22,7 @@ import com.moodtunes.app.data.remote.api.ListenBrainzService
 import com.moodtunes.app.domain.model.MoodType
 import com.moodtunes.app.domain.model.Song
 import com.moodtunes.app.platform.ConnectivityMonitor
+import com.moodtunes.app.di.ApplicationScope
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -43,9 +44,10 @@ class PlaybackManager @Inject constructor(
     private val songDao: SongDao,
     private val moodHistoryDao: MoodHistoryDao,
     private val connectivityMonitor: ConnectivityMonitor,
-    private val djSequencer: com.moodtunes.app.service.dj.DjSequencer
+    private val djSequencer: com.moodtunes.app.service.dj.DjSequencer,
+    @ApplicationScope private val appScope: CoroutineScope
 ) {
-    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private val scope = appScope
 
     private var mediaController: MediaController? = null
     private var currentSongScrobbled = false
@@ -528,7 +530,7 @@ class PlaybackManager @Inject constructor(
     }
 
     fun getDjTrackInfo(song: Song): com.moodtunes.app.service.dj.DjTrackInfo {
-        return djSequencer.analyzeTrack(song)
+        return djSequencer.estimateTrack(song)
     }
 
     // ── Queue editor ─────────────────────────────────────────────────────────

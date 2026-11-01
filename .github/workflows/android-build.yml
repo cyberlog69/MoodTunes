@@ -11,12 +11,17 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-android:
-    name: Build Android APK
+    name: Build & Test Android APK
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     permissions:
-      contents: write
+      contents: read
 
     steps:
       - name: Checkout Repository
@@ -32,19 +37,23 @@ jobs:
       - name: Make Gradle Wrapper Executable
         run: chmod +x ./gradlew
 
+      - name: Run Unit Tests
+        run: ./gradlew testDebugUnitTest --stacktrace
+
       - name: Configure Release Keystore
         run: |
-          if [ -n "$RELEASE_KEYSTORE_BASE64" ]; then
-            echo "$RELEASE_KEYSTORE_BASE64" | base64 --decode > app/release.keystore
-            echo "KEYSTORE_FILE=app/release.keystore" >> $GITHUB_ENV
+          if [ -z "$RELEASE_KEYSTORE_BASE64" ]; then
+            echo "::error::RELEASE_KEYSTORE_BASE64 secret is not configured. Refusing to build an unsigned release."
+            exit 1
           fi
+          echo "$RELEASE_KEYSTORE_BASE64" | base64 --decode > app/release.keystore
+          echo "KEYSTORE_FILE=app/release.keystore" >> "$GITHUB_ENV"
         env:
           RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
 
       - name: Build Release APK
         run: ./gradlew assembleRelease --stacktrace
         env:
-          KEYSTORE_FILE: ${{ env.KEYSTORE_FILE }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
@@ -52,10 +61,19 @@ jobs:
       - name: Locate and Verify APK
         id: apk_info
         run: |
-          APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" -print -quit)
+          if [ -z "$APK_PATH" ]; then
+            echo "::error::No release APK produced"
+            exit 1
+          fi
           echo "Found APK at: $APK_PATH"
-          echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
+          echo "apk_path=$APK_PATH" >> "$GITHUB_OUTPUT"
           ls -lh "$APK_PATH"
+
+      - name: Verify APK Signature
+        run: |
+          APK_SIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)
+          "$APK_SIGNER" verify --verbose "${{ steps.apk_info.outputs.apk_path }}"
 
       - name: Upload Android APK Artifact
         uses: actions/upload-artifact@v4
@@ -64,10 +82,25 @@ jobs:
           path: ${{ steps.apk_info.outputs.apk_path }}
           retention-days: 14
 
-      - name: Attach APK to GitHub Release (Tag Trigger Only)
-        if: startsWith(github.ref, 'refs/tags/v')
+  publish-release:
+    name: Attach APK to GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build-android
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download Built APK
+        uses: actions/download-artifact@v4
+        with:
+          name: MoodTunes-Android-Release-APK
+
+      - name: Attach APK to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ steps.apk_info.outputs.apk_path }}
+          files: "*.apk"
+          fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

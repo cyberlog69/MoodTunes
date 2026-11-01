@@ -4,6 +4,9 @@ import android.content.Context
 import android.net.Uri
 import com.moodtunes.app.data.remote.api.YouTubeMusicApiService
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -28,6 +31,8 @@ import java.util.concurrent.ExecutionException
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 /**
  * Resilient, multi-tier YouTube stream resolver:
@@ -87,13 +92,83 @@ class StreamResolver @Inject constructor(
         }
 
         return try {
-            val result = resolveFormats(videoId)
+            val result = resolveFormatsSuspending(videoId)
             cache[videoId] = result
             result.url
         } catch (e: Exception) {
             Timber.e(e, "StreamResolver failed for $videoId, falling back to VISIONOS API")
             youTubeMusicApiService.resolveStreamUrl(videoId)
         }
+    }
+
+    /**
+     * Coroutine-friendly variant of [resolveFormats]: it awaits the shared
+     * in-flight resolution instead of blocking the calling thread.
+     */
+    private suspend fun resolveFormatsSuspending(videoId: String): StreamResult {
+        val mine = CompletableFuture<StreamResult>()
+        val running = inflight.putIfAbsent(videoId, mine)
+        if (running != null) return awaitStream(running)
+
+        return try {
+            val result = loadStreamSuspending(videoId)
+            mine.complete(result)
+            result
+        } catch (e: Throwable) {
+            mine.completeExceptionally(e)
+            throw e
+        } finally {
+            inflight.remove(videoId, mine)
+        }
+    }
+
+    private suspend fun awaitStream(future: CompletableFuture<StreamResult>): StreamResult =
+        suspendCancellableCoroutine { continuation ->
+            future.whenComplete { result, error ->
+                when {
+                    error != null -> continuation.resumeWithException(error.cause ?: error)
+                    result != null -> continuation.resume(result)
+                    else -> continuation.resumeWithException(
+                        IOException("Stream resolution completed without a result")
+                    )
+                }
+            }
+        }
+
+    private suspend fun loadStreamSuspending(videoId: String): StreamResult {
+        // Tier 1: anonymous NewPipe resolution (blocking extractor work on IO)
+        val newPipeResult = withContext(Dispatchers.IO) {
+            runCatching { resolveAnonymousNewPipe(videoId) }.getOrNull()
+        }
+        if (newPipeResult != null && newPipeResult.url.isNotBlank()) {
+            return newPipeResult
+        }
+
+        // Tier 2: VISIONOS client (suspend, non-blocking)
+        Timber.i("NewPipe resolution failed for $videoId; falling back to VISIONOS player")
+        val visionOsUrl = runCatching {
+            youTubeMusicApiService.resolveStreamUrl(videoId)
+        }.getOrNull()
+
+        return visionOsUrl?.let(::toStreamResult)
+            ?: throw IOException("All stream resolution tiers exhausted for videoId: $videoId")
+    }
+
+    private fun toStreamResult(visionOsUrl: String): StreamResult {
+        val uri = Uri.parse(visionOsUrl)
+        val expire = uri.getQueryParameter("expire")?.toLongOrNull()?.let { it * 1000 - 10 * 60_000 }
+            ?: (System.currentTimeMillis() + 60 * 60_000)
+        val clen = uri.getQueryParameter("clen")?.toLongOrNull() ?: -1L
+
+        return StreamResult(
+            url = visionOsUrl,
+            bitrateKbps = 160,
+            mimeType = "audio/webm",
+            codec = "opus",
+            sampleRate = 48000,
+            contentLength = clen,
+            expiresAtMs = expire
+        )
     }
 
     /**
@@ -137,6 +212,10 @@ class StreamResolver @Inject constructor(
         }
     }
 
+    /**
+     * Blocking resolution used by ExoPlayer's loader thread. The coroutine
+     * bridge here is intentional and confined to this non-suspend entry point.
+     */
     private fun loadStream(videoId: String): StreamResult {
         // Tier 1: Try anonymous NewPipeExtractor fast-path
         val newPipeResult = runCatching { resolveAnonymousNewPipe(videoId) }.getOrNull()
@@ -154,20 +233,7 @@ class StreamResolver @Inject constructor(
         }.getOrNull()
 
         if (!visionOsUrl.isNullOrBlank()) {
-            val uri = Uri.parse(visionOsUrl)
-            val expire = uri.getQueryParameter("expire")?.toLongOrNull()?.let { it * 1000 - 10 * 60_000 }
-                ?: (System.currentTimeMillis() + 60 * 60_000)
-            val clen = uri.getQueryParameter("clen")?.toLongOrNull() ?: -1L
-
-            return StreamResult(
-                url = visionOsUrl,
-                bitrateKbps = 160,
-                mimeType = "audio/webm",
-                codec = "opus",
-                sampleRate = 48000,
-                contentLength = clen,
-                expiresAtMs = expire
-            )
+            return toStreamResult(visionOsUrl)
         }
 
         throw IOException("All stream resolution tiers exhausted for videoId: $videoId")

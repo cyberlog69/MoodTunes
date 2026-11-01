@@ -28,6 +28,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 // Online-first streaming mode
 import com.moodtunes.app.data.local.preferences.DarkModeOption
 import com.moodtunes.app.data.local.preferences.StreamQuality
+import com.moodtunes.app.presentation.ui.components.OpenSourceLicensesDialog
 import com.moodtunes.app.presentation.ui.theme.*
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -42,6 +43,7 @@ fun SettingsScreen(
     val context = LocalContext.current
 
     var isQualityDropdownExpanded by remember { mutableStateOf(false) }
+    var showLicenses by remember { mutableStateOf(false) }
 
     var listenBrainzToken by remember(settings.listenBrainzToken) { mutableStateOf(settings.listenBrainzToken) }
     var listenBrainzUser by remember(settings.listenBrainzUsername) { mutableStateOf(settings.listenBrainzUsername) }
@@ -1100,12 +1102,27 @@ fun SettingsScreen(
                             Text("Releases & Full Changelog")
                         }
 
+                        // Open-source license notices
+                        OutlinedButton(
+                            onClick = { showLicenses = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Description,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text("Open-source Licenses")
+                        }
+
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.Center
                         ) {
                             Text(
-                                text = "Open-Source under MIT License • Developed by cyberlog69",
+                                text = "Open-source under GPL-3.0 • Developed by cyberlog69",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                             )
@@ -1121,6 +1138,10 @@ fun SettingsScreen(
             hostState = snackbarHostState,
             modifier = Modifier.align(Alignment.BottomCenter)
         )
+    }
+
+    if (showLicenses) {
+        OpenSourceLicensesDialog(onDismiss = { showLicenses = false })
     }
 }
 

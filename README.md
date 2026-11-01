@@ -6,8 +6,8 @@
 [![Media3](https://img.shields.io/badge/Audio-androidx.media3%20ExoPlayer-FF6F00?style=flat-square)](https://developer.android.com/guide/topics/media/media3)
 [![Hilt](https://img.shields.io/badge/DI-Hilt-00897B?style=flat-square)](https://dagger.dev/hilt/)
 [![Room](https://img.shields.io/badge/Database-Room%202.7-4285F4?style=flat-square)](https://developer.android.com/training/data-storage/room)
-[![Release](https://img.shields.io/badge/Version-v1.8.0-blue?style=flat-square)](https://github.com/cyberlog69/MoodTunes/releases)
-[![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
+[![Release](https://img.shields.io/badge/Version-v1.9.3-blue?style=flat-square)](https://github.com/cyberlog69/MoodTunes/releases)
+[![License](https://img.shields.io/badge/License-GPL--3.0-blue?style=flat-square)](LICENSE)
 
 ---
 
@@ -18,15 +18,15 @@
 MoodTunes curates music tailored precisely to your emotional state. Whether you crave high-octane rhythms for an intense workout, tranquil melodies for deep focus or sleep, or euphoric beats to lift your spirit, MoodTunes seamlessly blends your local high-resolution audio library with full-length online streams powered by the **YouTube Music (InnerTube) Engine** and self-hosted **Navidrome / Subsonic** servers.
 
 ### 🌟 Key Vision & Design Philosophy
-- **Emotion-Driven Curation**: Intelligently categorizes tracks into 6 emotional mood profiles using sentiment algorithms and genre classification.
-- **YouTube Music Streaming Engine**: Built with an unthrottled InnerTube client, providing access to full-length tracks, official audio streams (Opus 160 kbps / AAC 130 kbps), automated radio station generation, and global charts.
+- **Mood Curation**: Scores tracks against 6 emotional mood profiles using explicit mood tags, metadata keywords (title/artist/album/genre) and a deterministic metadata heuristic — no audio signal analysis is performed.
+- **YouTube Music Streaming Engine**: InnerTube client with multi-tier stream resolution, full-length tracks, official audio streams (Opus 160 kbps / AAC 130 kbps), automated radio station generation, and global charts.
 - **Offline Song Downloads**: Download streamed tracks into standard Android MediaStore storage (`Music/MoodTunes/`) with offline artwork caching and local Room DB indexing for true zero-network playback.
-- **Bot-Detection Immunity**: Implements hardened `VISIONOS` client context and automated `visitorData` acquisition & caching to bypass YouTube bot blocks and playback restrictions.
+- **Resilient Stream Resolution**: Layered resolver (NewPipe extractor → InnerTube client fallback → on-device JS cipher solver) that recovers from throttled or expired stream URLs. YouTube changes its clients frequently, so playback can break until the resolver is updated.
 - **Audiophile Grade Fidelity**: Native decoding of 24-bit/32-bit float audio, FLAC Lossless, ALAC (`.m4a`), WAV Hi-Res, AAC, and MP3 formats.
 - **Live FFT Audio Visualizers**: 60 FPS real-time audio visualization using Android Visualizer FFT data rendered on dynamic Compose Canvases (Neon Bars, Pulse Aura, Cosmic Particles).
 - **Acoustic Reverb & 3D Spatial Audio**: Headphone-optimized Virtualizer and 6 environmental reverb presets (Small Room, Medium Room, Large Room, Medium Hall, Large Hall, Plate Reverb) with adjustable room reflection decay.
 - **On-Device ID3 Tag & Artwork Editor**: Full-featured tag editor supporting metadata edits (Title, Artist, Album, Year, Genre, Track Number) and embedded album art injection directly into local audio files.
-- **Privacy & Security First**: Zero tracking, HTTPS-only network transport, unexported services preventing third-party hijacking, and secure local preference encryption.
+- **Privacy & Security First**: Zero tracking, encrypted credential storage (AES-256-GCM with Android Keystore), unexported services preventing third-party hijacking, and HTTPS-enforced network transport.
 
 ---
 
@@ -41,12 +41,12 @@ MoodTunes curates music tailored precisely to your emotional state. Whether you 
   - Instant Room DB indexing (`isStream = false`) for zero-buffer offline playback.
   - Dedicated download actions in PlayerScreen and SongActionBottomSheet.
 - **🎶 YouTube Music (InnerTube) Engine**:
-  - **100% Full-Length Songs**: Unrestricted, full-length music streaming with zero 30-second preview limitations.
-  - **High-Bitrate Direct Audio**: Crystal-clear Opus (~160 kbps) and AAC (~130 kbps) direct streams without intermediate transcoders.
-  - **Automated Endless Radio**: Automatically queues and plays dynamically matching music when any song finishes or starts.
-  - **Bot-Detection Immunity**: Employs an authenticated visitor token cache and Apple Vision Pro `VISIONOS` player context to bypass YouTube bot detection.
+  - **Full-Length Streams**: Resolves full-length audio streams rather than 30-second previews where the upstream service allows it.
+  - **Direct Audio Streams**: Opus (~160 kbps) and AAC (~130 kbps) audio delivered without an intermediate transcoder.
+  - **Automated Endless Radio**: Automatically queues similar tracks when a song finishes or a station starts.
+  - **Resilient Player Client Fallbacks**: Caches `visitorData` and rotates the InnerTube client context (`VISIONOS` among others) when a request is rejected. This is best-effort: YouTube changes its client behaviour regularly, so streaming can break until the resolver is updated.
   - **Global Discovery & Charts**: Explore top global charts, mood-filtered playlists, trending releases, and instant search.
-- **☁️ Self-Hosted Navidrome / Subsonic Client**: Connect your self-hosted lossless music server to stream your private library anywhere with native authentication and caching.
+- **☁️ Self-Hosted Navidrome / Subsonic Client**: Stream your own library over HTTPS with Subsonic token+salt authentication and local caching. Plain `http://` addresses are rejected — see [Self-hosted music server](#self-hosted-music-server-navidrome--subsonic).
 - **🎼 Hi-Res Lossless Audio Support**: Native hardware decoding for FLAC (`.flac`), ALAC (`.m4a`), WAV (`.wav`), AAC, and MP3 formats with 24-bit/32-bit float audio output pipeline.
 - **📀 Animated Vinyl Disc Player**: Full-screen player featuring a smoothly rotating vinyl disc, interactive seek bar, queue reordering, and mood ambient gradient illumination.
 - **🎤 Spotify-Style Real-Time Synced Lyrics**:
@@ -85,9 +85,12 @@ MoodTunes curates music tailored precisely to your emotional state. Whether you 
 - **🔄 In-App Auto-Updater**: Checks GitHub Releases for new updates, downloads the APK in-app with progress feedback, and launches the package installer.
 - **🛡️ Security & Reliability Hardening**:
   - Unexported `MusicPlaybackService` preventing unauthorized 3rd-party app hijacking.
-  - HTTPS-only network security config disabling cleartext HTTP vulnerabilities.
+  - HTTPS-only network security config; cleartext HTTP is permitted only for `localhost` / `127.0.0.1` / `10.0.2.2` during local development.
+  - Update downloads are restricted to GitHub HTTPS hosts and verified against the installed app's signing certificate and package name before the installer is launched.
+  - User secrets (scrobbler tokens, server passwords) are encrypted at rest with AES-256-GCM keys held in the Android Keystore.
   - 512 MB LRU stream cache served from disk when connectivity drops.
   - Crash recovery guardian that detects unexpected exits and restores the database from an automatic backup.
+  - Room schema is exported and versioned; there is no destructive fallback, so an unknown schema change fails loudly instead of wiping your library.
 
 ---
 
@@ -116,8 +119,8 @@ app/src/main/java/com/moodtunes/app/
 | **Database & Storage** | Room 2.7.1 (SQLite), DataStore Preferences |
 | **Networking & HTTP** | OkHttp 4.12.0 with connection pooling and DNS caching |
 | **Image Loading** | Coil 2.7.0 (Compose image loader) |
-| **Scrobbling** | ListenBrainz REST API |
-| **Target Platform** | Android 8.0 (API 26) to Android 15 (API 36) |
+| **Scrobbling** | ListenBrainz and Last.fm REST APIs |
+| **Target Platform** | Android 8.0 (API 26) to Android 16 (API 36) |
 
 ---
 
@@ -168,6 +171,41 @@ app/src/main/java/com/moodtunes/app/
    .\gradlew.bat assembleRelease
    ```
 
+   Release builds are signed only when signing credentials are configured. See [Release signing](#-release-signing) below.
+
+### 🔑 Release Signing
+
+MoodTunes does **not** ship a keystore in the repository. Provide the signing material through environment variables (recommended for CI) or a local, git-ignored `keystore.properties` file:
+
+| Environment variable | `keystore.properties` key | Meaning |
+|---|---|---|
+| `KEYSTORE_FILE` | `storeFile` | Path to the `.keystore`, relative to the repo root |
+| `KEYSTORE_PASSWORD` | `storePassword` | Keystore password |
+| `KEY_ALIAS` | `keyAlias` | Key alias inside the keystore |
+| `KEY_PASSWORD` | `keyPassword` | Key password |
+
+```powershell
+Copy-Item keystore.properties.example keystore.properties
+# fill in real values, then:
+$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
+.\gradlew.bat assembleRelease
+```
+
+If no credentials are found, `assembleRelease` still completes but produces an **unsigned** APK and logs a warning. `*.keystore`, `*.jks` and `keystore.properties` are git-ignored — never commit them.
+
+> [!WARNING]
+> The key used by releases published before v1.9.2 was committed to this repository, so its password must be considered public. Existing keys should be rotated following [SECURITY.md → Release signing & key rotation](SECURITY.md#release-signing--key-rotation).
+
+---
+
+## Self-Hosted Music Server (Navidrome / Subsonic)
+
+MoodTunes talks to any Subsonic-compatible server (Navidrome, Airsonic, Gonic, LMS, Jellyfin).
+
+- **HTTPS is required.** Cleartext HTTP is blocked by the platform network security config, so `http://192.168.x.x:4533` will be rejected with an explanatory error. The only exceptions are loopback addresses used during development (`localhost`, `127.0.0.1`, `10.0.2.2`).
+- Put your server behind a reverse proxy with a trusted certificate (Caddy, Traefik, nginx + Let's Encrypt), or reach it through a VPN such as Tailscale/WireGuard that terminates TLS.
+- Credentials are sent using the Subsonic token+salt scheme and stored encrypted with a key in the Android Keystore.
+
 ---
 
 ## 📦 Releases & Downloads
@@ -178,7 +216,18 @@ Latest APK downloads and detailed release notes are available on the **[GitHub R
 
 ## 📜 License
 
-Distributed under the MIT License. See [`LICENSE`](LICENSE) for details.
+MoodTunes is distributed under the **GNU General Public License v3.0**. See [`LICENSE`](LICENSE) for the full text.
+
+Third-party components keep their own licenses:
+
+- **NewPipe Extractor** — GPL-3.0, compatible with this project's license.
+- **yt-dlp EJS solver** (bundled JS assets) — Unlicense, including meriyah (ISC) and astring (MIT).
+- **AndroidX / Media3 / Hilt / Room / OkHttp / Coil / Timber** — Apache-2.0.
+
+License texts are bundled inside the APK under `assets/licenses/` and are viewable in the app at **Settings → About MoodTunes → Open-source Licenses**. See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for the full inventory.
+
+> [!NOTE]
+> Redistributed binaries must comply with the GPL: ship the corresponding source (including your modifications) and keep the licence and attribution notices intact.
 
 ---
 

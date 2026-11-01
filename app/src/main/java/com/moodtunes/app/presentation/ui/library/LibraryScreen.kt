@@ -185,46 +185,6 @@ fun LibraryScreen(
                 }
             }
 
-            // ─── Search Bar (hidden when browsing albums/artists) ────────────
-            if (uiState.selectedTab == LibraryTab.ONLINE_STREAM ||
-                uiState.selectedTab == LibraryTab.DOWNLOADS ||
-                uiState.selectedTab == LibraryTab.FAVORITES ||
-                uiState.selectedTab == LibraryTab.ALBUMS ||
-                uiState.selectedTab == LibraryTab.ARTISTS
-            ) {
-                OutlinedTextField(
-                    value = uiState.searchQuery,
-                    onValueChange = viewModel::onSearchQueryChanged,
-                    placeholder = {
-                        Text("Search songs, artists, albums…", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    },
-                    leadingIcon = {
-                        Icon(Icons.Rounded.Search, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    },
-                    trailingIcon = {
-                        if (uiState.searchQuery.isNotEmpty()) {
-                            IconButton(onClick = { viewModel.onSearchQueryChanged("") }) {
-                                Icon(Icons.Rounded.Close, contentDescription = "Clear", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 6.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.outline,
-                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-                        cursorColor = MaterialTheme.colorScheme.primary,
-                        focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
-                    ),
-                    singleLine = true
-                )
-            }
-
             // ─── Tabs ────────────────────────────────────────────────────────
             PrimaryScrollableTabRow(
                 selectedTabIndex = LibraryTab.entries.indexOf(uiState.selectedTab),

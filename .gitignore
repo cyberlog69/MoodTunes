@@ -26,5 +26,7 @@ roadmap*.md
 *.jks
 keystore.properties
 app/release.keystore
+*.lineage
+app/keystore/*.bin
 
 

@@ -103,9 +103,19 @@ class AppUpdateManager @Inject constructor() {
     }
 
     /**
-     * Confirms that [apkFile] is a MoodTunes package signed with the same
-     * certificate as the currently installed app. A mismatched package name or
-     * signer means the download must never be handed to the installer.
+     * Confirms that [apkFile] is a MoodTunes package that the platform will
+     * accept as an update for the installed app.
+     *
+     * The download must have the right package name, and every signer of the
+     * installed app must appear in the archive's signing history. History (not
+     * just the current certificate) is used because `v1.9.4` rotated the
+     * signing key with an APK Signature Scheme v3 lineage: the archive legitimately
+     * carries a new signer while still listing the retired one. The platform
+     * installer performs the authoritative lineage validation; this check only
+     * rejects obviously unrelated packages before handing them over.
+     *
+     * If signer information cannot be read for either side, the check defers to
+     * the installer rather than blocking a valid update on old Android versions.
      */
     private fun isAuthenticUpdate(context: Context, apkFile: File): Boolean {
         return runCatching {
@@ -117,8 +127,16 @@ class AppUpdateManager @Inject constructor() {
                 false
             } else {
                 val installedInfo = pm.getPackageInfo(context.packageName, flags)
+                val installedSigners = signerFingerprints(installedInfo)
                 val archiveSigners = signerFingerprints(archiveInfo)
-                archiveSigners.isNotEmpty() && archiveSigners == signerFingerprints(installedInfo)
+
+                when {
+                    installedSigners.isEmpty() || archiveSigners.isEmpty() -> {
+                        Timber.w("AppUpdateManager: signer data unavailable; deferring to package installer")
+                        true
+                    }
+                    else -> installedSigners.all { it in archiveSigners }
+                }
             }
         }.getOrElse { error ->
             Timber.e(error, "AppUpdateManager: signature verification failed")

@@ -6,7 +6,7 @@
 [![Media3](https://img.shields.io/badge/Audio-androidx.media3%20ExoPlayer-FF6F00?style=flat-square)](https://developer.android.com/guide/topics/media/media3)
 [![Hilt](https://img.shields.io/badge/DI-Hilt-00897B?style=flat-square)](https://dagger.dev/hilt/)
 [![Room](https://img.shields.io/badge/Database-Room%202.7-4285F4?style=flat-square)](https://developer.android.com/training/data-storage/room)
-[![Release](https://img.shields.io/badge/Version-v1.9.3-blue?style=flat-square)](https://github.com/cyberlog69/MoodTunes/releases)
+[![Release](https://img.shields.io/badge/Version-v1.9.4-blue?style=flat-square)](https://github.com/cyberlog69/MoodTunes/releases)
 [![License](https://img.shields.io/badge/License-GPL--3.0-blue?style=flat-square)](LICENSE)
 
 ---
@@ -173,9 +173,9 @@ app/src/main/java/com/moodtunes/app/
 
    Release builds are signed only when signing credentials are configured. See [Release signing](#-release-signing) below.
 
-### 🔑 Release Signing
+### 🔑 Release Signing & Key Rotation
 
-MoodTunes does **not** ship a keystore in the repository. Provide the signing material through environment variables (recommended for CI) or a local, git-ignored `keystore.properties` file:
+MoodTunes does **not** ship a keystore in the repository. Local builds read signing credentials from environment variables or a git-ignored `keystore.properties`:
 
 | Environment variable | `keystore.properties` key | Meaning |
 |---|---|---|
@@ -191,10 +191,23 @@ $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 .\gradlew.bat assembleRelease
 ```
 
-If no credentials are found, `assembleRelease` still completes but produces an **unsigned** APK and logs a warning. `*.keystore`, `*.jks` and `keystore.properties` are git-ignored — never commit them.
+If no credentials are found, `assembleRelease` still completes but produces an **unsigned** APK and logs a warning.
+
+**Official releases are signed differently.** Since `v1.9.4` the project uses an APK Signature Scheme v3 rotation lineage: CI builds an unsigned APK, then signs it with both the retired key and the current key so Android 8.x still verifies v2 while Android 9+ follows the v3 lineage. CI therefore needs these repository secrets:
+
+| Secret | Purpose |
+|---|---|
+| `RELEASE_KEYSTORE_BASE64` | Current (new) keystore, base64-encoded |
+| `RELEASE_OLD_KEYSTORE_BASE64` | Previous keystore, kept to sign v1/v2 for legacy devices |
+| `RELEASE_LINEAGE_BASE64` | v3 `SigningCertificateLineage` binary |
+| `KEYSTORE_PASSWORD` / `KEY_PASSWORD` | Current key passwords |
+| `OLD_KEYSTORE_PASSWORD` / `OLD_KEY_PASSWORD` | Previous key passwords |
+| `KEY_ALIAS` | Alias used in both keystores |
+
+A plain local `assembleRelease` signs with the current key only, so it installs cleanly but cannot update an official lineage-signed install in place. Use CI artifacts for release testing. Rotation details and fingerprints live in [SECURITY.md → Release signing & key rotation](SECURITY.md#release-signing--key-rotation).
 
 > [!WARNING]
-> The key used by releases published before v1.9.2 was committed to this repository, so its password must be considered public. Existing keys should be rotated following [SECURITY.md → Release signing & key rotation](SECURITY.md#release-signing--key-rotation).
+> The original key was committed to this repository, so its password must be considered public. It has been rotated as of `v1.9.4`; only install APKs from the official GitHub Releases page and verify the signer fingerprint documented in `SECURITY.md`.
 
 ---
 

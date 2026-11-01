@@ -10,11 +10,11 @@ Security patches and dependency updates are maintained for the latest release br
 
 | Version | Status | Security Support Level |
 |---|---|---|
-| **v1.9.x (v1.9.3+)** | **Current Stable (Primary Release)** | ✅ Security fixes, bug fixes, and maintenance |
+| **v1.9.x (v1.9.4+)** | **Current Stable (Primary Release)** | ✅ Security fixes, bug fixes, and maintenance |
 | **< v1.9.0** | **Deprecated** | ❌ Unsupported; releases before v1.9.0 used ephemeral CI signatures. Please upgrade |
 
 > [!IMPORTANT]
-> **Release keys are no longer stored in this repository.** Up to v1.9.1 the release keystore and its password were committed to git, so that password must be treated as public. See [Release signing & key rotation](#-release-signing--key-rotation) — rotating the key is strongly recommended.
+> **Signing key rotated in v1.9.4.** The original release key was committed to this repository up to v1.9.1, so its password is public. `v1.9.4` introduces a new 4096-bit key with an APK Signature Scheme v3 rotation lineage; Android 9+ updates transparently. See [Release signing & key rotation](#release-signing--key-rotation).
 
 ---
 
@@ -22,48 +22,50 @@ Security patches and dependency updates are maintained for the latest release br
 
 ### 1. Release Signing
 
-- Release APKs are signed with APK Signature Schemes v1, v2, v3 and v4 when signing credentials are provided.
-- Signing material is supplied at build time through environment variables (`KEYSTORE_FILE`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`) or a local, git-ignored `keystore.properties`. There is no hard-coded fallback: without credentials the build produces an unsigned APK and logs a warning.
-- `*.keystore`, `*.jks` and `keystore.properties` are git-ignored.
-- CI refuses to build a release if the keystore secret is missing, runs unit tests first, and verifies the produced APK with `apksigner verify` before uploading.
+- Since `v1.9.4`, official releases use an APK Signature Scheme **v3 rotation lineage**.
+  - Current signer (newest lineage entry) SHA-256: `c994adfc0c267996d7ada16b4c034084022f79ce4d996036c616419b0f511622`
+  - Retired signer (oldest lineage entry, used for v1/v2 on older devices) SHA-256: `4376dffb4af3bc5d6e26e44a59f9da22033843950ffdc2b58d2be00b8750c60f`
+- CI builds an unsigned APK, page-aligns it, then signs with both the retired and current keys plus `--lineage`, using `--rotation-min-sdk-version 28`. This keeps v2 signatures verifiable on Android 8.x while Android 9+ follows the lineage to the new key.
+- Signing material (both keystores, the lineage, and their passwords) is supplied through repository secrets. `*.keystore`, `*.jks`, `*.lineage` and `keystore.properties` are git-ignored.
+- CI fails if any signing secret is missing, runs unit tests first, and verifies the signature **and** the embedded lineage with `apksigner` before uploading.
+- A local `assembleRelease` signs with the current key only (no lineage), so it installs cleanly but is not update-compatible with official builds.
 
 Verify a downloaded APK:
 
 ```bash
-apksigner verify --print-certs MoodTunes-v1.9.2.apk
+apksigner verify --print-certs MoodTunes-v1.9.4.apk
+apksigner lineage --in MoodTunes-v1.9.4.apk --print-certs
 ```
+
+The first command should report the `c994adfc…` signer; the second should list the retired `4376dffb…` key as signer #1 and `c994adfc…` as signer #2.
 
 #### Release signing & key rotation
 
-The historical key's password is public, so anyone with a copy of that key file could produce an APK that Android accepts as an update. Rotate it:
+The original key was committed to this repository, so its password must be considered public. It was rotated in `v1.9.4`:
 
-1. Generate a new keystore with a fresh, strong password (keep it only in your password manager / CI secrets):
-   ```bash
-   keytool -genkeypair -v -keystore moodtunes-upload.jks -alias moodtunes \
-     -keyalg RSA -keysize 4096 -validity 10000
-   ```
-2. Produce a v3 rotation lineage signed by **both** the old and new keys, using the old APK as the lineage source:
-   ```bash
-   apksigner rotate --out lineage.bin \
-     --old-signer --ks old-release.jks \
-     --new-signer --ks moodtunes-upload.jks
-   ```
-3. Sign subsequent releases with the new key and the lineage:
-   ```bash
-   apksigner sign --ks moodtunes-upload.jks \
-     --lineage lineage.bin --rotation-min-sdk-version 28 \
-     --out MoodTunes-v1.10.0.apk app-release-unsigned.apk
-   ```
-   Or configure `signingConfigs.release` with a `apksigner` lineage file in Gradle.
-4. Keep the old key available for the lifetime of the lineage; future rotations extend it.
-5. If rotation is not possible, users must uninstall and reinstall — an APK signed by a different key will always be rejected as an update. Document that in the release notes.
+1. A new 4096-bit RSA key was generated with a random password.
+2. `apksigner rotate` produced a `SigningCertificateLineage` proving the old key signed the new one.
+3. Release APKs are signed with the old key first (v1/v2) and the new key plus lineage (v3), so updates install in place.
+   - Android 9+ (API 28+) validates the v3 lineage and adopts the new key.
+   - Android 8.0–8.1 (API 26–27) do not support v3; they validate the v2 signature made with the retired key, which still matches `v1.9.3` and earlier.
+   - Fresh installs work on all supported versions.
 
-Note that a rotated key with lineage requires Android 9 (API 28) or newer for transparent updates; MoodTunes supports API 26+, so devices below API 28 will need the reinstall path.
+To rotate again in the future:
+
+```bash
+apksigner rotate --out lineage-next.bin --in lineage.bin \
+  --old-signer --ks current.jks --ks-key-alias moodtunes \
+  --new-signer --ks next.jks --ks-key-alias moodtunes
+```
+
+`apksigner sign` then needs the oldest signer (for v1/v2) and the newest signer (for v3) plus the extended lineage — see `apksigner sign --help`. Validate with `apksigner verify --min-sdk-version 26 --max-sdk-version 27` and `apksigner lineage --in <apk> --print-certs` before publishing.
+
+If the oldest key is lost, API 26–27 devices must reinstall; API 28+ devices can still update through the lineage. Losing the current key **and** the lineage forces a reinstall for everyone.
 
 ### 2. Secure In-App Updates
 
 - **Host allow-list**: `UpdateEndpointPolicy` accepts only `https://` URLs on `github.com` / `githubusercontent.com` (including subdomains). Non-HTTPS URLs, lookalike hosts, `file://` and `intent://` URLs are rejected before any download starts. The policy is re-checked against the final URL after redirects.
-- **Package + signer verification**: before the installer is launched, the downloaded APK's package name must equal `com.moodtunes.app` and its signing certificate set must match the installed app's. A mismatch is logged and the file is deleted; the user is offered the browser fallback instead.
+- **Package + signer verification**: before the installer is launched, the downloaded APK's package name must equal `com.moodtunes.app`, and every signer of the installed app must appear in the download's signing history. History is used rather than strict equality because the v3 lineage legitimately lists both the retired and current certificates; the platform installer still performs the authoritative lineage check.
 - **OS-level enforcement**: Android's PackageInstaller independently verifies the signature for updates on top of the app-level check.
 - **Restricted FileProvider**: update APKs are shared through a private, unexported `FileProvider` with temporary read-only URI permission for the system installer only.
 

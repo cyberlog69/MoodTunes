@@ -40,40 +40,77 @@ jobs:
       - name: Run Unit Tests
         run: ./gradlew testDebugUnitTest --stacktrace
 
-      - name: Configure Release Keystore
+      - name: Configure Release Signing
         run: |
-          if [ -z "$RELEASE_KEYSTORE_BASE64" ]; then
-            echo "::error::RELEASE_KEYSTORE_BASE64 secret is not configured. Refusing to build an unsigned release."
-            exit 1
-          fi
-          echo "$RELEASE_KEYSTORE_BASE64" | base64 --decode > app/release.keystore
-          echo "KEYSTORE_FILE=app/release.keystore" >> "$GITHUB_ENV"
+          for name in RELEASE_KEYSTORE_BASE64 RELEASE_LINEAGE_BASE64 RELEASE_OLD_KEYSTORE_BASE64; do
+            if [ -z "${!name}" ]; then
+              echo "::error::$name secret is not configured. Refusing to build an unsigned release."
+              exit 1
+            fi
+          done
+          echo "$RELEASE_OLD_KEYSTORE_BASE64" | base64 --decode > app/old.keystore
+          echo "$RELEASE_KEYSTORE_BASE64" | base64 --decode > app/upload.keystore
+          echo "$RELEASE_LINEAGE_BASE64" | base64 --decode > app/lineage.bin
         env:
           RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          RELEASE_LINEAGE_BASE64: ${{ secrets.RELEASE_LINEAGE_BASE64 }}
+          RELEASE_OLD_KEYSTORE_BASE64: ${{ secrets.RELEASE_OLD_KEYSTORE_BASE64 }}
 
-      - name: Build Release APK
+      # Built unsigned on purpose: signing is a separate step so the v3
+      # SigningCertificateLineage can be attached to the final APK.
+      - name: Build Unsigned Release APK
         run: ./gradlew assembleRelease --stacktrace
-        env:
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
-      - name: Locate and Verify APK
+      - name: Sign APK with Rotation Lineage
         id: apk_info
+        env:
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          OLD_KEYSTORE_PASSWORD: ${{ secrets.OLD_KEYSTORE_PASSWORD }}
+          OLD_KEY_PASSWORD: ${{ secrets.OLD_KEY_PASSWORD }}
         run: |
-          APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" -print -quit)
-          if [ -z "$APK_PATH" ]; then
+          set -euo pipefail
+          BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
+
+          UNSIGNED=$(find app/build/outputs/apk/release -name "*unsigned*.apk" -print -quit)
+          if [ -z "$UNSIGNED" ]; then
+            UNSIGNED=$(find app/build/outputs/apk/release -name "*.apk" -print -quit)
+          fi
+          if [ -z "$UNSIGNED" ]; then
             echo "::error::No release APK produced"
             exit 1
           fi
-          echo "Found APK at: $APK_PATH"
-          echo "apk_path=$APK_PATH" >> "$GITHUB_OUTPUT"
-          ls -lh "$APK_PATH"
 
-      - name: Verify APK Signature
+          VERSION_NAME=$(grep -m1 'versionName = ' app/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/')
+          SIGNED="app/build/outputs/apk/release/MoodTunes-v${VERSION_NAME}.apk"
+          ALIGNED="app/build/outputs/apk/release/MoodTunes-v${VERSION_NAME}-aligned.apk"
+
+          "$BUILD_TOOLS/zipalign" -p -f 4 "$UNSIGNED" "$ALIGNED"
+
+          # Old signer first so v1/v2 remain verifiable on Android 8.x; the new
+          # signer plus --lineage produces the v3 rotation proof for Android 9+.
+          "$BUILD_TOOLS/apksigner" sign \
+            --ks app/old.keystore --ks-key-alias "$KEY_ALIAS" \
+            --ks-pass env:OLD_KEYSTORE_PASSWORD --key-pass env:OLD_KEY_PASSWORD \
+            --next-signer \
+            --ks app/upload.keystore --ks-key-alias "$KEY_ALIAS" \
+            --ks-pass env:KEYSTORE_PASSWORD --key-pass env:KEY_PASSWORD \
+            --lineage app/lineage.bin --rotation-min-sdk-version 28 \
+            --out "$SIGNED" "$ALIGNED"
+
+          echo "Signed APK: $SIGNED"
+          echo "apk_path=$SIGNED" >> "$GITHUB_OUTPUT"
+          ls -lh "$SIGNED"
+
+      - name: Verify APK Signature and Lineage
         run: |
-          APK_SIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)
-          "$APK_SIGNER" verify --verbose "${{ steps.apk_info.outputs.apk_path }}"
+          set -euo pipefail
+          BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
+          APK_PATH="${{ steps.apk_info.outputs.apk_path }}"
+          "$BUILD_TOOLS/apksigner" verify --print-certs "$APK_PATH"
+          "$BUILD_TOOLS/apksigner" lineage --in "$APK_PATH" --print-certs
+          "$BUILD_TOOLS/apksigner" verify --min-sdk-version 26 --max-sdk-version 27 "$APK_PATH"
 
       - name: Upload Android APK Artifact
         uses: actions/upload-artifact@v4

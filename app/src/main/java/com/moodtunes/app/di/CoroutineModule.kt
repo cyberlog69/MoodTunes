@@ -27,5 +27,9 @@ object CoroutineModule {
     @Singleton
     @ApplicationScope
     fun provideApplicationScope(): CoroutineScope =
-        CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+        // Deliberately not Dispatchers.Main.immediate: an immediate dispatcher
+        // runs launch/collect bodies inline on the calling thread, which lets
+        // an injected collector execute before the injecting class has finished
+        // initializing its fields.
+        CoroutineScope(SupervisorJob() + Dispatchers.Main)
 }

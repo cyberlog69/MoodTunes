@@ -52,18 +52,6 @@ class PlaybackManager @Inject constructor(
     private var mediaController: MediaController? = null
     private var currentSongScrobbled = false
 
-    init {
-        connectivityMonitor.register()
-        scope.launch {
-            // Auto-retry failed streams the moment connectivity returns.
-            connectivityMonitor.isOnline.collect { online ->
-                if (online && _playbackError.value?.isRetryable == true) {
-                    retryPlayback()
-                }
-            }
-        }
-    }
-
     private val _currentSong = MutableStateFlow<Song?>(null)
     val currentSong: StateFlow<Song?> = _currentSong.asStateFlow()
 
@@ -154,6 +142,21 @@ class PlaybackManager @Inject constructor(
         var songCount: Int,
         var listenedMs: Long
     )
+
+    init {
+        // Declared after every property initializer above: this collector can
+        // run inline (Dispatchers.Main may dispatch immediately), and it reads
+        // _playbackError. Keep it below the fields it touches.
+        connectivityMonitor.register()
+        scope.launch {
+            // Auto-retry failed streams the moment connectivity returns.
+            connectivityMonitor.isOnline.collect { online ->
+                if (online && _playbackError.value?.isRetryable == true) {
+                    retryPlayback()
+                }
+            }
+        }
+    }
 
     init {
         initController()

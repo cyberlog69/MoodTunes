@@ -42,7 +42,8 @@ fun SettingsScreen(
     val settings = uiState.userSettings
     val context = LocalContext.current
 
-    var isQualityDropdownExpanded by remember { mutableStateOf(false) }
+    var isWifiQualityDropdownExpanded by remember { mutableStateOf(false) }
+    var isMobileQualityDropdownExpanded by remember { mutableStateOf(false) }
     var showLicenses by remember { mutableStateOf(false) }
 
     var listenBrainzToken by remember(settings.listenBrainzToken) { mutableStateOf(settings.listenBrainzToken) }
@@ -326,38 +327,81 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        // Wi-Fi Audio Stream Quality
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("Audio Stream Quality", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
-                                Text(settings.streamQuality.displayName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("Wi-Fi Streaming Quality", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
+                                Text("${settings.wifiStreamQuality.displayName} • Unmetered networks", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             Box {
                                 Button(
-                                    onClick = { isQualityDropdownExpanded = true },
+                                    onClick = { isWifiQualityDropdownExpanded = true },
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
                                         contentColor = MaterialTheme.colorScheme.primary
                                     ),
                                     shape = RoundedCornerShape(12.dp)
                                 ) {
-                                    Text(settings.streamQuality.badgeText)
+                                    Text(settings.wifiStreamQuality.badgeText)
                                     Icon(Icons.Rounded.ArrowDropDown, contentDescription = null)
                                 }
 
                                 DropdownMenu(
-                                    expanded = isQualityDropdownExpanded,
-                                    onDismissRequest = { isQualityDropdownExpanded = false }
+                                    expanded = isWifiQualityDropdownExpanded,
+                                    onDismissRequest = { isWifiQualityDropdownExpanded = false }
                                 ) {
                                     StreamQuality.entries.forEach { quality ->
                                         DropdownMenuItem(
                                             text = { Text(quality.displayName) },
                                             onClick = {
-                                                viewModel.onStreamQualityChanged(quality)
-                                                isQualityDropdownExpanded = false
+                                                viewModel.onWifiStreamQualityChanged(quality)
+                                                isWifiQualityDropdownExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                        // Mobile Data Stream Quality
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Mobile Data Quality", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
+                                Text("${settings.mobileStreamQuality.displayName} • Cellular / Metered", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Box {
+                                Button(
+                                    onClick = { isMobileQualityDropdownExpanded = true },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f),
+                                        contentColor = MaterialTheme.colorScheme.secondary
+                                    ),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Text(settings.mobileStreamQuality.badgeText)
+                                    Icon(Icons.Rounded.ArrowDropDown, contentDescription = null)
+                                }
+
+                                DropdownMenu(
+                                    expanded = isMobileQualityDropdownExpanded,
+                                    onDismissRequest = { isMobileQualityDropdownExpanded = false }
+                                ) {
+                                    StreamQuality.entries.forEach { quality ->
+                                        DropdownMenuItem(
+                                            text = { Text(quality.displayName) },
+                                            onClick = {
+                                                viewModel.onMobileStreamQualityChanged(quality)
+                                                isMobileQualityDropdownExpanded = false
                                             }
                                         )
                                     }

@@ -3,6 +3,7 @@ package com.moodtunes.app.data.local.lyrics
 import android.content.Context
 import android.provider.MediaStore
 import com.moodtunes.app.data.remote.api.LrclibService
+import com.moodtunes.app.data.remote.api.YouTubeMusicApiService
 import com.moodtunes.app.data.remote.api.LyricsTranslationService
 import com.moodtunes.app.domain.model.LyricsLine
 import com.moodtunes.app.domain.model.Song
@@ -18,8 +19,16 @@ import javax.inject.Singleton
 class LyricsRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     private val lrclibService: LrclibService,
+    private val youTubeMusicApiService: YouTubeMusicApiService,
     private val translationService: LyricsTranslationService
 ) {
+    private val offsetPrefs = context.getSharedPreferences("lyrics_offsets", Context.MODE_PRIVATE)
+
+    fun getLyricsOffset(songId: Long): Long = offsetPrefs.getLong("offset_$songId", 0L)
+
+    fun saveLyricsOffset(songId: Long, offsetMs: Long) {
+        offsetPrefs.edit().putLong("offset_$songId", offsetMs).apply()
+    }
     private val cache = mutableMapOf<Long, List<LyricsLine>>()
     private val lyricsCacheDir = File(context.filesDir, "lyrics_cache").apply {
         if (!exists()) mkdirs()
@@ -36,9 +45,9 @@ class LyricsRepository @Inject constructor(
 
         // 2. Resolve via local files or remote LRCLIB
         val lyrics = if (song.isStream) {
-            fetchFromLrclib(song)
+            fetchFromLrclib(song) ?: fetchFromYouTube(song)
         } else {
-            readFromMediaStore(song) ?: readFromSiblingFile(song) ?: fetchFromLrclib(song)
+            readFromMediaStore(song) ?: readFromSiblingFile(song) ?: fetchFromLrclib(song) ?: fetchFromYouTube(song)
         } ?: emptyList()
 
         if (lyrics.isNotEmpty()) cache[song.id] = lyrics
@@ -54,7 +63,7 @@ class LyricsRepository @Inject constructor(
             cache[song.id] = existing
             return@withContext existing
         }
-        val fetched = fetchFromLrclib(song) ?: emptyList()
+        val fetched = fetchFromLrclib(song) ?: fetchFromYouTube(song) ?: emptyList()
         if (fetched.isNotEmpty()) {
             cache[song.id] = fetched
         }
@@ -98,8 +107,12 @@ class LyricsRepository @Inject constructor(
                     saveToDiskCache(song.id, raw)
                     cache[song.id] = parsed
                     parsed
-                } else null
-            } else null
+                } else {
+                    fetchFromYouTube(song.copy(title = queryTitle, artist = queryArtist))
+                }
+            } else {
+                fetchFromYouTube(song.copy(title = queryTitle, artist = queryArtist))
+            }
         } catch (e: Exception) {
             Timber.w(e, "Manual lyrics search failed for query: $queryTitle - $queryArtist")
             null
@@ -168,6 +181,35 @@ class LyricsRepository @Inject constructor(
     }
 
     // Keep existing readFromMediaStore and readFromSiblingFile methods unchanged
+
+    private suspend fun fetchFromYouTube(song: Song): List<LyricsLine>? {
+        return try {
+            var videoId = if (song.isStream) {
+                youTubeMusicApiService.extractVideoId(song.uri.toString())
+            } else ""
+
+            if (videoId.isBlank() || videoId == song.uri.toString()) {
+                val searchQuery = "${song.title} ${song.artist}".trim()
+                val searchResults = youTubeMusicApiService.searchSongs(searchQuery, limit = 1)
+                videoId = searchResults.firstOrNull()?.uri?.let { youTubeMusicApiService.extractVideoId(it.toString()) } ?: ""
+            }
+
+            if (videoId.isNotBlank()) {
+                val ytLyrics = youTubeMusicApiService.getLyrics(videoId)
+                if (ytLyrics != null && ytLyrics.first.isNotEmpty()) {
+                    if (ytLyrics.second.isNotBlank()) {
+                        saveToDiskCache(song.id, ytLyrics.second)
+                    }
+                    Timber.d("Successfully retrieved lyrics from YouTube Music fallback for %s", song.title)
+                    ytLyrics.first
+                } else null
+            } else null
+        } catch (e: Exception) {
+            Timber.w(e, "YouTube lyrics fallback fetch failed for: %s", song.title)
+            null
+        }
+    }
+
     private fun readFromMediaStore(song: Song): List<LyricsLine>? = runCatching {
         context.contentResolver.query(
             song.uri,

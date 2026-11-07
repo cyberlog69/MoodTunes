@@ -2,6 +2,8 @@ package com.moodtunes.app.data.remote.stream
 
 import android.content.Context
 import android.net.Uri
+import com.moodtunes.app.data.local.preferences.StreamQuality
+import com.moodtunes.app.data.local.preferences.UserPreferencesRepository
 import com.moodtunes.app.data.remote.api.YouTubeMusicApiService
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -46,7 +48,8 @@ class StreamResolver @Inject constructor(
     @ApplicationContext private val context: Context,
     private val http: OkHttpClient,
     private val solver: PlayerJsSolver,
-    private val youTubeMusicApiService: YouTubeMusicApiService
+    private val youTubeMusicApiService: YouTubeMusicApiService,
+    private val userPreferencesRepository: UserPreferencesRepository
 ) {
     data class StreamResult(
         val url: String,
@@ -246,11 +249,26 @@ class StreamResolver @Inject constructor(
             throw IOException("No progressive audio streams found via NewPipe for $videoId")
         }
 
-        // Pick highest quality audio stream (Opus preferred, otherwise AAC)
-        val bestAudio: AudioStream = audioStreams
-            .sortedWith(compareByDescending<AudioStream> { it.format?.mimeType?.contains("webm") == true }
-                .thenByDescending { it.averageBitrate.takeIf { b -> b > 0 } ?: (it.bitrate / 1000) })
-            .first()
+        // Pick audio stream based on active network quality ceiling (Wi-Fi vs Mobile)
+        val quality = userPreferencesRepository.getActiveStreamQuality()
+        val bestAudio: AudioStream = when (quality) {
+            StreamQuality.DATA_SAVER -> {
+                audioStreams.minByOrNull { it.averageBitrate.takeIf { b -> b > 0 } ?: (it.bitrate / 1000) }
+                    ?: audioStreams.first()
+            }
+            StreamQuality.STANDARD -> {
+                audioStreams.minByOrNull {
+                    val kbps = it.averageBitrate.takeIf { b -> b > 0 } ?: (it.bitrate / 1000)
+                    Math.abs(kbps - 128)
+                } ?: audioStreams.first()
+            }
+            else -> {
+                audioStreams
+                    .sortedWith(compareByDescending<AudioStream> { it.format?.mimeType?.contains("webm") == true }
+                        .thenByDescending { it.averageBitrate.takeIf { b -> b > 0 } ?: (it.bitrate / 1000) })
+                    .first()
+            }
+        }
 
         val rawUrl = bestAudio.content
         val finalUrl = decipherIfNeeded(rawUrl)

@@ -107,6 +107,14 @@ class SettingsViewModel @Inject constructor(
         preferencesRepository.updateStreamQuality(quality)
     }
 
+    fun onWifiStreamQualityChanged(quality: StreamQuality) {
+        preferencesRepository.updateWifiStreamQuality(quality)
+    }
+
+    fun onMobileStreamQualityChanged(quality: StreamQuality) {
+        preferencesRepository.updateMobileStreamQuality(quality)
+    }
+
     fun onWifiOnlyStreamingChanged(enabled: Boolean) {
         preferencesRepository.updateWifiOnlyStreaming(enabled)
     }

@@ -719,6 +719,7 @@ fun PlayerScreen(
                 SpotifyLyricsCard(
                     lyrics = uiState.lyrics,
                     currentPositionMs = uiState.currentPositionMs,
+                    lyricsOffsetMs = uiState.lyricsOffsetMs,
                     isLoading = uiState.isLyricsLoading,
                     backgroundColor = animatedGradientStart.copy(alpha = 0.28f),
                     onClick = { activeSheet = PlayerSheet.LYRICS }
@@ -861,14 +862,16 @@ private fun formatSpeedLabel(speed: Float): String {
 private fun SpotifyLyricsCard(
     lyrics: List<LyricsLine>,
     currentPositionMs: Long,
+    lyricsOffsetMs: Long = 0L,
     isLoading: Boolean,
     backgroundColor: Color,
     onClick: () -> Unit
 ) {
-    val currentLineIndex = remember(lyrics, currentPositionMs) {
+    val effectivePositionMs = (currentPositionMs + lyricsOffsetMs).coerceAtLeast(0L)
+    val currentLineIndex = remember(lyrics, effectivePositionMs) {
         if (lyrics.isEmpty()) -1
         else {
-            val idx = lyrics.indexOfLast { it.timeMs <= currentPositionMs }
+            val idx = lyrics.indexOfLast { it.timeMs <= effectivePositionMs }
             idx.coerceAtLeast(0)
         }
     }

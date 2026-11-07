@@ -4,6 +4,8 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.*
+import java.util.Locale
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -73,6 +75,8 @@ fun PlayerBottomSheet(
             PlayerSheet.LYRICS -> LyricsSheetContent(
                 lyrics = uiState.lyrics,
                 currentPositionMs = uiState.currentPositionMs,
+                lyricsOffsetMs = uiState.lyricsOffsetMs,
+                isOffsetAdjusterVisible = uiState.isLyricsOffsetAdjusterVisible,
                 durationMs = uiState.durationMs,
                 isPlaying = uiState.isPlaying,
                 isLoading = uiState.isLyricsLoading,
@@ -83,6 +87,10 @@ fun PlayerBottomSheet(
                 selectedMood = uiState.selectedMood,
                 onSeekToLine = { timeMs -> viewModel.seekToPosition(timeMs) },
                 onToggleTranslation = viewModel::toggleLyricsTranslation,
+                onToggleOffsetAdjuster = viewModel::toggleLyricsOffsetAdjuster,
+                onSetOffset = viewModel::setLyricsOffset,
+                onAdjustOffset = viewModel::adjustLyricsOffset,
+                onResetOffset = viewModel::resetLyricsOffset,
                 onPlayPause = viewModel::playPause,
                 onSkipNext = viewModel::skipNext,
                 onOpenLyricsSearch = viewModel::openLyricsSearchDialog,
@@ -422,6 +430,8 @@ private fun QueueSheetContent(
 private fun LyricsSheetContent(
     lyrics: List<LyricsLine>,
     currentPositionMs: Long,
+    lyricsOffsetMs: Long = 0L,
+    isOffsetAdjusterVisible: Boolean = false,
     durationMs: Long,
     isPlaying: Boolean,
     isLoading: Boolean,
@@ -432,6 +442,10 @@ private fun LyricsSheetContent(
     selectedMood: MoodType?,
     onSeekToLine: (Long) -> Unit,
     onToggleTranslation: () -> Unit,
+    onToggleOffsetAdjuster: () -> Unit = {},
+    onSetOffset: (Long) -> Unit = {},
+    onAdjustOffset: (Long) -> Unit = {},
+    onResetOffset: () -> Unit = {},
     onPlayPause: () -> Unit,
     onSkipNext: () -> Unit,
     onOpenLyricsSearch: () -> Unit = {},
@@ -440,11 +454,12 @@ private fun LyricsSheetContent(
     val context = LocalContext.current
     val listState = rememberLazyListState()
 
-    // Find current lyric line index
-    val currentLineIndex = remember(lyrics, currentPositionMs) {
+    // Find current lyric line index incorporating custom timing offset
+    val effectivePositionMs = (currentPositionMs + lyricsOffsetMs).coerceAtLeast(0L)
+    val currentLineIndex = remember(lyrics, effectivePositionMs) {
         if (lyrics.isEmpty()) -1
         else {
-            val idx = lyrics.indexOfLast { it.timeMs <= currentPositionMs }
+            val idx = lyrics.indexOfLast { it.timeMs <= effectivePositionMs }
             idx.coerceAtLeast(0)
         }
     }
@@ -538,6 +553,38 @@ private fun LyricsSheetContent(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Timing Offset / Sync Button
+                    IconButton(
+                        onClick = onToggleOffsetAdjuster,
+                        enabled = lyrics.isNotEmpty()
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = if (lyricsOffsetMs != 0L || isOffsetAdjusterVisible) MaterialTheme.colorScheme.primary else Color.Transparent
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Icon(
+                                    Icons.Rounded.Schedule,
+                                    contentDescription = "Sync timing offset",
+                                    tint = if (lyricsOffsetMs != 0L || isOffsetAdjusterVisible) MaterialTheme.colorScheme.onPrimary else White.copy(alpha = 0.85f),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                if (lyricsOffsetMs != 0L) {
+                                    Spacer(Modifier.width(2.dp))
+                                    Text(
+                                        text = "${if (lyricsOffsetMs > 0) "+" else ""}${"%.1f".format(Locale.US, lyricsOffsetMs / 1000f)}s",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onPrimary
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     // Translation Button
                     IconButton(
                         onClick = onToggleTranslation,
@@ -603,6 +650,93 @@ private fun LyricsSheetContent(
                 color = White.copy(alpha = 0.1f),
                 modifier = Modifier.padding(horizontal = 16.dp)
             )
+
+            // ─── Timing Offset Adjuster Panel ───────────────────────────────────
+            AnimatedVisibility(
+                visible = isOffsetAdjusterVisible,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                Surface(
+                    color = Color.Black.copy(alpha = 0.45f),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Lyrics Timing Offset: ${if (lyricsOffsetMs > 0) "+" else ""}${"%.1f".format(Locale.US, lyricsOffsetMs / 1000f)}s",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                color = White
+                            )
+                            if (lyricsOffsetMs != 0L) {
+                                TextButton(
+                                    onClick = onResetOffset,
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                ) {
+                                    Text("Reset (0s)", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                        }
+
+                        Slider(
+                            value = lyricsOffsetMs.toFloat(),
+                            onValueChange = { onSetOffset(it.toLong()) },
+                            valueRange = -5000f..5000f,
+                            steps = 99,
+                            colors = SliderDefaults.colors(
+                                thumbColor = MaterialTheme.colorScheme.primary,
+                                activeTrackColor = MaterialTheme.colorScheme.primary,
+                                inactiveTrackColor = White.copy(alpha = 0.2f)
+                            )
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly
+                        ) {
+                            FilledTonalButton(
+                                onClick = { onAdjustOffset(-500L) },
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                            ) {
+                                Text("-0.5s", style = MaterialTheme.typography.labelSmall)
+                            }
+                            FilledTonalButton(
+                                onClick = { onAdjustOffset(-100L) },
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                            ) {
+                                Text("-0.1s", style = MaterialTheme.typography.labelSmall)
+                            }
+                            FilledTonalButton(
+                                onClick = { onAdjustOffset(100L) },
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                            ) {
+                                Text("+0.1s", style = MaterialTheme.typography.labelSmall)
+                            }
+                            FilledTonalButton(
+                                onClick = { onAdjustOffset(500L) },
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                            ) {
+                                Text("+0.5s", style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                    }
+                }
+            }
 
             // ─── Lyrics Body ────────────────────────────────────────────────────
             Box(

@@ -2,6 +2,7 @@ package com.moodtunes.app.data.remote.api
 
 import android.net.Uri
 import com.moodtunes.app.domain.model.AudioFormat
+import com.moodtunes.app.domain.model.LyricsLine
 import com.moodtunes.app.domain.model.MoodType
 import com.moodtunes.app.domain.model.Song
 import kotlinx.coroutines.Dispatchers
@@ -538,6 +539,128 @@ class YouTubeMusicApiService @Inject constructor() {
                 (hrs * 3600 + mins * 60 + secs) * 1000L
             } else 210_000L
         }.getOrDefault(210_000L)
+    }
+
+
+    /**
+     * Retrieves timed or plain lyrics from YouTube Music for a given [videoId].
+     * Returns Pair(parsedLines, rawLrcString) or null if no lyrics are available.
+     */
+    suspend fun getLyrics(videoId: String): Pair<List<LyricsLine>, String>? = withContext(Dispatchers.IO) {
+        val cleanId = extractVideoId(videoId)
+        if (cleanId.isBlank()) return@withContext null
+
+        runCatching {
+            // 1. Query /next endpoint to retrieve the Lyrics tab browseId
+            val nextBody = JSONObject().apply {
+                put("context", createWebContext())
+                put("videoId", cleanId)
+            }
+            val nextRequest = Request.Builder()
+                .url("$BASE_URL/next")
+                .addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+                .addHeader("X-YouTube-Client-Name", "67")
+                .addHeader("X-YouTube-Client-Version", WEB_CLIENT_VERSION)
+                .addHeader("Origin", "https://music.youtube.com")
+                .addHeader("Referer", "https://music.youtube.com/")
+                .post(nextBody.toString().toRequestBody(jsonMediaType))
+                .build()
+
+            val browseId = client.newCall(nextRequest).execute().use { response ->
+                if (!response.isSuccessful) return@withContext null
+                val resStr = response.body?.string() ?: return@withContext null
+                val json = JSONObject(resStr)
+                val tabs = json.optJSONObject("contents")
+                    ?.optJSONObject("singleColumnMusicWatchNextResultsRenderer")
+                    ?.optJSONObject("tabbedRenderer")
+                    ?.optJSONObject("watchNextTabbedResultsRenderer")
+                    ?.optJSONArray("tabs") ?: return@withContext null
+
+                var foundBrowseId: String? = null
+                for (i in 0 until tabs.length()) {
+                    val tabRenderer = tabs.getJSONObject(i).optJSONObject("tabRenderer")
+                    val title = tabRenderer?.optString("title")
+                    val endpoint = tabRenderer?.optJSONObject("endpoint")?.optJSONObject("browseEndpoint")
+                    val bId = endpoint?.optString("browseId")
+                    if (!bId.isNullOrBlank() && (title.equals("Lyrics", ignoreCase = true) || bId.startsWith("MPLYt"))) {
+                        foundBrowseId = bId
+                        break
+                    }
+                }
+                foundBrowseId
+            } ?: return@withContext null
+
+            // 2. Query /browse endpoint with browseId to retrieve the lyrics
+            val browseBody = JSONObject().apply {
+                put("context", createWebContext())
+                put("browseId", browseId)
+            }
+            val browseRequest = Request.Builder()
+                .url("$BASE_URL/browse")
+                .addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+                .addHeader("X-YouTube-Client-Name", "67")
+                .addHeader("X-YouTube-Client-Version", WEB_CLIENT_VERSION)
+                .addHeader("Origin", "https://music.youtube.com")
+                .addHeader("Referer", "https://music.youtube.com/")
+                .post(browseBody.toString().toRequestBody(jsonMediaType))
+                .build()
+
+            client.newCall(browseRequest).execute().use { response ->
+                if (!response.isSuccessful) return@withContext null
+                val resStr = response.body?.string() ?: return@withContext null
+                val json = JSONObject(resStr)
+                val sectionContents = json.optJSONObject("contents")
+                    ?.optJSONObject("sectionListRenderer")
+                    ?.optJSONArray("contents") ?: return@withContext null
+
+                for (i in 0 until sectionContents.length()) {
+                    val item = sectionContents.getJSONObject(i)
+                    // Check for timed lyrics first
+                    if (item.has("musicTimedLyricsRenderer")) {
+                        val renderer = item.getJSONObject("musicTimedLyricsRenderer")
+                        val timedData = renderer.optJSONArray("timedLyricsData") ?: continue
+                        val lines = mutableListOf<LyricsLine>()
+                        val lrcBuilder = StringBuilder()
+                        for (j in 0 until timedData.length()) {
+                            val lineObj = timedData.getJSONObject(j)
+                            val text = lineObj.optString("lyricLine", "").trim()
+                            val cue = lineObj.optJSONObject("cueRange")
+                            val startMs = cue?.optLong("startTimeMs") ?: 0L
+                            val endMs = cue?.optLong("endTimeMs") ?: (startMs + 4000L)
+                            if (text.isNotBlank()) {
+                                lines.add(LyricsLine(timeMs = startMs, text = text, endTimeMs = endMs))
+                                val minutes = (startMs / 60000)
+                                val seconds = (startMs % 60000) / 1000
+                                val hundredths = (startMs % 1000) / 10
+                                lrcBuilder.append(String.format(java.util.Locale.US, "[%02d:%02d.%02d]%s\n", minutes, seconds, hundredths, text))
+                            }
+                        }
+                        if (lines.isNotEmpty()) {
+                            return@withContext Pair(lines, lrcBuilder.toString())
+                        }
+                    } else if (item.has("musicDescriptionShelfRenderer")) {
+                        // Plain text fallback
+                        val renderer = item.getJSONObject("musicDescriptionShelfRenderer")
+                        val runs = renderer.optJSONObject("description")?.optJSONArray("runs") ?: continue
+                        val fullText = StringBuilder()
+                        for (j in 0 until runs.length()) {
+                            fullText.append(runs.getJSONObject(j).optString("text", ""))
+                        }
+                        val plainLines = fullText.toString().lines().filter { it.isNotBlank() }
+                        if (plainLines.isNotEmpty()) {
+                            val lines = plainLines.mapIndexed { idx, line ->
+                                LyricsLine(timeMs = idx * 4000L, text = line.trim(), endTimeMs = (idx + 1) * 4000L)
+                            }
+                            return@withContext Pair(lines, fullText.toString())
+                        }
+                    }
+                }
+                null
+            }
+        }.getOrElse { e ->
+            Timber.w(e, "YouTube Music lyrics fetch failed for videoId: $cleanId")
+            null
+        }
     }
 
     fun extractVideoId(rawUriOrId: String): String {

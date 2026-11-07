@@ -76,7 +76,9 @@ data class PlayerUiState(
     val isGaplessPlaybackEnabled: Boolean = true,
     val isLyricsSearchDialogOpen: Boolean = false,
     val isManualLyricsLoading: Boolean = false,
-    val lyricsSearchFeedback: String? = null
+    val lyricsSearchFeedback: String? = null,
+    val lyricsOffsetMs: Long = 0L,
+    val isLyricsOffsetAdjusterVisible: Boolean = false
 ) {
     val progress: Float get() = if (durationMs > 0) currentPositionMs / durationMs.toFloat() else 0f
 }
@@ -118,9 +120,10 @@ class PlayerViewModel @Inject constructor(
                     current.copy(currentSong = song, currentSongIndex = idx, currentTrackDjInfo = djInfo)
                 }
                 if (song == null) {
-                    _uiState.update { it.copy(lyrics = emptyList(), isLyricsLoading = false, isLyricsTranslated = false, isTranslatingLyrics = false) }
+                    _uiState.update { it.copy(lyrics = emptyList(), isLyricsLoading = false, isLyricsTranslated = false, isTranslatingLyrics = false, lyricsOffsetMs = 0L) }
                 } else {
-                    _uiState.update { it.copy(isLyricsLoading = true, isLyricsTranslated = false, isTranslatingLyrics = false) }
+                    val savedOffset = lyricsRepository.getLyricsOffset(song.id)
+                    _uiState.update { it.copy(isLyricsLoading = true, isLyricsTranslated = false, isTranslatingLyrics = false, lyricsOffsetMs = savedOffset) }
                     val loaded = lyricsRepository.getLyrics(song)
                     _uiState.update { it.copy(lyrics = loaded, isLyricsLoading = false) }
                 }
@@ -563,6 +566,32 @@ class PlayerViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+
+    // ── Lyrics Timing Offset Controls ─────────────────────────────────────────
+    fun setLyricsOffset(offsetMs: Long) {
+        val current = _uiState.value.currentSong ?: return
+        val clamped = offsetMs.coerceIn(-10_000L, 10_000L)
+        _uiState.update { it.copy(lyricsOffsetMs = clamped) }
+        lyricsRepository.saveLyricsOffset(current.id, clamped)
+    }
+
+    fun adjustLyricsOffset(deltaMs: Long) {
+        val current = _uiState.value.currentSong ?: return
+        val newOffset = (_uiState.value.lyricsOffsetMs + deltaMs).coerceIn(-10_000L, 10_000L)
+        _uiState.update { it.copy(lyricsOffsetMs = newOffset) }
+        lyricsRepository.saveLyricsOffset(current.id, newOffset)
+    }
+
+    fun resetLyricsOffset() {
+        val current = _uiState.value.currentSong ?: return
+        _uiState.update { it.copy(lyricsOffsetMs = 0L) }
+        lyricsRepository.saveLyricsOffset(current.id, 0L)
+    }
+
+    fun toggleLyricsOffsetAdjuster() {
+        _uiState.update { it.copy(isLyricsOffsetAdjusterVisible = !it.isLyricsOffsetAdjusterVisible) }
     }
 
     // ── Playback Error Recovery ──────────────────────────────────────────────

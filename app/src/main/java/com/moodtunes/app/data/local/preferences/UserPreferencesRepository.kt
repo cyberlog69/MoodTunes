@@ -2,6 +2,8 @@ package com.moodtunes.app.data.local.preferences
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,7 +22,8 @@ enum class StreamQuality(val displayName: String, val badgeText: String) {
     AUTO("Adaptive (Auto)", "Auto"),
     LOSSLESS("Lossless (FLAC 24-bit)", "FLAC 24-bit"),
     HIGH("High Quality (320 kbps)", "320 kbps"),
-    STANDARD("Standard (128 kbps)", "128 kbps")
+    STANDARD("Standard (128 kbps)", "128 kbps"),
+    DATA_SAVER("Data Saver (70 kbps)", "70 kbps")
 }
 
 enum class AudioSourceMode(val displayName: String) {
@@ -60,6 +63,8 @@ data class AppUserSettings(
     val isolateMoodFeatures: Boolean = true,
     val playerDeckStyle: PlayerDeckStyle = PlayerDeckStyle.VINYL,
     val streamQuality: StreamQuality = StreamQuality.LOSSLESS,
+    val wifiStreamQuality: StreamQuality = StreamQuality.LOSSLESS,
+    val mobileStreamQuality: StreamQuality = StreamQuality.STANDARD,
     val wifiOnlyStreaming: Boolean = false,
     val wifiOnlyDownloads: Boolean = true,
     val mobileDataHighQuality: Boolean = true,
@@ -85,7 +90,7 @@ data class AppUserSettings(
 
 @Singleton
 class UserPreferencesRepository @Inject constructor(
-    @ApplicationContext context: Context
+    @ApplicationContext private val context: Context
 ) {
     private val prefs: SharedPreferences =
         context.getSharedPreferences("moodtunes_settings", Context.MODE_PRIVATE)
@@ -127,6 +132,9 @@ class UserPreferencesRepository @Inject constructor(
     private fun loadSettings(): AppUserSettings {
         val modeStr = prefs.getString("dark_mode", DarkModeOption.DARK.name) ?: DarkModeOption.DARK.name
         val qualityStr = prefs.getString("stream_quality", StreamQuality.LOSSLESS.name) ?: StreamQuality.LOSSLESS.name
+        val wifiQualityStr = prefs.getString("wifi_stream_quality", qualityStr) ?: qualityStr
+        val defaultMobileQuality = if (prefs.getBoolean("mobile_data_hq", true)) StreamQuality.STANDARD.name else StreamQuality.DATA_SAVER.name
+        val mobileQualityStr = prefs.getString("mobile_stream_quality", defaultMobileQuality) ?: defaultMobileQuality
         val sourceStr = prefs.getString("audio_source_mode", AudioSourceMode.STREAM_ONLY.name) ?: AudioSourceMode.STREAM_ONLY.name
         val deckStr = prefs.getString("player_deck_style", PlayerDeckStyle.VINYL.name) ?: PlayerDeckStyle.VINYL.name
         
@@ -144,6 +152,8 @@ class UserPreferencesRepository @Inject constructor(
             isolateMoodFeatures = prefs.getBoolean("isolate_mood_features", true),
             playerDeckStyle = runCatching { PlayerDeckStyle.valueOf(deckStr) }.getOrDefault(PlayerDeckStyle.VINYL),
             streamQuality = runCatching { StreamQuality.valueOf(qualityStr) }.getOrDefault(StreamQuality.LOSSLESS),
+            wifiStreamQuality = runCatching { StreamQuality.valueOf(wifiQualityStr) }.getOrDefault(StreamQuality.LOSSLESS),
+            mobileStreamQuality = runCatching { StreamQuality.valueOf(mobileQualityStr) }.getOrDefault(StreamQuality.STANDARD),
             wifiOnlyStreaming = prefs.getBoolean("wifi_only_streaming", false),
             wifiOnlyDownloads = prefs.getBoolean("wifi_only_downloads", true),
             mobileDataHighQuality = prefs.getBoolean("mobile_data_hq", true),
@@ -189,7 +199,31 @@ class UserPreferencesRepository @Inject constructor(
 
     fun updateStreamQuality(quality: StreamQuality) {
         prefs.edit().putString("stream_quality", quality.name).apply()
-        _settings.value = _settings.value.copy(streamQuality = quality)
+        prefs.edit().putString("wifi_stream_quality", quality.name).apply()
+        _settings.value = _settings.value.copy(streamQuality = quality, wifiStreamQuality = quality)
+    }
+
+    fun updateWifiStreamQuality(quality: StreamQuality) {
+        prefs.edit().putString("wifi_stream_quality", quality.name).apply()
+        prefs.edit().putString("stream_quality", quality.name).apply()
+        _settings.value = _settings.value.copy(wifiStreamQuality = quality, streamQuality = quality)
+    }
+
+    fun updateMobileStreamQuality(quality: StreamQuality) {
+        prefs.edit().putString("mobile_stream_quality", quality.name).apply()
+        _settings.value = _settings.value.copy(mobileStreamQuality = quality)
+    }
+
+    fun getActiveStreamQuality(): StreamQuality {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+        val isMetered = cm?.isActiveNetworkMetered == true
+        val isWifi = cm?.getNetworkCapabilities(cm.activeNetwork)
+            ?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+        return if (isWifi && !isMetered) {
+            _settings.value.wifiStreamQuality
+        } else {
+            _settings.value.mobileStreamQuality
+        }
     }
 
     fun updateWifiOnlyStreaming(enabled: Boolean) {

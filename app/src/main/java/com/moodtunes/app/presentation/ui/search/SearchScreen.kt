@@ -334,10 +334,7 @@ private fun SearchResultsList(
 
         // ─── 0. YouTube Music top result ──────────────────────────────────────
         val topResult = uiState.youtubeTopResult
-        val topIsTrack = topResult is YouTubeItem.Track
-        if (topResult != null &&
-            (uiState.selectedFilter == SearchFilter.ALL || topIsTrack || uiState.selectedFilter != SearchFilter.LYRICS)
-        ) {
+        if (topResult != null && uiState.selectedFilter != SearchFilter.LYRICS) {
             item {
                 SectionTitle(
                     icon = Icons.Rounded.AutoAwesome,
@@ -360,7 +357,7 @@ private fun SearchResultsList(
         }
 
         // ─── 0b. YouTube Music albums, artists and playlists ─────────────────
-        if (uiState.youtubeItems.isNotEmpty()) {
+        if (uiState.youtubeItems.isNotEmpty() && uiState.selectedFilter != SearchFilter.LYRICS) {
             item {
                 SectionTitle(
                     icon = Icons.Rounded.TravelExplore,

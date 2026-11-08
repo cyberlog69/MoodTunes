@@ -2,6 +2,8 @@ package com.moodtunes.app.data.remote.api
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.webkit.CookieManager
+import android.webkit.WebStorage
 import com.moodtunes.app.data.local.preferences.SecretCipher
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -70,6 +72,14 @@ class YouTubeSessionStore @Inject constructor(
             .apply()
         _accountName.value = ""
         _isSignedIn.value = false
+        // Clearing only the encrypted copy is not enough: the sign-in WebView
+        // still holds the live Google session, so a later visit would silently
+        // re-capture the same cookies.
+        runCatching {
+            CookieManager.getInstance().removeAllCookies(null)
+            CookieManager.getInstance().flush()
+            WebStorage.getInstance().deleteAllData()
+        }.onFailure { Timber.w(it, "Could not clear the WebView session") }
     }
 
     /**

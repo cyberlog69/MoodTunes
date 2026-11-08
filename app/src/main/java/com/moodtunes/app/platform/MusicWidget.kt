@@ -3,6 +3,7 @@ package com.moodtunes.app.platform
 import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
@@ -77,7 +78,7 @@ private fun MusicWidgetContent(state: WidgetPlayerState) {
         modifier = GlanceModifier
             .fillMaxSize()
             .background(ColorProvider(Color(0xFF1E1E28)))
-            .padding(12)
+            .padding(horizontal = 12.dp, vertical = 12.dp)
     ) {
         Row(
             modifier = GlanceModifier.fillMaxWidth(),
@@ -86,7 +87,7 @@ private fun MusicWidgetContent(state: WidgetPlayerState) {
             // Track info (tap to open the app)
             Column(
                 modifier = GlanceModifier
-                    .size(130, 90)
+                    .size(width = 130.dp, height = 90.dp)
                     .clickable(actionStartActivity<MainActivity>()),
                 verticalAlignment = Alignment.Vertical.CenterVertically
             ) {
@@ -147,7 +148,7 @@ private fun WidgetIconButton(iconRes: Int, contentDesc: String, action: Action) 
         provider = ImageProvider(iconRes),
         contentDescription = contentDesc,
         modifier = GlanceModifier
-            .size(38, 38)
+            .size(width = 38.dp, height = 38.dp)
             .clickable(action)
     )
 }

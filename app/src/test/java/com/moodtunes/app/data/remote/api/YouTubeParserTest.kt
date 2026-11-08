@@ -3,6 +3,8 @@ package com.moodtunes.app.data.remote.api
 import com.moodtunes.app.domain.model.YouTubeItem
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -373,5 +375,63 @@ class YouTubeParserTest {
         val page = YouTubeParser.search("Midnight City", root, com.moodtunes.app.domain.model.YouTubeSearchFilter.SONGS)
         assertEquals("Midnight City", page.top?.title)
         assertEquals(1, page.sections.flatMap { it.items }.size)
+    }
+
+    @Test
+    fun `playlist whose title contains album is not treated as an album`() {
+        val root = JSONObject(
+            """
+            {
+              "microformat": {
+                "microformatDataRenderer": {
+                  "title": "Album Covers Live",
+                  "description": "Playlist • YouTube Music"
+                }
+              },
+              "contents": {
+                "twoColumnBrowseResultsRenderer": {
+                  "secondaryContents": {
+                    "sectionListRenderer": {
+                      "contents": [{
+                        "musicPlaylistShelfRenderer": {
+                          "contents": [{
+                            "musicResponsiveListItemRenderer": {
+                              "flexColumns": [
+                                {
+                                  "musicResponsiveListItemFlexColumnRenderer": {
+                                    "text": { "runs": [{ "text": "Track One" }] }
+                                  }
+                                },
+                                {
+                                  "musicResponsiveListItemFlexColumnRenderer": {
+                                    "text": { "runs": [{ "text": "Artist One" }] }
+                                  }
+                                }
+                              ],
+                              "playlistItemData": { "videoId": "video-one" }
+                            }
+                          }]
+                        }
+                      }]
+                    }
+                  }
+                }
+              }
+            }
+            """.trimIndent()
+        )
+
+        val page = YouTubeParser.page("VLPLalbumcovers", root)
+        assertFalse(page.isAlbum)
+        assertTrue(page.isPlaylist)
+        assertEquals("Artist One", page.songs.first().artist)
+    }
+
+    @Test
+    fun `play counts parse with and without a multiplier`() {
+        assertEquals(717L, parsePlayCount("717 plays"))
+        assertEquals(1_250_000L, parsePlayCount("1.25M plays"))
+        assertEquals(3_400_000_000L, parsePlayCount("3.4B views"))
+        assertNull(parsePlayCount("No plays here"))
     }
 }

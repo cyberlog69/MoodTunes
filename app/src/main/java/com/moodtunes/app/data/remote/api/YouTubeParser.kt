@@ -11,7 +11,6 @@ import com.moodtunes.app.domain.model.YouTubeSearchPage
 import com.moodtunes.app.domain.model.YouTubeSearchSection
 import com.moodtunes.app.domain.model.YouTubeShelf
 import org.json.JSONObject
-import java.util.Locale
 
 /**
  * Parses YouTube Music browse/search/next payloads into [YouTubeItem]s.
@@ -388,8 +387,7 @@ internal object YouTubeParser {
 
         val shelves = shelves(root)
 
-        val headerText = (title + " " + subtitle.orEmpty()).lowercase(Locale.ROOT)
-        val isAlbum = browseId.startsWith("MPRE") || headerText.contains("album")
+        val isAlbum = browseId.startsWith("MPRE")
         val isArtist = browseId.startsWith("UC") || browseId.startsWith("MPLA")
         val isPlaylist = browseId.startsWith("VL") || browseId.startsWith("PL") ||
             browseId.startsWith("RD")

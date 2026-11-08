@@ -123,6 +123,7 @@ lottie-compose                       = { group = "com.airbnb.android",      name
 timber                               = { group = "com.jakewharton.timber",  name = "timber",                          version.ref = "timber" }
 
 okhttp                               = { group = "com.squareup.okhttp3",    name = "okhttp",                          version.ref = "okhttp" }
+okhttp-mockwebserver                 = { group = "com.squareup.okhttp3",    name = "mockwebserver",                   version.ref = "okhttp" }
 androidx-javascriptengine            = { group = "androidx.javascriptengine", name = "javascriptengine",             version.ref = "javascriptengine" }
 newpipe-extractor                    = { group = "com.github.TeamNewPipe",  name = "NewPipeExtractor",               version.ref = "newpipeExtractor" }
 

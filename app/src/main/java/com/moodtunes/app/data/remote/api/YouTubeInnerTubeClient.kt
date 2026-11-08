@@ -218,33 +218,60 @@ class YouTubeInnerTubeClient @Inject constructor(
 
     // ── Transport ────────────────────────────────────────────────────────────
 
+    /**
+     * Test seam: lets transport tests point the client at a MockWebServer
+     * without changing production behaviour.
+     */
+    internal var baseUrlOverride: String? = null
+    internal var webOriginOverride: String? = null
+
+    private val baseUrl: String get() = baseUrlOverride ?: BASE_URL
+    private val webOrigin: String get() = webOriginOverride ?: "https://music.youtube.com"
+
+    private data class Attempt(val payload: JSONObject?, val code: Int?)
+
     private fun post(endpoint: String, body: JSONObject): JSONObject? {
+        val first = postOnce(endpoint, body)
+        if (first.payload != null) return first.payload
+        val code = first.code
+        if (code == null || code !in RETRYABLE_REJECTIONS) return null
+
+        // A stale visitor id shows up as 400/401/403. Refresh it once and strip
+        // the old value from the body so the retry is anonymous and clean.
+        Timber.i("InnerTube %s returned HTTP %d; refreshing visitorData", endpoint, code)
+        refreshVisitorData()
+        body.optJSONObject("context")?.optJSONObject("client")?.remove("visitorData")
+        return postOnce(endpoint, body).payload
+    }
+
+    private fun postOnce(endpoint: String, body: JSONObject): Attempt {
         val request = try {
             buildRequest(endpoint, body)
         } catch (e: Exception) {
             Timber.w(e, "Could not build InnerTube request for %s", endpoint)
-            return null
+            return Attempt(null, null)
         }
 
         return runCatching {
             http.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
                     Timber.w("InnerTube %s returned HTTP %d", endpoint, response.code)
-                    return null
+                    return@use Attempt(null, response.code)
                 }
-                val payload = response.body?.string()?.takeIf { it.isNotBlank() } ?: return null
-                JSONObject(payload)
+                val payload = response.body?.string()?.takeIf { it.isNotBlank() }
+                    ?: return@use Attempt(null, response.code)
+                Attempt(JSONObject(payload), response.code)
             }
         }.getOrElse { error ->
             Timber.w(error, "InnerTube %s failed", endpoint)
-            null
+            Attempt(null, null)
         }
     }
 
     private fun buildRequest(endpoint: String, body: JSONObject): Request {
         val visitor = visitorData()
         val builder = Request.Builder()
-            .url("$BASE_URL/$endpoint?prettyPrint=false")
+            .url("$baseUrl/$endpoint?prettyPrint=false")
             .post(body.toString().toRequestBody(jsonMediaType))
             .addHeader("User-Agent", WEB_USER_AGENT)
             .addHeader("X-YouTube-Client-Name", "67")
@@ -283,6 +310,14 @@ class YouTubeInnerTubeClient @Inject constructor(
     }
 
     @Synchronized
+    private fun refreshVisitorData(): String {
+        cachedVisitorData = null
+        visitorDataExpiry = 0L
+        sessionStore.visitorData = null
+        return visitorData()
+    }
+
+    @Synchronized
     private fun visitorData(): String {
         val now = System.currentTimeMillis()
         val cached = cachedVisitorData
@@ -296,7 +331,7 @@ class YouTubeInnerTubeClient @Inject constructor(
 
         val fetched = runCatching {
             val request = Request.Builder()
-                .url("https://music.youtube.com/")
+                .url("$webOrigin/")
                 .addHeader("User-Agent", WEB_USER_AGENT)
                 .build()
             http.newCall(request).execute().use { response ->
@@ -324,6 +359,7 @@ class YouTubeInnerTubeClient @Inject constructor(
 
     private companion object {
         const val BASE_URL = "https://music.youtube.com/youtubei/v1"
+        val RETRYABLE_REJECTIONS = setOf(400, 401, 403)
         const val WEB_CLIENT_VERSION = "1.20260928.13.00"
         const val WEB_USER_AGENT =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +

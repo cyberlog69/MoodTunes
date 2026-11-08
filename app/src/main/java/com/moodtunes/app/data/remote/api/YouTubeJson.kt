@@ -124,7 +124,7 @@ internal fun parseDurationMs(text: String?): Long {
 
 internal fun parsePlayCount(text: String?): Long? {
     val value = text?.trim() ?: return null
-    val match = Regex("""([\d.,]+)\s*([KMB])\s*(?:plays|views)?""", RegexOption.IGNORE_CASE)
+    val match = Regex("""([\d.,]+)\s*([KMB])?\s*(?:plays|views)""", RegexOption.IGNORE_CASE)
         .find(value) ?: return null
     val number = match.groupValues[1].replace(",", "").toDoubleOrNull() ?: return null
     val multiplier = when (match.groupValues[2].uppercase(Locale.ROOT)) {

@@ -232,7 +232,11 @@ private fun YouTubeShelfRow(
                     onClick = {
                         when (item) {
                             is YouTubeItem.Track -> {
-                                val index = shelf.items.indexOf(item)
+                                // playableSongs drops non-track items, so map the
+                                // tapped card to its position there, not in items.
+                                val index = shelf.playableSongs.indexOfFirst {
+                                    it.videoId == item.song.videoId
+                                }
                                 onPlay(index.coerceAtLeast(0))
                             }
                             is YouTubeItem.Category -> onOpenYouTubePage(item.browseId, item.params)

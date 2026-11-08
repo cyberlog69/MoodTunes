@@ -100,7 +100,9 @@ class YouTubePageViewModel @Inject constructor(
             _state.value = current.copy(
                 songs = mergedSongs,
                 shelves = mergedShelves,
-                continuation = next.continuation,
+                // A repeated token means there is no further page; clearing it
+                // stops "Load more" from refetching the same content forever.
+                continuation = next.continuation?.takeIf { it != continuation },
                 isAppending = false
             )
         }

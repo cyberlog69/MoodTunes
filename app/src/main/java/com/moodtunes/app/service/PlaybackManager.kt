@@ -133,6 +133,7 @@ class PlaybackManager @Inject constructor(
     private var effectsRetryJob: Job? = null
     private var radioFetchJob: Job? = null
     private var radioLoadedForSongId: Long? = null
+    private var queueGeneration = 0
 
     // Tracks the current mood listening session so it can be persisted as a
     // MoodHistory entry once the user switches queues or moods.
@@ -192,6 +193,7 @@ class PlaybackManager @Inject constructor(
         autoplayRadio: Boolean = false
     ) {
         if (songs.isEmpty()) return
+        queueGeneration++
 
         // Spotify-style autoplay: playing one online result starts a station
         // from that song instead of stopping after the handful of results.
@@ -651,8 +653,9 @@ class PlaybackManager @Inject constructor(
         if (radioLoadedForSongId == current.id) return
         radioLoadedForSongId = current.id
         radioFetchJob?.cancel()
+        val generation = queueGeneration
         radioFetchJob = scope.launch {
-            appendRadioTracks(videoId, limit = 15, excludeVideoId = null)
+            appendRadioTracks(videoId, limit = 15, excludeVideoId = null, generation = generation)
         }
     }
 
@@ -665,20 +668,25 @@ class PlaybackManager @Inject constructor(
         val videoId = seed.videoId ?: return
         radioLoadedForSongId = null
         radioFetchJob?.cancel()
+        val generation = queueGeneration
         radioFetchJob = scope.launch {
-            appendRadioTracks(videoId, limit = 25, excludeVideoId = videoId)
+            appendRadioTracks(videoId, limit = 25, excludeVideoId = videoId, generation = generation)
         }
     }
 
     private suspend fun appendRadioTracks(
         videoId: String,
         limit: Int,
-        excludeVideoId: String?
+        excludeVideoId: String?,
+        generation: Int
     ) {
         val radio = runCatching {
             onlineStreamRepository.getRadioQueue(videoId, limit)
         }.getOrDefault(emptyList())
         if (radio.isEmpty()) return
+        // The user may have started another queue while the request was in
+        // flight; never append stale recommendations to it.
+        if (generation != queueGeneration) return
 
         val controller = mediaController ?: return
         val existingKeys = _playlist.value.map { it.videoId ?: it.id.toString() }.toSet()
@@ -710,6 +718,7 @@ class PlaybackManager @Inject constructor(
         val controller = mediaController ?: return
         val queue = _playlist.value
         if (queue.isEmpty()) return
+        queueGeneration++
 
         if (keepCurrent) {
             val currentIndex = controller.currentMediaItemIndex

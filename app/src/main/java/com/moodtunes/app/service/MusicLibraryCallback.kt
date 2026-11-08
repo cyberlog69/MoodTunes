@@ -1,12 +1,14 @@
 package com.moodtunes.app.service
 
+import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
-import androidx.media3.common.PlaybackException
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaLibraryService.LibraryParams
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
+import androidx.media3.session.SessionError
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.SettableFuture
@@ -23,6 +25,7 @@ import kotlinx.coroutines.launch
  * Media3 library callback that powers Android Auto (and any other media browser).
  * Exposes the app's moods, playlists, favorites, and all songs as a browsable tree.
  */
+@OptIn(UnstableApi::class)
 class MusicLibraryCallback(
     private val musicRepository: IMusicRepository,
     private val playlistRepository: IPlaylistRepository,
@@ -81,7 +84,7 @@ class MusicLibraryCallback(
                 val paged = children.take(pageSize.coerceAtLeast(MAX_CHILDREN))
                 future.set(LibraryResult.ofItemList(ImmutableList.copyOf(paged), params))
             } catch (e: Exception) {
-                future.set(LibraryResult.ofError(PlaybackException.ERROR_CODE_IO_UNSPECIFIED))
+                future.set(LibraryResult.ofError(SessionError.ERROR_UNKNOWN))
             }
         }
         return future
@@ -92,6 +95,25 @@ class MusicLibraryCallback(
         controller: MediaSession.ControllerInfo,
         mediaItems: List<MediaItem>
     ): ListenableFuture<List<MediaItem>> {
+        // Assistant / Android Auto "play <query>" arrives as a media item with
+        // a search query instead of a concrete media id.
+        val searchQuery = mediaItems.firstOrNull()?.requestMetadata?.searchQuery
+        if (!searchQuery.isNullOrBlank()) {
+            val searchFuture = SettableFuture.create<List<MediaItem>>()
+            scope.launch {
+                try {
+                    searchFuture.set(
+                        songsToMediaItems(
+                            musicRepository.searchSongs(searchQuery.toString()).take(MAX_CHILDREN)
+                        )
+                    )
+                } catch (e: Exception) {
+                    searchFuture.set(emptyList())
+                }
+            }
+            return searchFuture
+        }
+
         val future = SettableFuture.create<List<MediaItem>>()
         scope.launch {
             try {

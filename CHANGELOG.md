@@ -4,6 +4,48 @@ All notable changes to MoodTunes are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows
 [Semantic Versioning](https://semver.org/).
 
+## [2.0.1] - 2026-11-09
+
+Hardening patch for v2.0.0, driven by a full Android lint and code review.
+
+### Fixed
+
+- **Quick Settings tile no longer crashes on Android 8/9.** `Tile#setSubtitle`
+  is API 29+; it is now guarded by a version check.
+- **Home-screen widget dimensions are real dp values.** Glance's `@DimenRes`
+  overloads were being called with raw integers, resolving to non-existent
+  resources.
+- **Android Auto library errors use a valid `SessionError` code** instead of a
+  `PlaybackException` constant.
+- **Assistant media search is handled.** `MEDIA_PLAY_FROM_SEARCH` is declared and
+  `onAddMediaItems` resolves a `searchQuery` against the local library.
+- **Sign-out clears the WebView session.** Cookies and WebStorage are removed,
+  so the Google session cannot be silently re-captured after signing out.
+- **Stale `visitorData` is refreshed automatically.** A 400/401/403 from
+  InnerTube now invalidates the cached visitor id, strips it from the JSON body
+  and retries once.
+- **Album detection uses the browse id only.** A playlist whose title contains
+  "album" is no longer treated as an album.
+- **Shelf taps map to the correct track.** Card positions are translated to
+  `playableSongs` positions before playback.
+- **"Load more" stops on a repeated continuation token.**
+- **Play counts parse without K/M/B** (e.g. `717 plays`).
+- **Lyrics filter hides YouTube Music rows.**
+- **Radio appends are generation-guarded**, so a slow request can no longer add
+  tracks to a queue the user already replaced.
+
+### Added
+
+- `YouTubeInnerTubeClientTest` with MockWebServer coverage for endpoint URL,
+  headers, request body and the stale-visitor retry. The old browse URL typo
+  would now fail this test.
+- Parser tests for album-vs-playlist detection and play-count parsing.
+
+### Changed
+
+- CI now runs `lintDebug` before building the release. Lint errors block the
+  pipeline instead of shipping silently.
+
 ## [2.0.0] - 2026-11-08
 
 The YouTube Music release: MoodTunes now speaks the full browse graph instead of

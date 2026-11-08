@@ -10,7 +10,8 @@ Security patches and dependency updates are maintained for the latest release br
 
 | Version | Status | Security Support Level |
 |---|---|---|
-| **v1.9.x (v1.9.4+)** | **Current Stable (Primary Release)** | ✅ Security fixes, bug fixes, and maintenance |
+| **v2.0.x** | **Current Stable (Primary Release)** | ✅ Security fixes, bug fixes, and maintenance |
+| **v1.9.x (v1.9.4+)** | **Maintenance** | ⚠️ Critical security fixes only |
 | **< v1.9.0** | **Deprecated** | ❌ Unsupported; releases before v1.9.0 used ephemeral CI signatures. Please upgrade |
 
 > [!IMPORTANT]
@@ -33,8 +34,8 @@ Security patches and dependency updates are maintained for the latest release br
 Verify a downloaded APK:
 
 ```bash
-apksigner verify --print-certs MoodTunes-v1.9.4.apk
-apksigner lineage --in MoodTunes-v1.9.4.apk --print-certs
+apksigner verify --print-certs MoodTunes-v2.0.0.apk
+apksigner lineage --in MoodTunes-v2.0.0.apk --print-certs
 ```
 
 The first command should report the `c994adfc…` signer; the second should list the retired `4376dffb…` key as signer #1 and `c994adfc…` as signer #2.

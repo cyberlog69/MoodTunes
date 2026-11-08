@@ -13,6 +13,9 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import com.moodtunes.app.domain.model.MoodType
+import com.moodtunes.app.presentation.ui.account.YouTubeAccountScreen
+import com.moodtunes.app.presentation.ui.collection.CollectionScreen
+import com.moodtunes.app.presentation.ui.discover.DiscoverScreen
 import com.moodtunes.app.presentation.ui.history.HistoryScreen
 import com.moodtunes.app.presentation.ui.home.HomeScreen
 import com.moodtunes.app.presentation.ui.library.LibraryScreen
@@ -21,6 +24,7 @@ import com.moodtunes.app.presentation.ui.player.PlayerScreen
 import com.moodtunes.app.presentation.ui.playlistdetail.PlaylistDetailScreen
 import com.moodtunes.app.presentation.ui.search.SearchScreen
 import com.moodtunes.app.presentation.ui.settings.SettingsScreen
+import com.moodtunes.app.presentation.ui.youtubepage.YouTubePageScreen
 
 @Composable
 fun MoodTunesNavGraph(
@@ -48,7 +52,9 @@ fun MoodTunesNavGraph(
                 onNavigateToLibrary = { navController.navigate(Routes.LIBRARY) },
                 onNavigateToHistory = { navController.navigate(Routes.HISTORY) },
                 onNavigateToSettings = { navController.navigate(Routes.SETTINGS) },
-                onNavigateToSearch = { navController.navigate(Routes.SEARCH) }
+                onNavigateToSearch = { navController.navigate(Routes.SEARCH) },
+                onNavigateToDiscover = { navController.navigate(Routes.DISCOVER) },
+                onNavigateToCollection = { navController.navigate(Routes.COLLECTION) }
             )
         }
 
@@ -64,6 +70,55 @@ fun MoodTunesNavGraph(
                 onNavigateToPlayer = { navController.navigate(Routes.PLAYER) },
                 onNavigateToPlaylist = { playlistId ->
                     navController.navigate(Routes.playlistDetail(playlistId))
+                },
+                onNavigateToYouTubePage = { browseId, params ->
+                    navController.navigate(Routes.youTubePage(browseId, params))
+                }
+            )
+        }
+
+        composable(Routes.DISCOVER) {
+            DiscoverScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToPlayer = { navController.navigate(Routes.PLAYER) },
+                onOpenYouTubePage = { browseId, params ->
+                    navController.navigate(Routes.youTubePage(browseId, params))
+                }
+            )
+        }
+
+        composable(Routes.COLLECTION) {
+            CollectionScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToPlayer = { navController.navigate(Routes.PLAYER) },
+                onNavigateToAccount = { navController.navigate(Routes.YOUTUBE_ACCOUNT) },
+                onOpenYouTubePage = { browseId, params ->
+                    navController.navigate(Routes.youTubePage(browseId, params))
+                }
+            )
+        }
+
+        composable(Routes.YOUTUBE_ACCOUNT) {
+            YouTubeAccountScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(
+            route = Routes.YOUTUBE_PAGE,
+            arguments = listOf(
+                navArgument("browseId") { type = NavType.StringType },
+                navArgument("params") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                }
+            )
+        ) {
+            YouTubePageScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToPlayer = { navController.navigate(Routes.PLAYER) },
+                onOpenYouTubePage = { browseId, params ->
+                    navController.navigate(Routes.youTubePage(browseId, params))
                 }
             )
         }
@@ -96,7 +151,8 @@ fun MoodTunesNavGraph(
 
         composable(Routes.SETTINGS) {
             SettingsScreen(
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToAccount = { navController.navigate(Routes.YOUTUBE_ACCOUNT) }
             )
         }
     }

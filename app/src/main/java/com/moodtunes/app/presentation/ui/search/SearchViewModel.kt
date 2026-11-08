@@ -9,11 +9,14 @@ import com.moodtunes.app.data.remote.api.SubsonicApiService
 import com.moodtunes.app.domain.model.AudioFormat
 import com.moodtunes.app.domain.model.Playlist
 import com.moodtunes.app.domain.model.Song
+import com.moodtunes.app.domain.model.YouTubeItem
+import com.moodtunes.app.domain.model.YouTubeSearchFilter
 import com.moodtunes.app.domain.repository.IMusicRepository
 import com.moodtunes.app.domain.repository.IPlaylistRepository
 import com.moodtunes.app.domain.usecase.AddSongToPlaylistUseCase
 import com.moodtunes.app.domain.usecase.CreatePlaylistUseCase
 import com.moodtunes.app.domain.usecase.ToggleFavoriteUseCase
+import com.moodtunes.app.domain.util.SearchRank
 import com.moodtunes.app.service.PlaybackManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -59,6 +62,9 @@ data class SearchUiState(
     val matchedPlaylists: List<Playlist> = emptyList(),
     val artists: List<ArtistGroup> = emptyList(),
     val albums: List<AlbumGroup> = emptyList(),
+    val youtubeTopResult: YouTubeItem? = null,
+    val youtubeItems: List<YouTubeItem> = emptyList(),
+    val suggestions: List<String> = emptyList(),
     val recentSearches: List<String> = emptyList(),
     val isSearchingLocal: Boolean = false,
     val isSearchingOnline: Boolean = false,
@@ -69,7 +75,8 @@ data class SearchUiState(
     val isEmpty: Boolean
         get() = query.isNotBlank() && !isSearchingLocal && !isSearchingOnline &&
                 localSongs.isEmpty() && onlineSongs.isEmpty() && lyricResults.isEmpty() &&
-                matchedPlaylists.isEmpty() && artists.isEmpty() && albums.isEmpty()
+                matchedPlaylists.isEmpty() && artists.isEmpty() && albums.isEmpty() &&
+                youtubeTopResult == null && youtubeItems.isEmpty()
 }
 
 @HiltViewModel
@@ -95,6 +102,9 @@ class SearchViewModel @Inject constructor(
     private val _matchedPlaylists = MutableStateFlow<List<Playlist>>(emptyList())
     private val _artists = MutableStateFlow<List<ArtistGroup>>(emptyList())
     private val _albums = MutableStateFlow<List<AlbumGroup>>(emptyList())
+    private val _youtubeTopResult = MutableStateFlow<YouTubeItem?>(null)
+    private val _youtubeItems = MutableStateFlow<List<YouTubeItem>>(emptyList())
+    private val _suggestions = MutableStateFlow<List<String>>(emptyList())
     private val _recentSearches = MutableStateFlow(userPreferencesRepository.getRecentSearches())
     private val _isSearchingLocal = MutableStateFlow(false)
     private val _isSearchingOnline = MutableStateFlow(false)
@@ -112,8 +122,11 @@ class SearchViewModel @Inject constructor(
         },
         combine(_isSearchingOnline, playbackManager.currentSong, playbackManager.isPlaying, playlistRepository.getPlaylists()) { searchingOnline, song, isPlaying, playlists ->
             Tuple4(searchingOnline, song, isPlaying, playlists)
+        },
+        combine(_youtubeTopResult, _youtubeItems, _suggestions) { top, items, suggestions ->
+            Tuple3(top, items, suggestions)
         }
-    ) { (q, filter, local, online, lyrics), (playlists, artists, albums, recent, searchingLocal), (searchingOnline, currentSong, isPlaying, userPlaylists) ->
+    ) { (q, filter, local, online, lyrics), (playlists, artists, albums, recent, searchingLocal), (searchingOnline, currentSong, isPlaying, userPlaylists), (top, youtubeItems, suggestions) ->
         this.allUserPlaylists = userPlaylists
         SearchUiState(
             query = q,
@@ -124,6 +137,9 @@ class SearchViewModel @Inject constructor(
             matchedPlaylists = playlists,
             artists = artists,
             albums = albums,
+            youtubeTopResult = top,
+            youtubeItems = youtubeItems,
+            suggestions = suggestions,
             recentSearches = recent,
             isSearchingLocal = searchingLocal,
             isSearchingOnline = searchingOnline,
@@ -154,6 +170,9 @@ class SearchViewModel @Inject constructor(
             _matchedPlaylists.value = emptyList()
             _artists.value = emptyList()
             _albums.value = emptyList()
+            _youtubeTopResult.value = null
+            _youtubeItems.value = emptyList()
+            _suggestions.value = emptyList()
             _isSearchingLocal.value = false
             _isSearchingOnline.value = false
             _recentSearches.value = userPreferencesRepository.getRecentSearches()
@@ -168,8 +187,11 @@ class SearchViewModel @Inject constructor(
             performLocalSearch(newQuery)
             _isSearchingLocal.value = false
 
-            // Debounced online search
-            delay(400)
+            // Debounced online search + typeahead suggestions
+            delay(350)
+            _suggestions.value = runCatching {
+                onlineStreamRepository.getSearchSuggestions(newQuery)
+            }.getOrDefault(emptyList())
             performOnlineSearch(newQuery)
             _isSearchingOnline.value = false
         }
@@ -213,12 +235,19 @@ class SearchViewModel @Inject constructor(
 
     private suspend fun performOnlineSearch(query: String) = coroutineScope {
         val settings = userPreferencesRepository.settings.value
+        val selectedFilter = _selectedFilter.value
+        val youTubeFilter = selectedFilter.toYouTubeFilter()
 
         val onlineDeferred = async {
-            onlineStreamRepository.searchSongs(
-                query = query,
-                limit = 20
-            )
+            if (youTubeFilter == YouTubeSearchFilter.SONGS || youTubeFilter == YouTubeSearchFilter.ALL) {
+                runCatching { onlineStreamRepository.searchSongs(query, 20) }.getOrDefault(emptyList())
+            } else {
+                emptyList()
+            }
+        }
+
+        val typedDeferred = async {
+            runCatching { onlineStreamRepository.searchPage(query, youTubeFilter) }.getOrNull()
         }
 
         val serverDeferred = async {
@@ -236,45 +265,64 @@ class SearchViewModel @Inject constructor(
         }
 
         val lyricsDeferred = async {
-            if (query.trim().length >= 3) {
-                runCatching {
-                    val results = lrclibService.searchLyrics(query.trim())
-                    results.take(8).mapNotNull { r ->
-                        val matched = findMatchingLyricSnippet(r.plainLyrics ?: r.syncedLyrics ?: "", query.trim())
-                        if (matched != null) {
-                            val dummySong = Song(
-                                id = kotlin.math.abs("${r.artistName}_${r.trackName}".hashCode().toLong()),
-                                title = r.trackName,
-                                artist = r.artistName,
-                                album = r.albumName ?: "Single",
-                                duration = (r.durationSeconds ?: 200) * 1000L,
-                                uri = android.net.Uri.parse("online://search/${android.net.Uri.encode("${r.trackName} ${r.artistName}")}"),
-                                albumArtUri = null,
-                                isStream = true,
-                                audioFormat = AudioFormat.STREAM
-                            )
-                            LyricSearchResult(
-                                song = dummySong,
-                                matchedSnippet = matched,
-                                source = "LRCLIB"
-                            )
-                        } else null
-                    }
-                }.getOrDefault(emptyList())
+            if (selectedFilter == SearchFilter.ALL || selectedFilter == SearchFilter.LYRICS) {
+                if (query.trim().length >= 3) {
+                    runCatching {
+                        val results = lrclibService.searchLyrics(query.trim())
+                        results.take(8).mapNotNull { r ->
+                            val matched = findMatchingLyricSnippet(r.plainLyrics ?: r.syncedLyrics ?: "", query.trim())
+                            if (matched != null) {
+                                val dummySong = Song(
+                                    id = kotlin.math.abs("${r.artistName}_${r.trackName}".hashCode().toLong()),
+                                    title = r.trackName,
+                                    artist = r.artistName,
+                                    album = r.albumName ?: "Single",
+                                    duration = (r.durationSeconds ?: 200) * 1000L,
+                                    uri = android.net.Uri.parse("online://search/${android.net.Uri.encode("${r.trackName} ${r.artistName}")}"),
+                                    albumArtUri = null,
+                                    isStream = true,
+                                    audioFormat = AudioFormat.STREAM
+                                )
+                                LyricSearchResult(
+                                    song = dummySong,
+                                    matchedSnippet = matched,
+                                    source = "LRCLIB"
+                                )
+                            } else null
+                        }
+                    }.getOrDefault(emptyList())
+                } else {
+                    emptyList()
+                }
             } else {
                 emptyList()
             }
         }
 
         val onlineSongs = onlineDeferred.await()
+        val typedPage = typedDeferred.await()
         val serverSongs = serverDeferred.await()
         val lyricMatches = lyricsDeferred.await()
 
-        val allOnline = (serverSongs + onlineSongs).distinctBy { it.id }
-        _onlineSongs.value = allOnline
+        if (selectedFilter == SearchFilter.ALL || selectedFilter == SearchFilter.SONGS) {
+            val allOnline = SearchRank.rankSongs(
+                (serverSongs + onlineSongs).distinctBy { it.id },
+                query
+            )
+            _onlineSongs.value = allOnline
+        } else {
+            _onlineSongs.value = emptyList()
+        }
         _lyricResults.value = lyricMatches
 
-        val allCombined = (allLocalSongs + allOnline).distinctBy { it.id }
+        val typedItems = typedPage?.allItems().orEmpty()
+        val topResult = typedPage?.top
+        _youtubeTopResult.value = topResult
+        _youtubeItems.value = typedItems.filterNot {
+            it is YouTubeItem.Track || it.id == topResult?.id
+        }
+
+        val allCombined = (allLocalSongs + onlineSongs + serverSongs).distinctBy { it.id }
         val q = query.trim().lowercase()
 
         val matchedArtists = allCombined
@@ -291,6 +339,15 @@ class SearchViewModel @Inject constructor(
                 AlbumGroup(first.album, first.artist, songs)
             }
         _albums.value = matchedAlbums
+    }
+
+    private fun SearchFilter.toYouTubeFilter(): YouTubeSearchFilter = when (this) {
+        SearchFilter.SONGS -> YouTubeSearchFilter.SONGS
+        SearchFilter.ARTISTS -> YouTubeSearchFilter.ARTISTS
+        SearchFilter.ALBUMS -> YouTubeSearchFilter.ALBUMS
+        SearchFilter.PLAYLISTS -> YouTubeSearchFilter.PLAYLISTS
+        SearchFilter.LYRICS -> YouTubeSearchFilter.ALL
+        SearchFilter.ALL -> YouTubeSearchFilter.ALL
     }
 
     private fun findMatchingLyricSnippet(lyrics: String, query: String): String? {
@@ -313,15 +370,25 @@ class SearchViewModel @Inject constructor(
             submitSearch(_query.value)
             val found = onlineStreamRepository.searchSongs("${lyricMatch.song.title} ${lyricMatch.song.artist}", limit = 1)
             if (found.isNotEmpty()) {
-                playbackManager.playSongs(found, 0)
+                playbackManager.playSongs(found, 0, autoplayRadio = true)
             } else {
-                playbackManager.playSongs(listOf(lyricMatch.song), 0)
+                playbackManager.playSongs(listOf(lyricMatch.song), 0, autoplayRadio = true)
             }
         }
     }
 
     fun onFilterSelected(filter: SearchFilter) {
+        if (_selectedFilter.value == filter) return
         _selectedFilter.value = filter
+        val query = _query.value
+        if (query.isNotBlank()) {
+            searchJob?.cancel()
+            searchJob = viewModelScope.launch {
+                _isSearchingOnline.value = true
+                performOnlineSearch(query)
+                _isSearchingOnline.value = false
+            }
+        }
     }
 
     fun submitSearch(query: String) {
@@ -345,7 +412,9 @@ class SearchViewModel @Inject constructor(
     // ── Playback & Queue Controls ────────────────────────────────────────────
     fun playSong(songs: List<Song>, startIndex: Int) {
         submitSearch(_query.value)
-        playbackManager.playSongs(songs, startIndex)
+        // Search results are a launchpad, not a fixed queue: start a radio
+        // station from the tapped song so it keeps playing related tracks.
+        playbackManager.playSongs(songs, startIndex, autoplayRadio = true)
     }
 
     fun playNext(song: Song) {
@@ -392,6 +461,10 @@ class SearchViewModel @Inject constructor(
 
     fun downloadSong(song: Song) = downloadManager.downloadSong(song)
     fun isDownloaded(songId: Long): Boolean = downloadManager.isDownloaded(songId)
+
+    private data class Tuple3<A, B, C>(
+        val a: A, val b: B, val c: C
+    )
 
     private data class Tuple4<A, B, C, D>(
         val a: A, val b: B, val c: C, val d: D

@@ -131,6 +131,8 @@ class PlaybackManager @Inject constructor(
     private var sleepTimerJob: Job? = null
     private var fadeJob: Job? = null
     private var effectsRetryJob: Job? = null
+    private var radioFetchJob: Job? = null
+    private var radioLoadedForSongId: Long? = null
 
     // Tracks the current mood listening session so it can be persisted as a
     // MoodHistory entry once the user switches queues or moods.
@@ -183,8 +185,23 @@ class PlaybackManager @Inject constructor(
         }, MoreExecutors.directExecutor())
     }
 
-    fun playSongs(songs: List<Song>, startIndex: Int = 0, mood: MoodType? = null) {
+    fun playSongs(
+        songs: List<Song>,
+        startIndex: Int = 0,
+        mood: MoodType? = null,
+        autoplayRadio: Boolean = false
+    ) {
         if (songs.isEmpty()) return
+
+        // Spotify-style autoplay: playing one online result starts a station
+        // from that song instead of stopping after the handful of results.
+        val requested = songs.getOrNull(startIndex)
+        val radioSeed = requested?.takeIf {
+            autoplayRadio && it.isStream && !it.videoId.isNullOrBlank()
+        }
+        val sourceSongs = radioSeed?.let { listOf(it) } ?: songs
+        val sourceStart = if (radioSeed != null) 0 else startIndex
+
         // Rotate mood-session analytics: persist the previous mood's session
         // before switching queues, then open a new one for this queue.
         val previousMood = _currentMood.value
@@ -202,16 +219,18 @@ class PlaybackManager @Inject constructor(
         // Mood-weighted smart shuffle: reorder the queue to favor songs that
         // match the active mood, then play the requested song from its new spot.
         val orderedSongs = if (mood != null && _smartShuffleEnabled.value) {
-            val targetId = songs.getOrNull(startIndex)?.id
-            val ordered = com.moodtunes.app.domain.util.MoodScoring.smartOrder(songs, mood)
+            val targetId = sourceSongs.getOrNull(sourceStart)?.id
+            val ordered = com.moodtunes.app.domain.util.MoodScoring.smartOrder(sourceSongs, mood)
             ordered to ordered.indexOfFirst { it.id == targetId }.coerceAtLeast(0)
         } else {
-            songs to startIndex
+            sourceSongs to sourceStart
         }
         val effectiveSongs = orderedSongs.first
         val effectiveStart = orderedSongs.second
 
         _playlist.value = effectiveSongs
+        radioLoadedForSongId = null
+        radioFetchJob?.cancel()
         _currentMood.value = mood
         _currentSong.value = effectiveSongs.getOrNull(effectiveStart)
         if (mood != null) {
@@ -269,6 +288,10 @@ class PlaybackManager @Inject constructor(
             controller.prepare()
             controller.play()
             ensureAudioEffectsAttached()
+
+            if (radioSeed != null) {
+                seedRadioQueue(radioSeed)
+            }
 
             // Asynchronously pre-warm upcoming songs so subsequent tracks are cached in advance
             scope.launch {
@@ -619,6 +642,70 @@ class PlaybackManager @Inject constructor(
         }
     }
 
+    /**
+     * When an online queue reaches its last track, extend it from YouTube
+     * Music's radio so playback keeps going without the user re-picking songs.
+     */
+    private fun extendQueueWithRadio(current: Song) {
+        val videoId = current.videoId ?: return
+        if (radioLoadedForSongId == current.id) return
+        radioLoadedForSongId = current.id
+        radioFetchJob?.cancel()
+        radioFetchJob = scope.launch {
+            appendRadioTracks(videoId, limit = 15, excludeVideoId = null)
+        }
+    }
+
+    /**
+     * Seeds a radio station for a single online song and appends it to the
+     * queue. Used when the user plays a song out of search results: the queue
+     * should become that song plus related tracks, like Spotify autoplay.
+     */
+    private fun seedRadioQueue(seed: Song) {
+        val videoId = seed.videoId ?: return
+        radioLoadedForSongId = null
+        radioFetchJob?.cancel()
+        radioFetchJob = scope.launch {
+            appendRadioTracks(videoId, limit = 25, excludeVideoId = videoId)
+        }
+    }
+
+    private suspend fun appendRadioTracks(
+        videoId: String,
+        limit: Int,
+        excludeVideoId: String?
+    ) {
+        val radio = runCatching {
+            onlineStreamRepository.getRadioQueue(videoId, limit)
+        }.getOrDefault(emptyList())
+        if (radio.isEmpty()) return
+
+        val controller = mediaController ?: return
+        val existingKeys = _playlist.value.map { it.videoId ?: it.id.toString() }.toSet()
+        val fresh = radio
+            .filter { it.videoId != excludeVideoId }
+            .filter { (it.videoId ?: it.id.toString()) !in existingKeys }
+            .distinctBy { it.videoId ?: it.id.toString() }
+        if (fresh.isEmpty()) return
+
+        _playlist.value = _playlist.value + fresh
+        controller.addMediaItems(fresh.map(::toMediaItem))
+    }
+
+    private fun toMediaItem(song: Song, uriOverride: Uri? = null): MediaItem =
+        MediaItem.Builder()
+            .setUri(uriOverride ?: song.uri)
+            .setMediaId(song.id.toString())
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(song.title)
+                    .setArtist(song.artist)
+                    .setAlbumTitle(song.album)
+                    .setArtworkUri(song.albumArtUri)
+                    .build()
+            )
+            .build()
+
     fun clearQueue(keepCurrent: Boolean = true) {
         val controller = mediaController ?: return
         val queue = _playlist.value
@@ -751,6 +838,8 @@ class PlaybackManager @Inject constructor(
                                 }
                             }
                         }
+                    } else if (nextSong == null && current.isStream && !current.videoId.isNullOrBlank()) {
+                        extendQueueWithRadio(current)
                     }
                 }
                 _durationMs.value = controller.duration.coerceAtLeast(0L)

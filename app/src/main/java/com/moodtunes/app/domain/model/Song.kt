@@ -29,7 +29,18 @@ data class Song(
     val isStream: Boolean = false,
     val isPreview: Boolean = false,
     val playCount: Int = 0,
-    val lastPlayedAt: Long = 0
+    val lastPlayedAt: Long = 0,
+    // ── YouTube Music identity ────────────────────────────────────────────
+    // Populated by the InnerTube browse/search parsers. All optional so local
+    // files and Subsonic tracks stay valid without a migration.
+    val videoId: String? = null,
+    val albumBrowseId: String? = null,
+    val artistBrowseId: String? = null,
+    val playlistId: String? = null,
+    val isExplicit: Boolean = false,
+    val year: Int? = null,
+    val playCountLong: Long? = null,
+    val videoType: String? = null
 ) {
     /** Formatted duration as mm:ss */
     val formattedDuration: String

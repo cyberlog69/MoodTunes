@@ -6,7 +6,7 @@
 [![Media3](https://img.shields.io/badge/Audio-androidx.media3%20ExoPlayer-FF6F00?style=flat-square)](https://developer.android.com/guide/topics/media/media3)
 [![Hilt](https://img.shields.io/badge/DI-Hilt-00897B?style=flat-square)](https://dagger.dev/hilt/)
 [![Room](https://img.shields.io/badge/Database-Room%202.7-4285F4?style=flat-square)](https://developer.android.com/training/data-storage/room)
-[![Release](https://img.shields.io/badge/Version-v1.9.7-blue?style=flat-square)](https://github.com/cyberlog69/MoodTunes/releases)
+[![Release](https://img.shields.io/badge/Version-v2.0.0-blue?style=flat-square)](https://github.com/cyberlog69/MoodTunes/releases)
 [![License](https://img.shields.io/badge/License-GPL--3.0-blue?style=flat-square)](LICENSE)
 
 ---
@@ -19,7 +19,7 @@ MoodTunes curates music tailored precisely to your emotional state. Whether you 
 
 ### 🌟 Key Vision & Design Philosophy
 - **Mood Curation**: Scores tracks against 6 emotional mood profiles using explicit mood tags, metadata keywords (title/artist/album/genre) and a deterministic metadata heuristic — no audio signal analysis is performed.
-- **YouTube Music Streaming Engine**: InnerTube client with multi-tier stream resolution, full-length tracks, official audio streams (Opus 160 kbps / AAC 130 kbps), automated radio station generation, and global charts.
+- **YouTube Music Streaming Engine**: Full InnerTube integration — browse graph (home, charts, moods, releases, albums, artists, playlists), typed search with ranking, signed-in library, multi-client stream resolution, full-length tracks (Opus 160 kbps / AAC 130 kbps), Spotify-style search radio, and global charts.
 - **Offline Song Downloads**: Download streamed tracks into standard Android MediaStore storage (`Music/MoodTunes/`) with offline artwork caching and local Room DB indexing for true zero-network playback.
 - **Resilient Stream Resolution**: Layered resolver (NewPipe extractor → InnerTube client fallback → on-device JS cipher solver) that recovers from throttled or expired stream URLs. YouTube changes its clients frequently, so playback can break until the resolver is updated.
 - **Audiophile Grade Fidelity**: Native decoding of 24-bit/32-bit float audio, FLAC Lossless, ALAC (`.m4a`), WAV Hi-Res, AAC, and MP3 formats.
@@ -43,8 +43,12 @@ MoodTunes curates music tailored precisely to your emotional state. Whether you 
 - **🎶 YouTube Music (InnerTube) Engine**:
   - **Full-Length Streams**: Resolves full-length audio streams rather than 30-second previews where the upstream service allows it.
   - **Direct Audio Streams**: Opus (~160 kbps) and AAC (~130 kbps) audio delivered without an intermediate transcoder.
+  - **Full Browse Graph**: Home, Charts, Explore, New Releases, Moods & Genres, album, artist and playlist pages with continuation paging.
+  - **Typed Search & Ranking**: Songs/Albums/Artists/Playlists filters, typeahead suggestions, a Top result and deterministic relevance re-ranking.
+  - **Search Autoplay Radio**: Playing a search result starts a Spotify-style station from that song and keeps appending related tracks.
+  - **Your Library**: Optional YouTube Music account sign-in (encrypted WebView cookies) for liked songs, albums, artists and playlists.
+  - **Resilient Player Clients**: Multi-client `/player` fallback (ANDROID_MUSIC, VISIONOS, TVHTML5, IOS, WEB_REMIX) with signature and `n` challenge solving.
   - **Automated Endless Radio**: Automatically queues similar tracks when a song finishes or a station starts.
-  - **Resilient Player Client Fallbacks**: Caches `visitorData` and rotates the InnerTube client context (`VISIONOS` among others) when a request is rejected. This is best-effort: YouTube changes its client behaviour regularly, so streaming can break until the resolver is updated.
   - **Global Discovery & Charts**: Explore top global charts, mood-filtered playlists, trending releases, and instant search.
 - **☁️ Self-Hosted Navidrome / Subsonic Client**: Stream your own library over HTTPS with Subsonic token+salt authentication and local caching. Plain `http://` addresses are rejected — see [Self-hosted music server](#self-hosted-music-server-navidrome--subsonic).
 - **🎼 Hi-Res Lossless Audio Support**: Native hardware decoding for FLAC (`.flac`), ALAC (`.m4a`), WAV (`.wav`), AAC, and MP3 formats with 24-bit/32-bit float audio output pipeline.
@@ -114,7 +118,7 @@ app/src/main/java/com/moodtunes/app/
 | **UI Framework** | Jetpack Compose (BOM 2025.01.00) + Material 3 |
 | **Audio Engine** | `androidx.media3:media3-exoplayer` & `media3-session` (1.6.1) |
 | **Audio DSP** | Android AudioFX (Virtualizer, EnvironmentalReverb, BassBoost, Visualizer FFT) |
-| **Streaming Backend** | YouTube Music InnerTube (`VISIONOS` client context) + Navidrome Subsonic |
+| **Streaming Backend** | YouTube Music InnerTube (`WEB_REMIX` browse/search + multi-client `/player`) + Navidrome Subsonic |
 | **Dependency Injection** | Dagger Hilt 2.56.2 |
 | **Database & Storage** | Room 2.7.1 (SQLite), DataStore Preferences |
 | **Networking & HTTP** | OkHttp 4.12.0 with connection pooling and DNS caching |
@@ -126,14 +130,18 @@ app/src/main/java/com/moodtunes/app/
 
 ## 📱 Screens Overview
 
-1. **Home Screen**: Dynamic mood cards (*Happy, Sad, Energetic, Calm, Euphoric, Sleep*), top mood statistics banner, recent listening history, and persistent mini-player.
+1. **Home Screen**: Dynamic mood cards (*Happy, Sad, Energetic, Calm, Euphoric, Sleep*), top mood statistics banner, recent listening history, Discover/Collection shortcuts, and persistent mini-player.
 2. **Songs Hub**: Tabbed library with *Local Device*, *Downloaded*, *YouTube Music Streams*, *Favorites*, and *Custom Playlists*.
 3. **Player Screen**: Immersive full-screen player with rotating vinyl disc animation, live FFT visualizer overlay, 3D reverb acoustic toggles, seek bar, queue drawer, and favorite heart toggle.
 4. **Lyrics Screen**: Synchronized Spotify-style lyrics with tap-to-seek, smooth auto-scroll, dynamic background gradients, and lyrics sharing.
-5. **ID3 Tag Editor**: Edit metadata fields and embed custom cover images directly into local audio files.
-6. **Playlist Detail Screen**: Custom playlist management with drag-to-reorder, search, and bulk operations.
-7. **Mood Analytics Screen**: Visual breakdown of your listening habits, mood trends, and session history over the past 30 days.
-8. **Settings Screen**: Comprehensive customization for themes, dynamic colors, crossfade duration, YouTube stream quality, ListenBrainz scrobbling, Navidrome server setup, database backup/restore, in-app updates, and about info.
+5. **Discover**: YouTube Music's browse surfaces — Made for you, Charts, Moods & genres and New releases — as horizontal shelves.
+6. **Collection**: Signed-in YouTube Music liked songs, albums, artists and playlists, switchable by tab.
+7. **YouTube Page**: Album, artist, playlist and mood pages with Play/Shuffle, track lists and continuation paging.
+8. **YouTube Music Account**: In-app Google sign-in WebView; cookies are encrypted with the Android Keystore.
+9. **ID3 Tag Editor**: Edit metadata fields and embed custom cover images directly into local audio files.
+10. **Playlist Detail Screen**: Custom playlist management with drag-to-reorder, search, and bulk operations.
+11. **Mood Analytics Screen**: Visual breakdown of your listening habits, mood trends, and session history over the past 30 days.
+12. **Settings Screen**: Comprehensive customization for themes, dynamic colors, crossfade duration, YouTube stream quality, YouTube Music account, ListenBrainz scrobbling, Navidrome server setup, database backup/restore, in-app updates, and about info.
 
 ---
 

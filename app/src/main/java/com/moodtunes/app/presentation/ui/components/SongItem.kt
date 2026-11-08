@@ -89,7 +89,8 @@ fun SongItem(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
                 )
                 Surface(
                     shape = RoundedCornerShape(4.dp),
@@ -99,6 +100,8 @@ fun SongItem(
                         text = song.audioFormat.displayName,
                         style = MaterialTheme.typography.labelSmall,
                         color = Color(song.audioFormat.badgeColorHex),
+                        maxLines = 1,
+                        softWrap = false,
                         modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                     )
                 }

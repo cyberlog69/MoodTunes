@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -36,7 +37,8 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onNavigateToAccount: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val settings = uiState.userSettings
@@ -314,6 +316,42 @@ fun SettingsScreen(
                                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                                 )
                             }
+                        }
+
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable(onClick = onNavigateToAccount)
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Rounded.AccountCircle,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "YouTube Music Account",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "Sign in to browse your liked songs, albums and playlists",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Icon(
+                                Icons.Rounded.ChevronRight,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                 }

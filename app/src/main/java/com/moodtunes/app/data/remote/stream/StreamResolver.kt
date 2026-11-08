@@ -5,6 +5,7 @@ import android.net.Uri
 import com.moodtunes.app.data.local.preferences.StreamQuality
 import com.moodtunes.app.data.local.preferences.UserPreferencesRepository
 import com.moodtunes.app.data.remote.api.YouTubeMusicApiService
+import com.moodtunes.app.data.remote.stream.YouTubePlayerClient
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -49,6 +50,7 @@ class StreamResolver @Inject constructor(
     private val http: OkHttpClient,
     private val solver: PlayerJsSolver,
     private val youTubeMusicApiService: YouTubeMusicApiService,
+    private val youTubePlayerClient: YouTubePlayerClient,
     private val userPreferencesRepository: UserPreferencesRepository
 ) {
     data class StreamResult(
@@ -147,8 +149,18 @@ class StreamResolver @Inject constructor(
             return newPipeResult
         }
 
-        // Tier 2: VISIONOS client (suspend, non-blocking)
-        Timber.i("NewPipe resolution failed for $videoId; falling back to VISIONOS player")
+        // Tier 2: multi-client InnerTube player (suspend, non-blocking)
+        Timber.i("NewPipe resolution failed for $videoId; trying InnerTube player clients")
+        val quality = userPreferencesRepository.getActiveStreamQuality()
+        val playerStream = runCatching {
+            youTubePlayerClient.resolveStream(videoId, quality)
+        }.getOrNull()
+        if (playerStream != null) {
+            return playerStream.toStreamResult()
+        }
+
+        // Tier 3: single-client VISIONOS fallback
+        Timber.i("InnerTube player clients failed for $videoId; falling back to VISIONOS")
         val visionOsUrl = runCatching {
             youTubeMusicApiService.resolveStreamUrl(videoId)
         }.getOrNull()
@@ -156,6 +168,16 @@ class StreamResolver @Inject constructor(
         return visionOsUrl?.let(::toStreamResult)
             ?: throw IOException("All stream resolution tiers exhausted for videoId: $videoId")
     }
+
+    private fun YouTubePlayerClient.PlayerStream.toStreamResult(): StreamResult = StreamResult(
+        url = url,
+        bitrateKbps = bitrateKbps,
+        mimeType = mimeType,
+        codec = codec,
+        sampleRate = sampleRate,
+        contentLength = contentLength,
+        expiresAtMs = expiresAtMs
+    )
 
     private fun toStreamResult(visionOsUrl: String): StreamResult {
         val uri = Uri.parse(visionOsUrl)
@@ -226,8 +248,20 @@ class StreamResolver @Inject constructor(
             return newPipeResult
         }
 
-        // Tier 2: Fallback to VISIONOS Client
-        Timber.i("NewPipe resolution failed for $videoId; falling back to VISIONOS player")
+        // Tier 2: multi-client InnerTube player fallback
+        Timber.i("NewPipe resolution failed for $videoId; trying InnerTube player clients")
+        val quality = userPreferencesRepository.getActiveStreamQuality()
+        val playerStream = runCatching {
+            kotlinx.coroutines.runBlocking {
+                youTubePlayerClient.resolveStream(videoId, quality)
+            }
+        }.getOrNull()
+        if (playerStream != null) {
+            return playerStream.toStreamResult()
+        }
+
+        // Tier 3: VISIONOS Client
+        Timber.i("InnerTube player clients failed for $videoId; falling back to VISIONOS player")
         val visionOsUrl = runCatching {
             // Note: resolveStreamUrl in youTubeMusicApiService uses VISIONOS client context
             kotlinx.coroutines.runBlocking {

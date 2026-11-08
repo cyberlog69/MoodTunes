@@ -48,7 +48,9 @@ fun HomeScreen(
     onNavigateToLibrary: () -> Unit,
     onNavigateToHistory: () -> Unit,
     onNavigateToSettings: () -> Unit,
-    onNavigateToSearch: () -> Unit
+    onNavigateToSearch: () -> Unit,
+    onNavigateToDiscover: () -> Unit,
+    onNavigateToCollection: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var selectedSongForAction by remember { mutableStateOf<Song?>(null) }
@@ -388,10 +390,30 @@ fun HomeScreen(
                             }
                         )
                     }
+                    // Row 4: Discover | Collection
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        SpeedDialTile(
+                            title = "Discover",
+                            icon = Icons.Rounded.Explore,
+                            iconTint = Color(0xFF102FA8),
+                            iconContainerColor = Color(0xFF9DB7FF),
+                            modifier = Modifier.weight(1f),
+                            onClick = onNavigateToDiscover
+                        )
+                        SpeedDialTile(
+                            title = "Collection",
+                            icon = Icons.Rounded.LibraryMusic,
+                            iconTint = Color(0xFF4A1D6A),
+                            iconContainerColor = Color(0xFFD8B4FF),
+                            modifier = Modifier.weight(1f),
+                            onClick = onNavigateToCollection
+                        )
+                    }
                 }
             }
-
-            // ─── 4. Quick picks Section ─────────────────────────────────────
             if (quickPicks.isNotEmpty()) {
                 item {
                     Text(

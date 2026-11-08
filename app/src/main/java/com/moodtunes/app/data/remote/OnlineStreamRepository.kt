@@ -1,10 +1,15 @@
 package com.moodtunes.app.data.remote
 
 import com.moodtunes.app.data.local.preferences.MusicLanguage
+import com.moodtunes.app.data.remote.api.YouTubeInnerTubeClient
 import com.moodtunes.app.data.remote.api.YouTubeMusicApiService
 import com.moodtunes.app.data.remote.stream.StreamResolver
 import com.moodtunes.app.domain.model.MoodType
 import com.moodtunes.app.domain.model.Song
+import com.moodtunes.app.domain.model.YouTubePage
+import com.moodtunes.app.domain.model.YouTubeRadioPage
+import com.moodtunes.app.domain.model.YouTubeSearchFilter
+import com.moodtunes.app.domain.model.YouTubeSearchPage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -19,6 +24,7 @@ import javax.inject.Singleton
 @Singleton
 class OnlineStreamRepository @Inject constructor(
     private val youTubeMusicApi: YouTubeMusicApiService,
+    private val innerTube: YouTubeInnerTubeClient,
     private val streamResolver: StreamResolver
 ) {
 
@@ -90,8 +96,71 @@ class OnlineStreamRepository @Inject constructor(
 
     /**
      * Fetches continuous radio queue recommendations for a given [videoId].
+     * The typed InnerTube client is preferred because it returns playlist ids
+     * and continuation tokens; the legacy parser is kept as a fallback.
      */
     suspend fun getRadioQueue(videoId: String, limit: Int = 20): List<Song> = withContext(Dispatchers.IO) {
-        youTubeMusicApi.getRadioQueue(videoId, limit)
+        val page = runCatching { innerTube.radio(videoId) }.getOrNull()
+        if (page != null && page.songs.isNotEmpty()) page.songs.take(limit)
+        else youTubeMusicApi.getRadioQueue(videoId, limit)
     }
+
+    suspend fun getRadioPage(videoId: String): YouTubeRadioPage = withContext(Dispatchers.IO) {
+        innerTube.radio(videoId)
+    }
+
+    suspend fun getRadioContinuation(token: String): YouTubeRadioPage = withContext(Dispatchers.IO) {
+        innerTube.radioContinuation(token)
+    }
+
+    // ── Browse graph ─────────────────────────────────────────────────────────
+
+    suspend fun getHome(): YouTubePage = withContext(Dispatchers.IO) { innerTube.home() }
+
+    suspend fun getMoodsAndGenres(): YouTubePage = withContext(Dispatchers.IO) { innerTube.moodsAndGenres() }
+
+    suspend fun getCharts(): YouTubePage = withContext(Dispatchers.IO) { innerTube.charts() }
+
+    suspend fun getExplore(): YouTubePage = withContext(Dispatchers.IO) { innerTube.explore() }
+
+    suspend fun getNewReleases(): YouTubePage = withContext(Dispatchers.IO) { innerTube.newReleases() }
+
+    suspend fun getBrowsePage(browseId: String, params: String? = null): YouTubePage =
+        withContext(Dispatchers.IO) { innerTube.browse(browseId, params) }
+
+    suspend fun getBrowseContinuation(continuation: String): YouTubePage =
+        withContext(Dispatchers.IO) { innerTube.browseContinuation(continuation) }
+
+    // ── Typed search ─────────────────────────────────────────────────────────
+
+    suspend fun searchPage(
+        query: String,
+        filter: YouTubeSearchFilter = YouTubeSearchFilter.ALL
+    ): YouTubeSearchPage = withContext(Dispatchers.IO) { innerTube.search(query, filter) }
+
+    suspend fun searchPageContinuation(
+        query: String,
+        filter: YouTubeSearchFilter,
+        continuation: String
+    ): YouTubeSearchPage = withContext(Dispatchers.IO) {
+        innerTube.searchContinuation(query, filter, continuation)
+    }
+
+    suspend fun getSearchSuggestions(query: String): List<String> = withContext(Dispatchers.IO) {
+        innerTube.suggestions(query)
+    }
+
+    // ── Signed-in collection ─────────────────────────────────────────────────
+
+    suspend fun getLikedPlaylists(): YouTubePage = withContext(Dispatchers.IO) { innerTube.likedPlaylists() }
+
+    suspend fun getLikedAlbums(): YouTubePage = withContext(Dispatchers.IO) { innerTube.likedAlbums() }
+
+    suspend fun getLibraryArtists(): YouTubePage = withContext(Dispatchers.IO) { innerTube.libraryArtists() }
+
+    suspend fun getLibrarySongs(): YouTubePage = withContext(Dispatchers.IO) { innerTube.librarySongs() }
+
+    suspend fun getLibraryLanding(): YouTubePage = withContext(Dispatchers.IO) { innerTube.libraryLanding() }
+
+    suspend fun getLibraryAlbums(): YouTubePage = withContext(Dispatchers.IO) { innerTube.libraryAlbums() }
 }

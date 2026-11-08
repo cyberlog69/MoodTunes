@@ -28,6 +28,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.moodtunes.app.domain.model.Song
+import com.moodtunes.app.domain.model.YouTubeItem
 import com.moodtunes.app.presentation.ui.components.MiniPlayer
 import com.moodtunes.app.presentation.ui.components.SongActionBottomSheet
 import com.moodtunes.app.presentation.ui.components.SongItem
@@ -39,7 +40,8 @@ fun SearchScreen(
     viewModel: SearchViewModel = hiltViewModel(),
     onNavigateBack: () -> Unit,
     onNavigateToPlayer: () -> Unit,
-    onNavigateToPlaylist: (Long) -> Unit
+    onNavigateToPlaylist: (Long) -> Unit,
+    onNavigateToYouTubePage: (String, String?) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var selectedSongForAction by remember { mutableStateOf<Song?>(null) }
@@ -174,6 +176,23 @@ fun SearchScreen(
                 }
             }
 
+            // ─── Typeahead Suggestions ───────────────────────────────────────
+            if (uiState.query.isNotBlank() && uiState.suggestions.isNotEmpty()) {
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(uiState.suggestions) { suggestion ->
+                        SuggestionChip(
+                            onClick = { viewModel.onQueryChanged(suggestion) },
+                            label = { Text(suggestion, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            shape = RoundedCornerShape(16.dp)
+                        )
+                    }
+                }
+            }
+
             // ─── Content Area ────────────────────────────────────────────────
             Box(
                 modifier = Modifier
@@ -237,7 +256,13 @@ fun SearchScreen(
                         onMoreClick = { song -> selectedSongForAction = song },
                         onArtistClick = { artistName -> viewModel.onQueryChanged(artistName) },
                         onAlbumClick = { albumName -> viewModel.onQueryChanged(albumName) },
-                        onPlaylistClick = onNavigateToPlaylist
+                        onPlaylistClick = onNavigateToPlaylist,
+                        onYouTubeItemClick = { item ->
+                            when (item) {
+                                is YouTubeItem.Category -> onNavigateToYouTubePage(item.browseId, item.params)
+                                else -> onNavigateToYouTubePage(item.id, null)
+                            }
+                        }
                     )
                 }
             }
@@ -273,7 +298,8 @@ private fun SearchResultsList(
     onMoreClick: (Song) -> Unit,
     onArtistClick: (String) -> Unit,
     onAlbumClick: (String) -> Unit,
-    onPlaylistClick: (Long) -> Unit
+    onPlaylistClick: (Long) -> Unit,
+    onYouTubeItemClick: (YouTubeItem) -> Unit
 ) {
     val bottomPadding = if (uiState.currentSong != null) 90.dp else 24.dp
 
@@ -303,6 +329,47 @@ private fun SearchResultsList(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+            }
+        }
+
+        // ─── 0. YouTube Music top result ──────────────────────────────────────
+        val topResult = uiState.youtubeTopResult
+        val topIsTrack = topResult is YouTubeItem.Track
+        if (topResult != null &&
+            (uiState.selectedFilter == SearchFilter.ALL || topIsTrack || uiState.selectedFilter != SearchFilter.LYRICS)
+        ) {
+            item {
+                SectionTitle(
+                    icon = Icons.Rounded.AutoAwesome,
+                    title = "Top result",
+                    count = 1
+                )
+            }
+            item {
+                YouTubeSearchItemRow(
+                    item = topResult,
+                    onClick = {
+                        if (topResult is YouTubeItem.Track) {
+                            onSongClick(listOf(topResult.song), 0)
+                        } else {
+                            onYouTubeItemClick(topResult)
+                        }
+                    }
+                )
+            }
+        }
+
+        // ─── 0b. YouTube Music albums, artists and playlists ─────────────────
+        if (uiState.youtubeItems.isNotEmpty()) {
+            item {
+                SectionTitle(
+                    icon = Icons.Rounded.TravelExplore,
+                    title = "From YouTube Music",
+                    count = uiState.youtubeItems.size
+                )
+            }
+            items(uiState.youtubeItems, key = { "yt_${it.id}" }) { item ->
+                YouTubeSearchItemRow(item = item, onClick = { onYouTubeItemClick(item) })
             }
         }
 
@@ -525,6 +592,82 @@ private fun SearchResultsList(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun YouTubeSearchItemRow(
+    item: YouTubeItem,
+    onClick: () -> Unit
+) {
+    val icon = when (item) {
+        is YouTubeItem.Artist -> Icons.Rounded.Person
+        is YouTubeItem.Album -> Icons.Rounded.Album
+        is YouTubeItem.Playlist -> Icons.AutoMirrored.Rounded.QueueMusic
+        is YouTubeItem.Track -> Icons.Rounded.MusicNote
+        is YouTubeItem.Category -> Icons.Rounded.AutoAwesome
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(52.dp)
+                .clip(RoundedCornerShape(if (item is YouTubeItem.Artist) 26.dp else 10.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+            contentAlignment = Alignment.Center
+        ) {
+            AsyncImage(
+                model = item.thumbnail,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+            if (item.thumbnail == null) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
+        Spacer(Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = item.title,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            val subtitle = item.subtitle.ifBlank {
+                when (item) {
+                    is YouTubeItem.Artist -> "Artist"
+                    is YouTubeItem.Album -> "Album"
+                    is YouTubeItem.Playlist -> "Playlist"
+                    is YouTubeItem.Track -> item.song.artist
+                    is YouTubeItem.Category -> "Browse"
+                }
+            }
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Icon(
+            Icons.Rounded.ChevronRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 

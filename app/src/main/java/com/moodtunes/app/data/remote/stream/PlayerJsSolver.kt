@@ -42,12 +42,32 @@ class PlayerJsSolver @Inject constructor(
     private var sandbox: JavaScriptSandbox? = null
     private var isolate: JavaScriptIsolate? = null
     private var loadedId: String? = null
+    private var playerUnavailableUntil = 0L
+    private var playerUnavailableReason: String? = null
 
     /**
      * Retrieves the current YouTube player's ID and signature timestamp (sts).
+     *
+     * A failed lookup is cached for ten minutes. Otherwise every stream on a
+     * device where `iframe_api` or the player JS is unreachable would pay the
+     * same network timeout again.
      */
     fun currentPlayer(): Pair<String, Int> = synchronized(lock) {
-        latest().let { it.id to it.sts }
+        val now = System.currentTimeMillis()
+        if (now < playerUnavailableUntil) {
+            throw IOException(playerUnavailableReason ?: "YouTube player JS is temporarily unavailable")
+        }
+        try {
+            latest().let { player ->
+                playerUnavailableUntil = 0L
+                playerUnavailableReason = null
+                player.id to player.sts
+            }
+        } catch (e: IOException) {
+            playerUnavailableUntil = now + PLAYER_RETRY_COOLDOWN_MS
+            playerUnavailableReason = e.message ?: "YouTube player JS is temporarily unavailable"
+            throw e
+        }
     }
 
     /**
@@ -190,6 +210,7 @@ class PlayerJsSolver @Inject constructor(
         val PLAYER_ID = Regex("""player[\\/]([0-9a-fA-F]{8})[\\/]""")
         val STS = Regex("""(?:signatureTimestamp|sts)\s*:\s*(\d{5})""")
         const val RECHECK_MS = 60 * 60_000L
+        const val PLAYER_RETRY_COOLDOWN_MS = 10 * 60_000L
         const val CONNECT_TIMEOUT_S = 20L
         const val LOAD_TIMEOUT_S = 60L
         const val SOLVE_TIMEOUT_S = 15L

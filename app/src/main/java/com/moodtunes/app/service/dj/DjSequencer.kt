@@ -1,6 +1,5 @@
 package com.moodtunes.app.service.dj
 
-import com.moodtunes.app.domain.model.MoodType
 import com.moodtunes.app.domain.model.Song
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -40,8 +39,8 @@ class DjSequencer @Inject constructor() {
     }
 
     /**
-     * Estimates the Camelot key and BPM for a song from its metadata and mood
-     * tags. Deterministic per song, but not a measurement of the audio.
+     * Estimates the Camelot key, BPM and energy for a song from its metadata.
+     * Deterministic per song, but not a measurement of the audio.
      */
     fun estimateTrack(song: Song): DjTrackInfo {
         val hash = abs(("${song.artist}_${song.title}").hashCode())
@@ -50,17 +49,9 @@ class DjSequencer @Inject constructor() {
         val keyIndex = hash % CAMELOT_KEYS.size
         val camelotKey = CAMELOT_KEYS[keyIndex]
 
-        // Base BPM by primary mood
-        val primaryMood = song.moodTags.firstOrNull()
-        val (baseBpm, energy) = when (primaryMood) {
-            MoodType.EUPHORIC -> Pair(128, 0.90f)
-            MoodType.ENERGETIC -> Pair(135, 0.95f)
-            MoodType.HAPPY -> Pair(120, 0.75f)
-            MoodType.CALM -> Pair(92, 0.40f)
-            MoodType.SAD -> Pair(82, 0.35f)
-            MoodType.SLEEP -> Pair(68, 0.20f)
-            null -> Pair(115, 0.60f)
-        }
+        // Deterministic metadata heuristic: 100-134 BPM and modest energy.
+        val baseBpm = 100 + (hash % 35)
+        val energy = 0.45f + ((hash / 7) % 50) / 100f
 
         // Add acoustic jitter for realistic variation (±12 BPM)
         val jitter = (hash % 25) - 12

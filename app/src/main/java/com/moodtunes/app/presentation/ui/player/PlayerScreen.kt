@@ -66,10 +66,8 @@ fun PlayerScreen(
         }
     }
 
-    val defaultPlayerGradientStart = Color(0xFF1E1B2E)
-    val defaultPlayerGradientEnd = Color(0xFF0F0E17)
-    val gradientStart = uiState.selectedMood?.gradientStart ?: defaultPlayerGradientStart
-    val gradientEnd = uiState.selectedMood?.gradientEnd ?: defaultPlayerGradientEnd
+    val gradientStart = Color(0xFF1E1B2E)
+    val gradientEnd = Color(0xFF0F0E17)
 
     val animatedGradientStart by animateColorAsState(
         targetValue = gradientStart,
@@ -134,18 +132,10 @@ fun PlayerScreen(
 
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        text = if (uiState.selectedMood != null) "Mood Radio" else "Now Playing",
+                        text = "Now Playing",
                         style = MaterialTheme.typography.labelMedium,
                         color = White.copy(alpha = 0.7f)
                     )
-                    uiState.selectedMood?.let { mood ->
-                        Text(
-                            text = "${mood.emoji} ${mood.displayName} • Exit",
-                            modifier = Modifier.clickable { viewModel.exitMoodMode() },
-                            style = MaterialTheme.typography.labelLarge,
-                            color = White
-                        )
-                    }
                 }
 
                 Row(
@@ -408,44 +398,6 @@ fun PlayerScreen(
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (song?.isStream == true || uiState.isDownloaded) {
-                        when {
-                            uiState.downloadProgress != null -> {
-                                Box(
-                                    modifier = Modifier.size(40.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    CircularProgressIndicator(
-                                        progress = { uiState.downloadProgress ?: 0f },
-                                        modifier = Modifier.size(22.dp),
-                                        color = White,
-                                        strokeWidth = 2.5.dp
-                                    )
-                                }
-                            }
-                            uiState.isDownloaded -> {
-                                IconButton(onClick = { viewModel.deleteCurrentSongDownload() }) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.DownloadDone,
-                                        contentDescription = "Downloaded (tap to remove)",
-                                        tint = Color(0xFF00E676),
-                                        modifier = Modifier.size(26.dp)
-                                    )
-                                }
-                            }
-                            else -> {
-                                IconButton(onClick = { viewModel.downloadCurrentSong() }) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.Download,
-                                        contentDescription = "Download Song",
-                                        tint = White.copy(alpha = 0.85f),
-                                        modifier = Modifier.size(26.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-
                     IconButton(onClick = viewModel::toggleFavorite) {
                         Icon(
                             imageVector = if (song?.isFavorite == true)
@@ -590,30 +542,6 @@ fun PlayerScreen(
                     active = uiState.isCrossfadeEnabled,
                     onClick = { activeSheet = PlayerSheet.CROSSFADE }
                 )
-                PlayerToolButton(
-                    icon = Icons.Rounded.AutoAwesome,
-                    label = "Smart",
-                    active = uiState.isSmartShuffleEnabled,
-                    onClick = viewModel::toggleSmartShuffle
-                )
-                if (song?.isStream == true || uiState.isDownloaded) {
-                    PlayerToolButton(
-                        icon = if (uiState.isDownloaded) Icons.Rounded.DownloadDone else Icons.Rounded.Download,
-                        label = when {
-                            uiState.downloadProgress != null -> "${(uiState.downloadProgress!! * 100).toInt()}%"
-                            uiState.isDownloaded -> "Saved"
-                            else -> "Download"
-                        },
-                        active = uiState.isDownloaded || uiState.downloadProgress != null,
-                        onClick = {
-                            if (uiState.isDownloaded) {
-                                viewModel.deleteCurrentSongDownload()
-                            } else {
-                                viewModel.downloadCurrentSong()
-                            }
-                        }
-                    )
-                }
             }
 
             Spacer(Modifier.height(12.dp))

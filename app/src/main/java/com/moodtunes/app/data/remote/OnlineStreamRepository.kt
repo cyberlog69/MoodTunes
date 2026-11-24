@@ -4,7 +4,6 @@ import com.moodtunes.app.data.local.preferences.MusicLanguage
 import com.moodtunes.app.data.remote.api.YouTubeInnerTubeClient
 import com.moodtunes.app.data.remote.api.YouTubeMusicApiService
 import com.moodtunes.app.data.remote.stream.StreamResolver
-import com.moodtunes.app.domain.model.MoodType
 import com.moodtunes.app.domain.model.Song
 import com.moodtunes.app.domain.model.YouTubePage
 import com.moodtunes.app.domain.model.YouTubeRadioPage
@@ -63,24 +62,6 @@ class OnlineStreamRepository @Inject constructor(
      */
     suspend fun searchSongs(query: String, limit: Int = 20): List<Song> = withContext(Dispatchers.IO) {
         youTubeMusicApi.searchSongs(query, limit)
-    }
-
-    /**
-     * Fetches curated songs matching the given [mood].
-     */
-    suspend fun getSongsByMood(mood: MoodType, limit: Int = 20): List<Song> = withContext(Dispatchers.IO) {
-        youTubeMusicApi.getSongsByMood(mood, limit)
-    }
-
-    /**
-     * Backward-compatible alias for fetching all online tracks matching a mood.
-     */
-    suspend fun fetchAllOnlineTracksForMood(
-        mood: MoodType,
-        language: MusicLanguage = MusicLanguage.ALL,
-        limit: Int = 20
-    ): List<Song> = withContext(Dispatchers.IO) {
-        getSongsByMood(mood, limit)
     }
 
     /**

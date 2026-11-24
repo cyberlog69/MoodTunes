@@ -66,12 +66,24 @@ class StreamResolver @Inject constructor(
     private val cache = ConcurrentHashMap<String, StreamResult>()
     private val inflight = ConcurrentHashMap<String, CompletableFuture<StreamResult>>()
 
+    // NewPipeExtractor is a best-effort fast path. When it starts failing
+    // (YouTube changed a client again), stop paying its timeout on every track
+    // and let the InnerTube clients take over for a while.
+    @Volatile
+    private var newPipeConsecutiveFailures = 0
+
+    @Volatile
+    private var newPipeDisabledUntil = 0L
+
     init {
         try {
             val country = Locale.getDefault().country.ifBlank { "US" }
             val lang = Locale.getDefault().language.ifBlank { "en" }
+            val newPipeHttp = http.newBuilder()
+                .callTimeout(NEWPIPE_CALL_TIMEOUT_S, TimeUnit.SECONDS)
+                .build()
             NewPipe.init(
-                NewPipeDownloader(http),
+                NewPipeDownloader(newPipeHttp),
                 Localization(lang, country),
                 ContentCountry(country)
             )
@@ -142,8 +154,16 @@ class StreamResolver @Inject constructor(
 
     private suspend fun loadStreamSuspending(videoId: String): StreamResult {
         // Tier 1: anonymous NewPipe resolution (blocking extractor work on IO)
-        val newPipeResult = withContext(Dispatchers.IO) {
-            runCatching { resolveAnonymousNewPipe(videoId) }.getOrNull()
+        val newPipeResult = if (shouldAttemptNewPipe()) {
+            withContext(Dispatchers.IO) {
+                runCatching { resolveAnonymousNewPipe(videoId) }
+                    .onSuccess { onNewPipeSuccess() }
+                    .onFailure { onNewPipeFailure(it) }
+                    .getOrNull()
+            }
+        } else {
+            Timber.i("Skipping NewPipe for %s (temporarily disabled)", videoId)
+            null
         }
         if (newPipeResult != null && newPipeResult.url.isNotBlank()) {
             return newPipeResult
@@ -243,7 +263,15 @@ class StreamResolver @Inject constructor(
      */
     private fun loadStream(videoId: String): StreamResult {
         // Tier 1: Try anonymous NewPipeExtractor fast-path
-        val newPipeResult = runCatching { resolveAnonymousNewPipe(videoId) }.getOrNull()
+        val newPipeResult = if (shouldAttemptNewPipe()) {
+            runCatching { resolveAnonymousNewPipe(videoId) }
+                .onSuccess { onNewPipeSuccess() }
+                .onFailure { onNewPipeFailure(it) }
+                .getOrNull()
+        } else {
+            Timber.i("Skipping NewPipe for %s (temporarily disabled)", videoId)
+            null
+        }
         if (newPipeResult != null && newPipeResult.url.isNotBlank()) {
             return newPipeResult
         }
@@ -274,6 +302,27 @@ class StreamResolver @Inject constructor(
         }
 
         throw IOException("All stream resolution tiers exhausted for videoId: $videoId")
+    }
+
+    private fun shouldAttemptNewPipe(): Boolean =
+        System.currentTimeMillis() >= newPipeDisabledUntil
+
+    private fun onNewPipeSuccess() {
+        newPipeConsecutiveFailures = 0
+        newPipeDisabledUntil = 0L
+    }
+
+    private fun onNewPipeFailure(error: Throwable) {
+        newPipeConsecutiveFailures++
+        if (newPipeConsecutiveFailures >= NEWPIPE_FAILURE_THRESHOLD) {
+            newPipeDisabledUntil = System.currentTimeMillis() + NEWPIPE_COOLDOWN_MS
+            Timber.w(
+                error,
+                "NewPipe disabled for %d min after %d consecutive failure(s)",
+                NEWPIPE_COOLDOWN_MS / 60_000,
+                newPipeConsecutiveFailures
+            )
+        }
     }
 
     private fun resolveAnonymousNewPipe(videoId: String): StreamResult {
@@ -422,5 +471,11 @@ class StreamResolver @Inject constructor(
                 )
             }
         }
+    }
+
+    private companion object {
+        const val NEWPIPE_CALL_TIMEOUT_S = 8L
+        const val NEWPIPE_FAILURE_THRESHOLD = 1
+        const val NEWPIPE_COOLDOWN_MS = 10 * 60_000L
     }
 }

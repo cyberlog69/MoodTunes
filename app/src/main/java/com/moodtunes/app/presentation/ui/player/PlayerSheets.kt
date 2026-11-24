@@ -37,7 +37,6 @@ import com.moodtunes.app.domain.model.Song
 import android.content.Intent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Brush
-import com.moodtunes.app.domain.model.MoodType
 import com.moodtunes.app.presentation.ui.theme.EuphoricGradientStart
 import com.moodtunes.app.presentation.ui.theme.EuphoricGradientEnd
 import com.moodtunes.app.presentation.ui.theme.White
@@ -69,8 +68,7 @@ fun PlayerBottomSheet(
                 onMoveDown = { from, to -> viewModel.moveQueueItem(from, to) },
                 onRemove = viewModel::removeFromQueue,
                 onShuffleQueue = viewModel::shuffleQueue,
-                onClearQueue = { viewModel.clearQueue(keepCurrent = true) },
-                onDownloadQueue = viewModel::downloadRemainingQueue
+                onClearQueue = { viewModel.clearQueue(keepCurrent = true) }
             )
             PlayerSheet.LYRICS -> LyricsSheetContent(
                 lyrics = uiState.lyrics,
@@ -84,7 +82,6 @@ fun PlayerBottomSheet(
                 isTranslating = uiState.isTranslatingLyrics,
                 songTitle = uiState.currentSong?.title,
                 songArtist = uiState.currentSong?.artist,
-                selectedMood = uiState.selectedMood,
                 onSeekToLine = { timeMs -> viewModel.seekToPosition(timeMs) },
                 onToggleTranslation = viewModel::toggleLyricsTranslation,
                 onToggleOffsetAdjuster = viewModel::toggleLyricsOffsetAdjuster,
@@ -119,7 +116,6 @@ fun PlayerBottomSheet(
                 isSkipSilenceEnabled = uiState.isSkipSilenceEnabled,
                 isLoudnessNormalizationEnabled = uiState.isLoudnessNormalizationEnabled,
                 loudnessGainMb = uiState.loudnessGainMb,
-                isAutoMoodEqEnabled = uiState.isAutoMoodEqEnabled,
                 selectedPreset = uiState.selectedEqPreset,
                 isGaplessPlaybackEnabled = uiState.isGaplessPlaybackEnabled,
                 bandLevels = uiState.equalizerLevels,
@@ -134,7 +130,6 @@ fun PlayerBottomSheet(
                 onToggleSkipSilence = viewModel::setSkipSilenceEnabled,
                 onToggleLoudnessNormalization = viewModel::toggleLoudnessNormalization,
                 onLoudnessGainMb = viewModel::setLoudnessGainMb,
-                onToggleAutoMoodEq = viewModel::toggleAutoMoodEq,
                 onPresetByName = viewModel::applyEqualizerPresetByName,
                 onToggleGapless = viewModel::setGaplessPlaybackEnabled,
                 onBandLevel = viewModel::setBandLevel,
@@ -180,8 +175,7 @@ private fun QueueSheetContent(
     onMoveDown: (Int, Int) -> Unit,
     onRemove: (Int) -> Unit,
     onShuffleQueue: () -> Unit,
-    onClearQueue: () -> Unit,
-    onDownloadQueue: () -> Unit = {}
+    onClearQueue: () -> Unit
 ) {
     val totalRemainingMs = remember(songs, currentIndex) {
         songs.drop(currentIndex.coerceAtLeast(0)).sumOf { it.duration }
@@ -223,19 +217,6 @@ private fun QueueSheetContent(
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            if (songs.isNotEmpty()) {
-                IconButton(
-                    onClick = onDownloadQueue,
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Icon(
-                        Icons.Rounded.Download,
-                        contentDescription = "Download Remaining Queue",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
             if (songs.size > 2) {
                 IconButton(
                     onClick = onShuffleQueue,
@@ -439,7 +420,6 @@ private fun LyricsSheetContent(
     isTranslating: Boolean,
     songTitle: String?,
     songArtist: String?,
-    selectedMood: MoodType?,
     onSeekToLine: (Long) -> Unit,
     onToggleTranslation: () -> Unit,
     onToggleOffsetAdjuster: () -> Unit = {},
@@ -474,10 +454,8 @@ private fun LyricsSheetContent(
         }
     }
 
-    val defaultSheetGradientStart = Color(0xFF1E1B2E)
-    val defaultSheetGradientEnd = Color(0xFF0F0E17)
-    val gradientStart = selectedMood?.gradientStart ?: defaultSheetGradientStart
-    val gradientEnd = selectedMood?.gradientEnd ?: defaultSheetGradientEnd
+    val gradientStart = Color(0xFF1E1B2E)
+    val gradientEnd = Color(0xFF0F0E17)
 
     Box(
         modifier = Modifier
@@ -1246,7 +1224,6 @@ private fun EqualizerSheetContent(
     isSkipSilenceEnabled: Boolean,
     isLoudnessNormalizationEnabled: Boolean = false,
     loudnessGainMb: Int = 300,
-    isAutoMoodEqEnabled: Boolean = false,
     selectedPreset: String? = null,
     isGaplessPlaybackEnabled: Boolean = true,
     bandLevels: List<Float>,
@@ -1261,7 +1238,6 @@ private fun EqualizerSheetContent(
     onToggleSkipSilence: (Boolean) -> Unit,
     onToggleLoudnessNormalization: (Boolean) -> Unit = {},
     onLoudnessGainMb: (Int) -> Unit = {},
-    onToggleAutoMoodEq: (Boolean) -> Unit = {},
     onPresetByName: (String) -> Unit = {},
     onToggleGapless: (Boolean) -> Unit = {},
     onBandLevel: (Int, Float) -> Unit,
@@ -1279,38 +1255,6 @@ private fun EqualizerSheetContent(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp)
     ) {
-        // ── 0. Auto Mood EQ ──
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                Icons.Rounded.AutoAwesome,
-                contentDescription = null,
-                tint = if (isAutoMoodEqEnabled) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Auto Mood EQ",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "Dynamically adjusts acoustic curves to match active song mood",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Switch(
-                checked = isAutoMoodEqEnabled,
-                onCheckedChange = onToggleAutoMoodEq
-            )
-        }
-
-        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
-
         // ── 1. Equalizer Section ──
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1920,7 +1864,7 @@ fun LyricsSearchDialog(
                     }
                 } else {
                     Text(
-                        text = "Paste standard LRC formatted lyrics or plain text to save offline:",
+                        text = "Paste standard LRC formatted lyrics or plain text to save locally:",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1950,7 +1894,7 @@ fun LyricsSearchDialog(
                     onClick = { onSaveCustom(customLrcText) },
                     enabled = customLrcText.isNotBlank()
                 ) {
-                    Text("Save Offline")
+                    Text("Save Lyrics")
                 }
             }
         },

@@ -1,7 +1,5 @@
 package com.moodtunes.app.presentation.navigation
 
-import android.Manifest
-import android.os.Build
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -9,17 +7,9 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.google.accompanist.permissions.ExperimentalPermissionsApi
-import com.google.accompanist.permissions.isGranted
-import com.google.accompanist.permissions.rememberPermissionState
-import com.moodtunes.app.domain.model.MoodType
 import com.moodtunes.app.presentation.ui.account.YouTubeAccountScreen
 import com.moodtunes.app.presentation.ui.collection.CollectionScreen
 import com.moodtunes.app.presentation.ui.discover.DiscoverScreen
-import com.moodtunes.app.presentation.ui.history.HistoryScreen
-import com.moodtunes.app.presentation.ui.home.HomeScreen
-import com.moodtunes.app.presentation.ui.library.LibraryScreen
-import com.moodtunes.app.presentation.ui.permission.PermissionScreen
 import com.moodtunes.app.presentation.ui.player.PlayerScreen
 import com.moodtunes.app.presentation.ui.playlistdetail.PlaylistDetailScreen
 import com.moodtunes.app.presentation.ui.search.SearchScreen
@@ -28,33 +18,30 @@ import com.moodtunes.app.presentation.ui.youtubepage.YouTubePageScreen
 
 @Composable
 fun MoodTunesNavGraph(
-    navController: NavHostController = rememberNavController(),
-    shortcutMood: MoodType? = null
+    navController: NavHostController = rememberNavController()
 ) {
     NavHost(
         navController = navController,
         startDestination = Routes.HOME
     ) {
-        composable(Routes.PERMISSION) {
-            PermissionScreen(
-                onPermissionGranted = {
-                    navController.navigate(Routes.HOME) {
-                        popUpTo(Routes.PERMISSION) { inclusive = true }
-                    }
-                }
-            )
-        }
-
         composable(Routes.HOME) {
-            HomeScreen(
-                deepLinkMood = shortcutMood,
+            DiscoverScreen(
+                isRoot = true,
                 onNavigateToPlayer = { navController.navigate(Routes.PLAYER) },
-                onNavigateToLibrary = { navController.navigate(Routes.LIBRARY) },
-                onNavigateToHistory = { navController.navigate(Routes.HISTORY) },
+                onNavigateToLibrary = {
+                    navController.navigate(Routes.LIBRARY) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToSearch = {
+                    navController.navigate(Routes.SEARCH) {
+                        launchSingleTop = true
+                    }
+                },
                 onNavigateToSettings = { navController.navigate(Routes.SETTINGS) },
-                onNavigateToSearch = { navController.navigate(Routes.SEARCH) },
-                onNavigateToDiscover = { navController.navigate(Routes.DISCOVER) },
-                onNavigateToCollection = { navController.navigate(Routes.COLLECTION) }
+                onOpenYouTubePage = { browseId, params ->
+                    navController.navigate(Routes.youTubePage(browseId, params))
+                }
             )
         }
 
@@ -77,23 +64,16 @@ fun MoodTunesNavGraph(
             )
         }
 
-        composable(Routes.DISCOVER) {
-            DiscoverScreen(
-                onNavigateBack = { navController.popBackStack() },
-                onNavigateToPlayer = { navController.navigate(Routes.PLAYER) },
-                onOpenYouTubePage = { browseId, params ->
-                    navController.navigate(Routes.youTubePage(browseId, params))
-                }
-            )
-        }
-
-        composable(Routes.COLLECTION) {
+        composable(Routes.LIBRARY) {
             CollectionScreen(
                 onNavigateBack = { navController.popBackStack() },
                 onNavigateToPlayer = { navController.navigate(Routes.PLAYER) },
                 onNavigateToAccount = { navController.navigate(Routes.YOUTUBE_ACCOUNT) },
                 onOpenYouTubePage = { browseId, params ->
                     navController.navigate(Routes.youTubePage(browseId, params))
+                },
+                onNavigateToPlaylist = { playlistId ->
+                    navController.navigate(Routes.playlistDetail(playlistId))
                 }
             )
         }
@@ -123,28 +103,11 @@ fun MoodTunesNavGraph(
             )
         }
 
-        composable(Routes.LIBRARY) {
-            LibraryScreen(
-                onNavigateBack = { navController.popBackStack() },
-                onNavigateToPlayer = { navController.navigate(Routes.PLAYER) },
-                onNavigateToPlaylist = { playlistId ->
-                    navController.navigate(Routes.playlistDetail(playlistId))
-                },
-                onNavigateToSearch = { navController.navigate(Routes.SEARCH) }
-            )
-        }
-
         composable(
             route = Routes.PLAYLIST_DETAIL,
             arguments = listOf(navArgument("playlistId") { type = NavType.LongType })
         ) {
             PlaylistDetailScreen(
-                onNavigateBack = { navController.popBackStack() }
-            )
-        }
-
-        composable(Routes.HISTORY) {
-            HistoryScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
         }

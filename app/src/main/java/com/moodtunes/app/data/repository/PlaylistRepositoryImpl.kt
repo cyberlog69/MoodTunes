@@ -28,7 +28,7 @@ class PlaylistRepositoryImpl @Inject constructor(
                 Playlist(
                     id = playlist.id,
                     name = playlist.name,
-                    moodType = null,
+
                     songs = songs,
                     coverUri = playlist.coverUri,
                     createdAt = playlist.createdAt
@@ -44,7 +44,7 @@ class PlaylistRepositoryImpl @Inject constructor(
                 Playlist(
                     id = it.id,
                     name = it.name,
-                    moodType = null,
+
                     songs = entries.sortedBy { e -> e.position }
                         .mapNotNull { SongJsonSerializer.deserialize(it.songJson) },
                     coverUri = it.coverUri,

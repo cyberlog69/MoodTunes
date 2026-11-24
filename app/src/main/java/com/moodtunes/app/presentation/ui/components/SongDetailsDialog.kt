@@ -83,7 +83,7 @@ fun SongDetailsDialog(
                 DetailItem(
                     Icons.Rounded.Cloud,
                     "Source",
-                    if (song.isStream) "Online Stream" else "Local Storage"
+                    "YouTube Music"
                 )
                 if (song.playCount > 0) {
                     DetailItem(Icons.Rounded.PlayCircle, "Plays", "${song.playCount} times")
@@ -92,13 +92,6 @@ fun SongDetailsDialog(
                     val dateStr = SimpleDateFormat("MMM dd, yyyy • hh:mm a", Locale.getDefault())
                         .format(Date(song.lastPlayedAt))
                     DetailItem(Icons.Rounded.History, "Last Played", dateStr)
-                }
-                if (song.moodTags.isNotEmpty()) {
-                    DetailItem(
-                        Icons.Rounded.Mood,
-                        "Mood Tags",
-                        song.moodTags.joinToString(", ") { "${it.emoji} ${it.displayName}" }
-                    )
                 }
 
                 Spacer(Modifier.height(20.dp))

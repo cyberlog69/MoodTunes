@@ -24,15 +24,15 @@ data class Song(
     val albumArtUri: Uri?,
     val genre: String? = null,
     val isFavorite: Boolean = false,
-    val moodTags: List<MoodType> = emptyList(),
     val audioFormat: AudioFormat = AudioFormat.MP3,
     val isStream: Boolean = false,
     val isPreview: Boolean = false,
     val playCount: Int = 0,
     val lastPlayedAt: Long = 0,
     // ── YouTube Music identity ────────────────────────────────────────────
-    // Populated by the InnerTube browse/search parsers. All optional so local
-    // files and Subsonic tracks stay valid without a migration.
+    // Populated by the InnerTube browse/search parsers. Optional so a Song can
+    // still be built from a bare URI, but they are what make radio and
+    // catalogue navigation work.
     val videoId: String? = null,
     val albumBrowseId: String? = null,
     val artistBrowseId: String? = null,

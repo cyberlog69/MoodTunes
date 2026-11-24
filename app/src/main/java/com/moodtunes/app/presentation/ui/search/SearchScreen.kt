@@ -81,11 +81,7 @@ fun SearchScreen(
             selectedSongForAction?.let { song ->
                 viewModel.createPlaylist(name, song)
             }
-        },
-        onDownload = { song ->
-            viewModel.downloadSong(song)
-        },
-        isDownloaded = selectedSongForAction?.let { viewModel.isDownloaded(it.id) } ?: false
+        }
     )
 
     Box(
@@ -280,7 +276,6 @@ fun SearchScreen(
                 MiniPlayer(
                     song = song,
                     isPlaying = uiState.isPlaying,
-                    mood = null,
                     onPlayPauseClick = viewModel::playPause,
                     onExpandClick = onNavigateToPlayer
                 )
@@ -372,7 +367,7 @@ private fun SearchResultsList(
 
         // ─── 1. Songs (YouTube Music Streams) ─────────────────────────────────
         if (uiState.selectedFilter == SearchFilter.ALL || uiState.selectedFilter == SearchFilter.SONGS) {
-            val allSongs = (uiState.onlineSongs + uiState.localSongs).distinctBy { it.id }
+            val allSongs = uiState.onlineSongs.distinctBy { it.id }
             if (allSongs.isNotEmpty()) {
                 item {
                     SectionTitle(

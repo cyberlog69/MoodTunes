@@ -9,8 +9,8 @@ import androidx.room.PrimaryKey
  * Join row between a [PlaylistEntity] and a [SongEntity].
  *
  * A full JSON snapshot of the [com.moodtunes.app.domain.model.Song] is stored in
- * [songJson] so that online streams and local tracks can be restored even if the
- * source (MediaStore / remote API) is no longer reachable.
+ * [songJson] so that online streams can be restored even if the remote API is
+ * temporarily unreachable.
  */
 @Entity(
     tableName = "playlist_songs",

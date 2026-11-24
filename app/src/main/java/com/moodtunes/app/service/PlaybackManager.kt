@@ -11,15 +11,13 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.MoreExecutors
-import com.moodtunes.app.data.local.db.dao.MoodHistoryDao
 import com.moodtunes.app.data.local.db.dao.SongDao
-import com.moodtunes.app.data.local.db.entity.MoodHistoryEntity
+import com.moodtunes.app.data.local.db.entity.toEntity
 import com.moodtunes.app.data.local.preferences.PlaybackPreferencesRepository
 import com.moodtunes.app.data.local.preferences.UserPreferencesRepository
 import com.moodtunes.app.data.remote.OnlineStreamRepository
 import com.moodtunes.app.data.remote.api.LastFmService
 import com.moodtunes.app.data.remote.api.ListenBrainzService
-import com.moodtunes.app.domain.model.MoodType
 import com.moodtunes.app.domain.model.Song
 import com.moodtunes.app.platform.ConnectivityMonitor
 import com.moodtunes.app.di.ApplicationScope
@@ -42,7 +40,6 @@ class PlaybackManager @Inject constructor(
     private val listenBrainzService: ListenBrainzService,
     private val lastFmService: LastFmService,
     private val songDao: SongDao,
-    private val moodHistoryDao: MoodHistoryDao,
     private val connectivityMonitor: ConnectivityMonitor,
     private val djSequencer: com.moodtunes.app.service.dj.DjSequencer,
     @ApplicationScope private val appScope: CoroutineScope
@@ -66,9 +63,6 @@ class PlaybackManager @Inject constructor(
 
     private val _playlist = MutableStateFlow<List<Song>>(emptyList())
     val playlist: StateFlow<List<Song>> = _playlist.asStateFlow()
-
-    private val _currentMood = MutableStateFlow<MoodType?>(null)
-    val currentMood: StateFlow<MoodType?> = _currentMood.asStateFlow()
 
     private val _isShuffleEnabled = MutableStateFlow(false)
     val isShuffleEnabled: StateFlow<Boolean> = _isShuffleEnabled.asStateFlow()
@@ -108,9 +102,6 @@ class PlaybackManager @Inject constructor(
     private val _crossfadeDurationMs = MutableStateFlow(playbackPreferencesRepository.crossfadeDurationMs)
     val crossfadeDurationMs: StateFlow<Int> = _crossfadeDurationMs.asStateFlow()
 
-    private val _smartShuffleEnabled = MutableStateFlow(false)
-    val isSmartShuffleEnabled: StateFlow<Boolean> = _smartShuffleEnabled.asStateFlow()
-
     private val _isSkipSilenceEnabled = MutableStateFlow(playbackPreferencesRepository.skipSilenceEnabled)
     val isSkipSilenceEnabled: StateFlow<Boolean> = _isSkipSilenceEnabled.asStateFlow()
 
@@ -134,17 +125,6 @@ class PlaybackManager @Inject constructor(
     private var radioFetchJob: Job? = null
     private var radioLoadedForSongId: Long? = null
     private var queueGeneration = 0
-
-    // Tracks the current mood listening session so it can be persisted as a
-    // MoodHistory entry once the user switches queues or moods.
-    private var moodSession: MoodSession? = null
-
-    private data class MoodSession(
-        val mood: MoodType,
-        val startTime: Long,
-        var songCount: Int,
-        var listenedMs: Long
-    )
 
     init {
         // Declared after every property initializer above: this collector can
@@ -189,7 +169,6 @@ class PlaybackManager @Inject constructor(
     fun playSongs(
         songs: List<Song>,
         startIndex: Int = 0,
-        mood: MoodType? = null,
         autoplayRadio: Boolean = false
     ) {
         if (songs.isEmpty()) return
@@ -204,42 +183,13 @@ class PlaybackManager @Inject constructor(
         val sourceSongs = radioSeed?.let { listOf(it) } ?: songs
         val sourceStart = if (radioSeed != null) 0 else startIndex
 
-        // Rotate mood-session analytics: persist the previous mood's session
-        // before switching queues, then open a new one for this queue.
-        val previousMood = _currentMood.value
-        if (previousMood != mood) {
-            finalizeMoodSession()
-            if (mood != null) {
-                moodSession = MoodSession(
-                    mood = mood,
-                    startTime = System.currentTimeMillis(),
-                    songCount = 1,
-                    listenedMs = 0L
-                )
-            }
-        }
-        // Mood-weighted smart shuffle: reorder the queue to favor songs that
-        // match the active mood, then play the requested song from its new spot.
-        val orderedSongs = if (mood != null && _smartShuffleEnabled.value) {
-            val targetId = sourceSongs.getOrNull(sourceStart)?.id
-            val ordered = com.moodtunes.app.domain.util.MoodScoring.smartOrder(sourceSongs, mood)
-            ordered to ordered.indexOfFirst { it.id == targetId }.coerceAtLeast(0)
-        } else {
-            sourceSongs to sourceStart
-        }
-        val effectiveSongs = orderedSongs.first
-        val effectiveStart = orderedSongs.second
+        val effectiveSongs = sourceSongs
+        val effectiveStart = sourceStart
 
         _playlist.value = effectiveSongs
         radioLoadedForSongId = null
         radioFetchJob?.cancel()
-        _currentMood.value = mood
         _currentSong.value = effectiveSongs.getOrNull(effectiveStart)
-        if (mood != null) {
-            audioEffectsManager.applyMood(mood)
-        } else {
-            audioEffectsManager.resetMoodEq()
-        }
 
         scope.launch {
             val controller = mediaController ?: run {
@@ -309,12 +259,6 @@ class PlaybackManager @Inject constructor(
         }
     }
 
-    fun clearMood() {
-        _currentMood.value = null
-        finalizeMoodSession()
-        audioEffectsManager.resetMoodEq()
-    }
-
     fun playPause() {
         val controller = mediaController ?: return
         if (controller.isPlaying) {
@@ -363,19 +307,6 @@ class PlaybackManager @Inject constructor(
         val newMode = !controller.shuffleModeEnabled
         controller.shuffleModeEnabled = newMode
         _isShuffleEnabled.value = newMode
-    }
-
-    fun toggleSmartShuffle() {
-        val enabled = !_smartShuffleEnabled.value
-        _smartShuffleEnabled.value = enabled
-        val mood = _currentMood.value
-        val playlist = _playlist.value
-        val current = _currentSong.value
-        if (enabled && mood != null && playlist.size > 1) {
-            val ordered = com.moodtunes.app.domain.util.MoodScoring.smartOrder(playlist, mood)
-            val newIndex = ordered.indexOfFirst { it.id == current?.id }.coerceAtLeast(0)
-            playSongs(ordered, newIndex, mood)
-        }
     }
 
     fun toggleRepeat() {
@@ -753,7 +684,7 @@ class PlaybackManager @Inject constructor(
             add(currentSong)
             addAll(upcoming)
         }
-        playSongs(newPlaylist, 0, _currentMood.value)
+        playSongs(newPlaylist, 0)
     }
 
     // ── Equalizer, Bass Boost, 3D Virtualizer, Reverb & Loudness Normalization ─
@@ -767,7 +698,6 @@ class PlaybackManager @Inject constructor(
     fun resetEqualizer() = audioEffectsManager.resetEqualizer()
     fun applyEqualizerPreset(presetIndex: Int) = audioEffectsManager.applyPreset(presetIndex)
     fun applyEqualizerPresetByName(presetName: String) = audioEffectsManager.applyPresetByName(presetName)
-    fun toggleAutoMoodEq(enabled: Boolean) = audioEffectsManager.toggleAutoMoodEq(enabled)
     fun toggleLoudnessNormalization(enabled: Boolean) = audioEffectsManager.toggleLoudnessNormalization(enabled)
     fun setLoudnessGainMb(gainMb: Int) = audioEffectsManager.setLoudnessGainMb(gainMb)
 
@@ -1036,18 +966,10 @@ class PlaybackManager @Inject constructor(
     private fun startProgressTracking() {
         progressJob?.cancel()
         progressJob = scope.launch {
-            var lastTickMs = System.currentTimeMillis()
             while (isActive) {
                 mediaController?.let { controller ->
                     _currentPositionMs.value = controller.currentPosition.coerceAtLeast(0L)
                     _durationMs.value = controller.duration.coerceAtLeast(0L)
-                }
-                // Accumulate listening time for the active mood session (500 ms per tick).
-                val now = System.currentTimeMillis()
-                moodSession?.let { session ->
-                    if (controllerIsPlaying()) {
-                        session.listenedMs += now - lastTickMs
-                    }
                 }
 
                 // Check and trigger ListenBrainz & Last.fm scrobble if threshold (50% or 4 min) is met
@@ -1075,47 +997,18 @@ class PlaybackManager @Inject constructor(
                     }
                 }
 
-                lastTickMs = now
                 delay(500)
             }
         }
     }
 
-    private fun controllerIsPlaying(): Boolean {
-        val controller = mediaController ?: return _isPlaying.value
-        return controller.isPlaying
-    }
-
-    /** Persists the current mood session (if any) to mood history. */
-    private fun finalizeMoodSession() {
-        val session = moodSession ?: return
-        moodSession = null
-        if (session.listenedMs < 10_000) return // ignore throwaway sessions
+    /** Stores the played song and refreshes its play count/recency. */
+    private fun recordPlay(song: Song, reason: Int) {
         scope.launch {
             runCatching {
-                moodHistoryDao.insertMoodEntry(
-                    MoodHistoryEntity(
-                        moodTypeName = session.mood.name,
-                        timestamp = session.startTime,
-                        songCount = session.songCount,
-                        durationListenedMs = session.listenedMs
-                    )
-                )
+                songDao.upsertSong(song.toEntity())
+                songDao.incrementPlayCount(song.id, System.currentTimeMillis())
             }
-        }
-    }
-
-    /** Increments play count and refreshes recency for the given song. */
-    private fun recordPlay(song: Song, reason: Int) {
-        // Count the song toward the active mood session unless this was just the
-        // queue being (re)built — the first song is already counted when the
-        // session opens.
-        if (moodSession != null && reason != Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED) {
-            moodSession?.songCount = moodSession!!.songCount + 1
-        }
-        if (song.isStream) return
-        scope.launch {
-            runCatching { songDao.incrementPlayCount(song.id, System.currentTimeMillis()) }
         }
     }
 

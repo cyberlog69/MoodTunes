@@ -2,8 +2,11 @@
 
 MoodTunes talks to YouTube Music directly over the InnerTube API. There is no
 server in the middle, no API key and no bundled extraction library for the
-browse graph. This document describes how the pieces fit together, what changed
-in the app, and which parts are intentionally out of scope.
+browse graph. YouTube Music is the only source: local-device scanning,
+downloads, the tag editor and Subsonic/Navidrome were removed in v3.0.0.
+
+This document describes how the pieces fit together, what changed in the app,
+and which parts are intentionally out of scope.
 
 ## Architecture
 
@@ -47,9 +50,10 @@ radio.
 | `YouTubeRadioPage` | Radio queue and its continuation token. |
 
 `Song` gained optional fields (`videoId`, `albumBrowseId`, `artistBrowseId`,
-`playlistId`, `isExplicit`, `year`, `playCountLong`, `videoType`). All of them
-default to `null`/`0`, so the Room schema is untouched: they are populated by
-the parser at runtime and are not persisted.
+`playlistId`, `isExplicit`, `year`, `playCountLong`, `videoType`). They are
+populated by the parser at runtime. `videoId` is persisted alongside favorites
+and playlist entries so a saved YouTube track keeps its identity and can seed
+radio when replayed; the other catalogue fields remain runtime-only.
 
 ## Browse and pagination
 
@@ -73,12 +77,13 @@ optional, malformed rows are skipped, and an empty page is a valid result.
 
 ## Search
 
-`SearchViewModel` keeps doing the instant local scan, then adds:
+`SearchViewModel` matches saved playlists locally and searches YouTube Music
+online:
 
 1. a debounced typed search against the selected `YouTubeSearchFilter`,
 2. the legacy song search as a fallback for the Songs/All tabs,
 3. typeahead suggestions from the same client,
-4. Subsonic results and LRCLIB lyric matches as before,
+4. LRCLIB lyric matches,
 5. `SearchRank.rankSongs(...)` over the combined online list.
 
 `SearchRank` is pure Kotlin and covered by `SearchRankTest`. It scores title
@@ -106,21 +111,28 @@ encrypted at rest with `SecretCipher` (Android Keystore) in
 Anonymous browsing works without any session: the client falls back to a
 scraped `visitorData` and simply omits the cookie/authorization headers.
 
-`CollectionScreen` exposes Songs, Albums, Artists and Playlists tabs. The
-Songs tab reads `FEmusic_library_landing` first (it carries the same shelves
-the web app shows) and falls back to `FEmusic_library_privately_owned_tracks`.
+`CollectionScreen` exposes six tabs: Liked, Albums, Artists and YT Playlists
+from the signed-in account, plus app-managed Favorites and Playlists that work
+without signing in. The Liked tab reads `FEmusic_library_landing` first (it
+carries the same shelves the web app shows) and falls back to
+`FEmusic_library_privately_owned_tracks`.
 
 ## Playback
 
-`YouTubePlayerClient` sends `/player` requests across several clients, in
-order: `ANDROID_MUSIC`, `VISIONOS`, `TVHTML5`, `IOS`, `WEB_REMIX`. Each attempt
-is independent, so a bot check on one client does not fail playback. The first
-client that returns `playabilityStatus == OK` wins.
+`YouTubePlayerClient` sends `/player` requests across several clients. As of
+late 2026 the anonymous workhorses are `VISIONOS` and `ANDROID_VR`; the
+cookie-only clients (`ANDROID_MUSIC`, `WEB_REMIX`, `TVHTML5`) are only tried
+when a YouTube account is connected, and `IOS` is last until SABR playback is
+supported. Each attempt is bounded to 8 seconds, and a successful client is
+remembered (with a 10-minute cooldown for failures) so the next track starts on
+the client that worked.
 
 Returned formats are ranked per `StreamQuality` (data saver, standard, high,
 lossless, auto preferring Opus/WebM). `signatureCipher` / `cipher` URLs and the
 `n` throttling parameter are normalised through `PlayerJsSolver` before the URL
-is handed to Media3, so both signature and throttling challenges are solved.
+is handed to Media3. Clients that return already-signed URLs skip the JS player
+entirely, and a failed player-JS lookup is cached for ten minutes so it does not
+add latency to every track.
 The resulting stream carries bitrate, codec, sample rate, content length and
 expiry, matching the existing `StreamResult` contract.
 
@@ -144,11 +156,12 @@ list ends.
 
 | Screen | Route | Entry point |
 | --- | --- | --- |
-| Discover | `discover` | Home → Discover tile |
-| Collection | `collection` | Home → Collection tile |
-| YouTube account | `youtube_account` | Settings → YouTube Music Account, Collection prompt |
-| YouTube page | `youtube_page/{browseId}?params={params}` | Search results, Discover shelves, Collection rows |
-| Search | `search` | Home search button (now with typed results) |
+| Home (Discover shelves) | `home` | App start, bottom navigation |
+| Library (Collection) | `library` | Bottom navigation |
+| YouTube account | `youtube_account` | Settings → YouTube Music Account, Library prompt |
+| YouTube page | `youtube_page/{browseId}?params={params}` | Search results, Home shelves, Library rows |
+| Search | `search` | Bottom navigation, Home search button |
+| Player | `player` | Mini player, song taps |
 
 ## Intentional limitations
 
@@ -156,10 +169,11 @@ list ends.
   proof-of-origin token for anonymous playback. MoodTunes relies on the client
   rotation above and on the user's web session for tricky tracks. If YouTube
   starts rejecting every client, this is the next thing to add.
-- **No YouTube Takeout import.** Listening history is not imported; the local
-  history and mood analytics remain MoodTunes' own data.
+- **No YouTube Takeout import.** Listening history is not imported; play
+  counts and recency are MoodTunes' own data.
 - **No write operations to YouTube Music.** Like/unlike, library edits and
-  playlist mutations are read-only today; the app only browses and plays.
+  playlist mutations are read-only today; the app only browses and plays. Likes
+  and playlists created inside MoodTunes live in the app database.
 - **Search filters are opaque constants.** They are YouTube's own params and
   may change; the parser treats an empty typed page as a soft failure and keeps
   the legacy search results.

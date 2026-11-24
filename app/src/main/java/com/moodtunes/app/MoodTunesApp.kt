@@ -60,15 +60,6 @@ class MoodTunesApp : Application() {
                 setShowBadge(false)
             }
 
-            val downloadChannel = NotificationChannel(
-                DOWNLOAD_NOTIFICATION_CHANNEL_ID,
-                "Song Downloads",
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "Shows progress of offline song downloads"
-                setShowBadge(false)
-            }
-
             val updateChannel = NotificationChannel(
                 UPDATE_NOTIFICATION_CHANNEL_ID,
                 "App Updates",
@@ -80,14 +71,12 @@ class MoodTunesApp : Application() {
 
             val manager = getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(playbackChannel)
-            manager.createNotificationChannel(downloadChannel)
             manager.createNotificationChannel(updateChannel)
         }
     }
 
     companion object {
         const val PLAYBACK_NOTIFICATION_CHANNEL_ID = "moodtunes_playback_channel"
-        const val DOWNLOAD_NOTIFICATION_CHANNEL_ID = "moodtunes_download_channel"
         const val UPDATE_NOTIFICATION_CHANNEL_ID = "moodtunes_update_channel"
     }
 }

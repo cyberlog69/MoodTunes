@@ -1,35 +1,21 @@
 package com.moodtunes.app.domain.repository
 
-import android.net.Uri
-import com.moodtunes.app.domain.model.MoodType
 import com.moodtunes.app.domain.model.Song
 import kotlinx.coroutines.flow.Flow
 
 /**
- * Contract for all music-related data operations.
+ * Contract for app-managed YouTube Music state (favorites and play history).
  */
 interface IMusicRepository {
-    /** Returns all audio files from the device's MediaStore. */
-    suspend fun getAllSongs(): List<Song>
-
-    /** Returns songs that match the given mood based on keyword matching. */
-    suspend fun getSongsByMood(mood: MoodType): List<Song>
-
     /** Returns all songs marked as favorites. */
     fun getFavoriteSongs(): Flow<List<Song>>
 
-    /** Toggles the favorite status of a song. Returns the new status. */
-    suspend fun toggleFavorite(songId: Long): Boolean
-
-    /** Searches songs by title or artist. */
-    suspend fun searchSongs(query: String): List<Song>
+    /** Toggles the favorite status of [song]. Returns the new status. */
+    suspend fun toggleFavorite(song: Song): Boolean
 
     /** Returns recently played songs, most recent first. */
     fun getRecentlyPlayed(limit: Int = 20): Flow<List<Song>>
 
     /** Returns most-played songs, highest play count first. */
     fun getMostPlayed(limit: Int = 50): Flow<List<Song>>
-
-    /** Updates user-edited ID3 metadata and album art for a local song. */
-    suspend fun updateSongTags(songId: Long, title: String, artist: String, album: String, genre: String?, albumArtUri: Uri?)
 }

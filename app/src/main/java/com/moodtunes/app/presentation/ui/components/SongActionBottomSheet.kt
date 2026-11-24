@@ -2,8 +2,6 @@ package com.moodtunes.app.presentation.ui.components
 
 import android.content.Context
 import android.content.Intent
-import android.media.RingtoneManager
-import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -47,29 +45,13 @@ fun SongActionBottomSheet(
     onAddToQueue: () -> Unit = {},
     onToggleFavorite: () -> Unit = {},
     onAddToPlaylist: (playlistId: Long) -> Unit = {},
-    onCreatePlaylist: (name: String) -> Unit = {},
-    onSaveTags: ((Song, String, String, String, String?, Uri?) -> Unit)? = null,
-    onDownload: ((Song) -> Unit)? = null,
-    isDownloaded: Boolean = false
+    onCreatePlaylist: (name: String) -> Unit = {}
 ) {
     if (song == null) return
 
     val context = LocalContext.current
     var showDetailsDialog by remember { mutableStateOf(false) }
     var showPlaylistDialog by remember { mutableStateOf(false) }
-    var showTagEditorDialog by remember { mutableStateOf(false) }
-
-    if (showTagEditorDialog && onSaveTags != null) {
-        TagEditorDialog(
-            song = song,
-            onSave = { title, artist, album, genre, artUri ->
-                onSaveTags(song, title, artist, album, genre, artUri)
-                showTagEditorDialog = false
-                onDismiss()
-            },
-            onDismiss = { showTagEditorDialog = false }
-        )
-    }
 
     if (showDetailsDialog) {
         SongDetailsDialog(song = song, onDismiss = { showDetailsDialog = false })
@@ -239,45 +221,10 @@ fun SongActionBottomSheet(
                 }
             )
 
-            if (song.isStream && onDownload != null) {
-                ActionItem(
-                    icon = if (isDownloaded) Icons.Rounded.DownloadDone else Icons.Rounded.Download,
-                    title = if (isDownloaded) "Downloaded" else "Download Song",
-                    subtitle = if (isDownloaded) "Saved to your device for offline playback" else "Save offline for listening without internet",
-                    onClick = {
-                        onDownload(song)
-                        onDismiss()
-                    }
-                )
-            }
-
-            if (!song.isStream) {
-                if (onSaveTags != null) {
-                    ActionItem(
-                        icon = Icons.Rounded.EditNote,
-                        title = "Edit Tags & Artwork",
-                        subtitle = "Modify title, artist, album & cover art",
-                        onClick = {
-                            showTagEditorDialog = true
-                        }
-                    )
-                }
-
-                ActionItem(
-                    icon = Icons.Rounded.NotificationsActive,
-                    title = "Set as Ringtone",
-                    subtitle = "Use this track as default phone ringtone",
-                    onClick = {
-                        setAsRingtone(context, song)
-                        onDismiss()
-                    }
-                )
-            }
-
             ActionItem(
                 icon = Icons.Rounded.Info,
                 title = "Track Details",
-                subtitle = "View format, audio quality, and file info",
+                subtitle = "View format, audio quality, and stream info",
                 onClick = {
                     showDetailsDialog = true
                 }
@@ -349,29 +296,4 @@ private fun shareSong(context: Context, song: Song) {
         Intent.createChooser(sendIntent, "Share Track")
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     )
-}
-
-private fun setAsRingtone(context: Context, song: Song) {
-    try {
-        RingtoneManager.setActualDefaultRingtoneUri(
-            context,
-            RingtoneManager.TYPE_RINGTONE,
-            song.uri
-        )
-        Toast.makeText(context, "Ringtone set to ${song.title}", Toast.LENGTH_SHORT).show()
-    } catch (e: SecurityException) {
-        // Direct ringtone write requires WRITE_SETTINGS permission
-        try {
-            val intent = Intent(android.provider.Settings.ACTION_MANAGE_WRITE_SETTINGS).apply {
-                data = Uri.parse("package:${context.packageName}")
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            context.startActivity(intent)
-            Toast.makeText(context, "Please allow Modify System Settings to set ringtones", Toast.LENGTH_LONG).show()
-        } catch (_: Exception) {
-            Toast.makeText(context, "Could not set ringtone on this device", Toast.LENGTH_SHORT).show()
-        }
-    } catch (e: Exception) {
-        Toast.makeText(context, "Failed to set ringtone", Toast.LENGTH_SHORT).show()
-    }
 }

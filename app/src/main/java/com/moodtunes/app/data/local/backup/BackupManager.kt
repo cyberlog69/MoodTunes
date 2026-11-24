@@ -87,7 +87,7 @@ class BackupManager @Inject constructor(
                 }
                 Playlist(
                     name = obj.optString("name", "Imported Playlist"),
-                    moodType = null,
+
                     songs = songs,
                     createdAt = obj.optLong("createdAt", System.currentTimeMillis())
                 )
@@ -119,8 +119,8 @@ class BackupManager @Inject constructor(
         albumArtUriString = albumArtUri?.toString(),
         genre = genre,
         isFavorite = true,
-        moodTagsJson = moodTags.joinToString(",") { it.name },
         audioFormatName = audioFormat.name,
-        isStream = isStream
+        isStream = isStream,
+        videoId = videoId ?: uri.getQueryParameter("v")
     )
 }

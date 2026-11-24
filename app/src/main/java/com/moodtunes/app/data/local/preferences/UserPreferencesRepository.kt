@@ -20,18 +20,11 @@ enum class DarkModeOption(val displayName: String) {
 
 enum class StreamQuality(val displayName: String, val badgeText: String) {
     AUTO("Adaptive (Auto)", "Auto"),
-    LOSSLESS("Lossless (FLAC 24-bit)", "FLAC 24-bit"),
-    HIGH("High Quality (320 kbps)", "320 kbps"),
-    STANDARD("Standard (128 kbps)", "128 kbps"),
-    DATA_SAVER("Data Saver (70 kbps)", "70 kbps")
+    LOSSLESS("Maximum (best available)", "Max"),
+    HIGH("High (up to 192 kbps)", "192k"),
+    STANDARD("Standard (128 kbps)", "128k"),
+    DATA_SAVER("Data Saver (48 kbps)", "48k")
 }
-
-enum class AudioSourceMode(val displayName: String) {
-    BOTH("Both Local & Online"),
-    LOCAL_ONLY("Local Device Only"),
-    STREAM_ONLY("Online Stream Only")
-}
-
 
 enum class MusicLanguage(
     val displayName: String,
@@ -60,15 +53,12 @@ data class AppUserSettings(
     val darkModeOption: DarkModeOption = DarkModeOption.DARK,
     val useDynamicColors: Boolean = true,
     val performanceMode: Boolean = false,
-    val isolateMoodFeatures: Boolean = true,
     val playerDeckStyle: PlayerDeckStyle = PlayerDeckStyle.VINYL,
     val streamQuality: StreamQuality = StreamQuality.LOSSLESS,
     val wifiStreamQuality: StreamQuality = StreamQuality.LOSSLESS,
-    val mobileStreamQuality: StreamQuality = StreamQuality.STANDARD,
+    val mobileStreamQuality: StreamQuality = StreamQuality.HIGH,
     val wifiOnlyStreaming: Boolean = false,
-    val wifiOnlyDownloads: Boolean = true,
     val mobileDataHighQuality: Boolean = true,
-    val audioSourceMode: AudioSourceMode = AudioSourceMode.STREAM_ONLY,
     val preferredLanguages: Set<MusicLanguage> = setOf(MusicLanguage.ALL),
     // 🧠 ListenBrainz
     val listenBrainzToken: String = "",
@@ -77,12 +67,7 @@ data class AppUserSettings(
     // 📻 Last.fm
     val lastFmSessionKey: String = "",
     val lastFmUsername: String = "",
-    val isLastFmScrobblingEnabled: Boolean = false,
-    // 🏠 Navidrome / Subsonic
-    val navidromeServerUrl: String = "",
-    val navidromeUsername: String = "",
-    val navidromePassword: String = "",
-    val isNavidromeEnabled: Boolean = false
+    val isLastFmScrobblingEnabled: Boolean = false
 ) {
     val preferredLanguage: MusicLanguage
         get() = preferredLanguages.firstOrNull() ?: MusicLanguage.ALL
@@ -133,9 +118,8 @@ class UserPreferencesRepository @Inject constructor(
         val modeStr = prefs.getString("dark_mode", DarkModeOption.DARK.name) ?: DarkModeOption.DARK.name
         val qualityStr = prefs.getString("stream_quality", StreamQuality.LOSSLESS.name) ?: StreamQuality.LOSSLESS.name
         val wifiQualityStr = prefs.getString("wifi_stream_quality", qualityStr) ?: qualityStr
-        val defaultMobileQuality = if (prefs.getBoolean("mobile_data_hq", true)) StreamQuality.STANDARD.name else StreamQuality.DATA_SAVER.name
+        val defaultMobileQuality = if (prefs.getBoolean("mobile_data_hq", true)) StreamQuality.HIGH.name else StreamQuality.DATA_SAVER.name
         val mobileQualityStr = prefs.getString("mobile_stream_quality", defaultMobileQuality) ?: defaultMobileQuality
-        val sourceStr = prefs.getString("audio_source_mode", AudioSourceMode.STREAM_ONLY.name) ?: AudioSourceMode.STREAM_ONLY.name
         val deckStr = prefs.getString("player_deck_style", PlayerDeckStyle.VINYL.name) ?: PlayerDeckStyle.VINYL.name
         
         val rawLangs = prefs.getString("preferred_languages", prefs.getString("preferred_language", MusicLanguage.ALL.name)) 
@@ -149,32 +133,20 @@ class UserPreferencesRepository @Inject constructor(
             darkModeOption = runCatching { DarkModeOption.valueOf(modeStr) }.getOrDefault(DarkModeOption.DARK),
             useDynamicColors = prefs.getBoolean("dynamic_colors", true),
             performanceMode = prefs.getBoolean("performance_mode", false),
-            isolateMoodFeatures = prefs.getBoolean("isolate_mood_features", true),
             playerDeckStyle = runCatching { PlayerDeckStyle.valueOf(deckStr) }.getOrDefault(PlayerDeckStyle.VINYL),
             streamQuality = runCatching { StreamQuality.valueOf(qualityStr) }.getOrDefault(StreamQuality.LOSSLESS),
             wifiStreamQuality = runCatching { StreamQuality.valueOf(wifiQualityStr) }.getOrDefault(StreamQuality.LOSSLESS),
-            mobileStreamQuality = runCatching { StreamQuality.valueOf(mobileQualityStr) }.getOrDefault(StreamQuality.STANDARD),
+            mobileStreamQuality = runCatching { StreamQuality.valueOf(mobileQualityStr) }.getOrDefault(StreamQuality.HIGH),
             wifiOnlyStreaming = prefs.getBoolean("wifi_only_streaming", false),
-            wifiOnlyDownloads = prefs.getBoolean("wifi_only_downloads", true),
             mobileDataHighQuality = prefs.getBoolean("mobile_data_hq", true),
-            audioSourceMode = runCatching { AudioSourceMode.valueOf(sourceStr) }.getOrDefault(AudioSourceMode.STREAM_ONLY),
             preferredLanguages = parsedLangs,
             listenBrainzToken = readSecret("listenbrainz_token"),
             listenBrainzUsername = prefs.getString("listenbrainz_username", "") ?: "",
             isListenBrainzScrobblingEnabled = prefs.getBoolean("listenbrainz_scrobble_enabled", false),
             lastFmSessionKey = readSecret("lastfm_session_key"),
             lastFmUsername = prefs.getString("lastfm_username", "") ?: "",
-            isLastFmScrobblingEnabled = prefs.getBoolean("lastfm_scrobble_enabled", false),
-            navidromeServerUrl = prefs.getString("navidrome_server_url", "") ?: "",
-            navidromeUsername = prefs.getString("navidrome_username", "") ?: "",
-            navidromePassword = readSecret("navidrome_password"),
-            isNavidromeEnabled = prefs.getBoolean("navidrome_enabled", false)
+            isLastFmScrobblingEnabled = prefs.getBoolean("lastfm_scrobble_enabled", false)
         )
-    }
-
-    fun updateIsolateMoodFeatures(enabled: Boolean) {
-        prefs.edit().putBoolean("isolate_mood_features", enabled).apply()
-        _settings.value = _settings.value.copy(isolateMoodFeatures = enabled)
     }
 
     fun updatePerformanceMode(enabled: Boolean) {
@@ -231,19 +203,9 @@ class UserPreferencesRepository @Inject constructor(
         _settings.value = _settings.value.copy(wifiOnlyStreaming = enabled)
     }
 
-    fun updateWifiOnlyDownloads(enabled: Boolean) {
-        prefs.edit().putBoolean("wifi_only_downloads", enabled).apply()
-        _settings.value = _settings.value.copy(wifiOnlyDownloads = enabled)
-    }
-
     fun updateMobileDataHighQuality(enabled: Boolean) {
         prefs.edit().putBoolean("mobile_data_hq", enabled).apply()
         _settings.value = _settings.value.copy(mobileDataHighQuality = enabled)
-    }
-
-    fun updateAudioSourceMode(mode: AudioSourceMode) {
-        prefs.edit().putString("audio_source_mode", mode.name).apply()
-        _settings.value = _settings.value.copy(audioSourceMode = mode)
     }
 
 
@@ -289,27 +251,6 @@ class UserPreferencesRepository @Inject constructor(
     fun updateListenBrainzScrobbling(enabled: Boolean) {
         prefs.edit().putBoolean("listenbrainz_scrobble_enabled", enabled).apply()
         _settings.value = _settings.value.copy(isListenBrainzScrobblingEnabled = enabled)
-    }
-
-    // ── Navidrome / Subsonic Preferences ─────────────────────────────────────
-    fun updateNavidromeConfig(serverUrl: String, username: String, password: String, enabled: Boolean) {
-        prefs.edit()
-            .putString("navidrome_server_url", serverUrl.trim())
-            .putString("navidrome_username", username.trim())
-            .let { putSecret(it, "navidrome_password", password) }
-            .putBoolean("navidrome_enabled", enabled)
-            .apply()
-        _settings.value = _settings.value.copy(
-            navidromeServerUrl = serverUrl.trim(),
-            navidromeUsername = username.trim(),
-            navidromePassword = password.trim(),
-            isNavidromeEnabled = enabled
-        )
-    }
-
-    fun updateNavidromeEnabled(enabled: Boolean) {
-        prefs.edit().putBoolean("navidrome_enabled", enabled).apply()
-        _settings.value = _settings.value.copy(isNavidromeEnabled = enabled)
     }
 
     fun checkShouldShowWhatsNew(): String? {

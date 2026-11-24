@@ -13,6 +13,8 @@ import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.ArrowBackIosNew
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
@@ -29,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import com.moodtunes.app.domain.model.Playlist
 import com.moodtunes.app.domain.model.YouTubeItem
 import com.moodtunes.app.presentation.ui.components.MiniPlayer
 import com.moodtunes.app.presentation.ui.components.SongItem
@@ -39,7 +42,8 @@ fun CollectionScreen(
     onNavigateBack: () -> Unit,
     onNavigateToPlayer: () -> Unit,
     onNavigateToAccount: () -> Unit,
-    onOpenYouTubePage: (browseId: String, params: String?) -> Unit
+    onOpenYouTubePage: (browseId: String, params: String?) -> Unit,
+    onNavigateToPlaylist: (Long) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -60,7 +64,7 @@ fun CollectionScreen(
                 }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Your Collection",
+                        text = "Your Library",
                         style = MaterialTheme.typography.headlineSmall,
                         color = MaterialTheme.colorScheme.onBackground
                     )
@@ -68,7 +72,7 @@ fun CollectionScreen(
                         text = if (uiState.isSignedIn) {
                             uiState.accountName.ifBlank { "Signed in to YouTube Music" }
                         } else {
-                            "Local library stays available offline"
+                            "Your YouTube Music library"
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -93,8 +97,21 @@ fun CollectionScreen(
             }
 
             if (!uiState.isSignedIn) {
-                SignInPrompt(onNavigateToAccount)
-                return@Column
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "Favorites and playlists work without an account.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(onClick = onNavigateToAccount) { Text("Sign in") }
+                }
             }
 
             LazyRow(
@@ -112,79 +129,98 @@ fun CollectionScreen(
             }
 
             val bottomPadding = if (uiState.currentSong != null) 96.dp else 24.dp
-            when {
-                uiState.isLoading -> Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                }
-
-                uiState.error != null -> Box(
-                    modifier = Modifier.fillMaxSize().padding(32.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = uiState.error.orEmpty(),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(Modifier.height(16.dp))
-                        Button(onClick = viewModel::refresh) { Text("Try again") }
+            if (uiState.selectedTab.requiresYouTube && !uiState.isSignedIn) {
+                SignInPrompt(onNavigateToAccount)
+            } else {
+                when {
+                    uiState.isLoading -> Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                     }
-                }
 
-                uiState.songs.isNotEmpty() -> LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(top = 8.dp, bottom = bottomPadding)
-                ) {
-                    itemsIndexed(
-                        uiState.songs,
-                        key = { index, song -> "lib_song_${song.videoId ?: song.id}_$index" }
-                    ) { index, song ->
-                        SongItem(
-                            song = song,
-                            isPlaying = uiState.currentSong?.id == song.id,
-                            onClick = {
-                                viewModel.playSong(uiState.songs, index)
-                                onNavigateToPlayer()
-                            },
-                            onFavoriteClick = {},
-                            onMoreClick = null
-                        )
-                    }
-                }
-
-                else -> {
-                    val items = uiState.shelves.catalogueItems()
-                    if (items.isEmpty()) {
-                        Box(
-                            modifier = Modifier.fillMaxSize().padding(32.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
+                    uiState.error != null -> Box(
+                        modifier = Modifier.fillMaxSize().padding(32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                text = "Nothing here yet. Save songs, albums or playlists on YouTube Music and pull to refresh.",
+                                text = uiState.error.orEmpty(),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                            Spacer(Modifier.height(16.dp))
+                            Button(onClick = viewModel::refresh) { Text("Try again") }
                         }
-                    } else {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(top = 8.dp, bottom = bottomPadding)
-                        ) {
-                            items(items, key = { it.id }) { item ->
-                                CatalogueRow(
-                                    item = item,
-                                    onClick = {
-                                        when (item) {
-                                            is YouTubeItem.Category ->
-                                                onOpenYouTubePage(item.browseId, item.params)
-                                            else -> onOpenYouTubePage(item.id, null)
+                    }
+
+                    uiState.selectedTab == CollectionTab.PLAYLISTS -> {
+                        if (uiState.localPlaylists.isEmpty()) {
+                            EmptyCollectionMessage("No playlists yet. Save a song to a playlist from its menu.")
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(top = 8.dp, bottom = bottomPadding)
+                            ) {
+                                items(uiState.localPlaylists, key = { "playlist_${it.id}" }) { playlist ->
+                                    PlaylistRow(
+                                        playlist = playlist,
+                                        onClick = { onNavigateToPlaylist(playlist.id) }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    uiState.songs.isNotEmpty() -> LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(top = 8.dp, bottom = bottomPadding)
+                    ) {
+                        itemsIndexed(
+                            uiState.songs,
+                            key = { index, song -> "lib_song_${song.videoId ?: song.id}_$index" }
+                        ) { index, song ->
+                            SongItem(
+                                song = song,
+                                isPlaying = uiState.currentSong?.id == song.id,
+                                onClick = {
+                                    viewModel.playSong(uiState.songs, index)
+                                    onNavigateToPlayer()
+                                },
+                                onFavoriteClick = { viewModel.toggleFavorite(song) },
+                                onMoreClick = null
+                            )
+                        }
+                    }
+
+                    else -> {
+                        val catalogue = uiState.shelves.catalogueItems()
+                        if (catalogue.isEmpty()) {
+                            EmptyCollectionMessage(
+                                if (uiState.selectedTab == CollectionTab.FAVORITES) {
+                                    "No favorites yet. Tap the heart on any song to save it here."
+                                } else {
+                                    "Nothing here yet. Save songs, albums or playlists on YouTube Music and pull to refresh."
+                                }
+                            )
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(top = 8.dp, bottom = bottomPadding)
+                            ) {
+                                items(catalogue, key = { it.id }) { item ->
+                                    CatalogueRow(
+                                        item = item,
+                                        onClick = {
+                                            when (item) {
+                                                is YouTubeItem.Category ->
+                                                    onOpenYouTubePage(item.browseId, item.params)
+                                                else -> onOpenYouTubePage(item.id, null)
+                                            }
                                         }
-                                    }
-                                )
+                                    )
+                                }
                             }
                         }
                     }
@@ -203,12 +239,81 @@ fun CollectionScreen(
                 MiniPlayer(
                     song = song,
                     isPlaying = uiState.isPlaying,
-                    mood = null,
                     onPlayPauseClick = viewModel::playPause,
                     onExpandClick = onNavigateToPlayer
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun EmptyCollectionMessage(message: String) {
+    Box(
+        modifier = Modifier.fillMaxSize().padding(32.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun PlaylistRow(playlist: Playlist, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(52.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+            contentAlignment = Alignment.Center
+        ) {
+            if (playlist.coverUri != null) {
+                AsyncImage(
+                    model = playlist.coverUri,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Icon(
+                    Icons.AutoMirrored.Rounded.QueueMusic,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(26.dp)
+                )
+            }
+        }
+        Spacer(Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = playlist.name,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = "${playlist.songCount} songs",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Icon(
+            Icons.Rounded.ChevronRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
@@ -234,7 +339,7 @@ private fun SignInPrompt(onNavigateToAccount: () -> Unit) {
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            text = "Sign in to see liked songs, albums, artists and playlists next to your local files and Subsonic library.",
+            text = "Sign in to see liked songs, albums, artists and playlists from your YouTube Music account.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

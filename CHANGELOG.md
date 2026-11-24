@@ -4,6 +4,77 @@ All notable changes to MoodTunes are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows
 [Semantic Versioning](https://semver.org/).
 
+## [3.0.0] - 2026-11-25
+
+MoodTunes is now a YouTube Music client. The mood-first design, local library,
+offline downloads, tag editor and self-hosted server support are gone.
+
+### Breaking
+
+- **YouTube Music is the only source.** Local-device scanning, the permission
+  flow, song downloads and the offline Downloads tab, the ID3/tag editor, and
+  Subsonic/Navidrome streaming were removed along with their settings, services
+  and permissions.
+- **Mood personalization is gone.** `MoodType`/`MoodEntry`, mood scoring and
+  recommendations, mood history, the mood selector, mood EQ and the mood
+  statistics screen were deleted. YouTube Music's own “Moods & genres” shelves
+  remain as catalogue browsing.
+- **Database migration 5 → 6.** The `songs` table is rebuilt without
+  `moodTagsJson`, the `mood_history` table and the `moodType` playlist column
+  are dropped, and a `videoId` column is added so saved YouTube tracks keep
+  their identity. Favorites, play counts and playlists are preserved.
+
+### Added
+
+- **Home is Discover.** The YouTube Music browse graph (Made for you, Charts,
+  Moods & genres, New releases) is the start destination, with bottom navigation
+  for Home, Library, Search and Settings.
+- **Unified Library.** Six tabs: Liked, Albums, Artists and YT Playlists from
+  the connected account, plus app-managed Favorites and Playlists that work
+  without signing in.
+- **YouTube favorites.** Any track can be favorited; the `videoId` is persisted
+  so replaying a favorite can still seed its radio queue.
+
+### Changed
+
+- **Audio format ranking is now bitrate-first.** AUTO picks YouTube Music's
+  256 kbps AAC (itag 141) over a 160 kbps Opus stream (itag 251); Opus wins
+  only on a tie. `High` caps at ~192 kbps for data efficiency, while `Maximum`
+  takes the best available format.
+- **Signed-in users try `WEB_REMIX` first.** It is the only client that can
+  return YouTube Music Premium's 256 kbps AAC/Opus formats, and its player
+  request now correctly targets `music.youtube.com`.
+- **Quality labels and defaults are honest.** Streaming labels no longer claim
+  FLAC 24-bit or 320 kbps; mobile data now defaults to High (192 kbps ceiling)
+  instead of 128 kbps, and Settings explains the anonymous 160 kbps ceiling.
+- **Player client order now matches the current YouTube landscape.** VISIONOS is
+  tried first, followed by ANDROID_VR; the cookie-only clients (WEB_REMIX,
+  ANDROID_MUSIC, TVHTML5) are only attempted when a YouTube account is
+  connected. IOS stays last because it currently returns SABR-only responses.
+- **Client health is remembered.** The last client that produced a stream is
+  tried first and failing clients are skipped for 10 minutes, so a dead client
+  cannot add latency to every track.
+- **Each `/player` attempt has an 8-second timeout** instead of sharing the
+  20-second read timeout.
+- **The JS player is only fetched for clients that need it.** VISIONOS,
+  ANDROID_VR, ANDROID_MUSIC and IOS return already-signed URLs.
+- **Player JS failures are cached for 10 minutes**, preventing repeated
+  `iframe_api` lookups on devices where it is unreachable.
+- **NewPipe has an 8-second cap and a circuit breaker.** After a failure it is
+  skipped for 10 minutes while InnerTube resolves.
+- **Search is YouTube-only.** The debounced typed search, suggestions, LRCLIB
+  lyric matching and playlist matching remain; local and Subsonic result
+  branches were removed.
+- **Android Auto exposes Favorites and local playlists.** The mood and
+  all-songs folders were removed; assistant “play <query>” searches YouTube
+  Music.
+
+### Removed
+
+- Manifest storage/media permissions, mood deep links and launcher shortcuts,
+  the download notification channel, the Subsonic cleartext network exception
+  and the obsolete settings sections.
+
 ## [2.0.1] - 2026-11-09
 
 Hardening patch for v2.0.0, driven by a full Android lint and code review.

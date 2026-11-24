@@ -105,12 +105,6 @@ class PlaybackPreferencesRepository @Inject constructor(
             prefs.edit().putInt("loudness_gain_mb", value).apply()
         }
 
-    var autoMoodEqEnabled: Boolean
-        get() = prefs.getBoolean("auto_mood_eq_enabled", false)
-        set(value) {
-            prefs.edit().putBoolean("auto_mood_eq_enabled", value).apply()
-        }
-
     var gaplessPlaybackEnabled: Boolean
         get() = prefs.getBoolean("gapless_playback_enabled", true)
         set(value) {

@@ -34,7 +34,6 @@ fun PlaylistDetailScreen(
     onNavigateBack: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val batchProgress by viewModel.batchProgress.collectAsStateWithLifecycle()
     val playlist = uiState.playlist
 
     var showRenameDialog by remember { mutableStateOf(false) }
@@ -183,7 +182,7 @@ fun PlaylistDetailScreen(
                         }
                     }
                 } else {
-                    // ─── Actions Row (Play All / Add Songs / Download All) ────
+                    // ─── Actions Row (Play All / Add Songs) ──────────────────
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -212,45 +211,6 @@ fun PlaylistDetailScreen(
                             Icon(Icons.Rounded.Add, contentDescription = null)
                             Spacer(Modifier.width(4.dp))
                             Text("Add")
-                        }
-                        FilledTonalIconButton(
-                            onClick = viewModel::downloadAllSongs,
-                            shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier.size(44.dp)
-                        ) {
-                            Icon(
-                                Icons.Rounded.Download,
-                                contentDescription = "Download All Songs",
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
-
-                    val currentBatch = batchProgress
-                    if (currentBatch != null && currentBatch.isDownloading) {
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 4.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(18.dp),
-                                    strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                                Spacer(Modifier.width(10.dp))
-                                Text(
-                                    text = "Downloading playlist (${currentBatch.current}/${currentBatch.total})",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                            }
                         }
                     }
 

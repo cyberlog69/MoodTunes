@@ -1,7 +1,6 @@
 package com.moodtunes.app.data.local.lyrics
 
 import android.content.Context
-import android.provider.MediaStore
 import com.moodtunes.app.data.remote.api.LrclibService
 import com.moodtunes.app.data.remote.api.YouTubeMusicApiService
 import com.moodtunes.app.data.remote.api.LyricsTranslationService
@@ -43,19 +42,15 @@ class LyricsRepository @Inject constructor(
             return@withContext diskLyrics
         }
 
-        // 2. Resolve via local files or remote LRCLIB
-        val lyrics = if (song.isStream) {
-            fetchFromLrclib(song) ?: fetchFromYouTube(song)
-        } else {
-            readFromMediaStore(song) ?: readFromSiblingFile(song) ?: fetchFromLrclib(song) ?: fetchFromYouTube(song)
-        } ?: emptyList()
+        // 2. Resolve remotely: LRCLIB first, then YouTube Music
+        val lyrics = fetchFromLrclib(song) ?: fetchFromYouTube(song) ?: emptyList()
 
         if (lyrics.isNotEmpty()) cache[song.id] = lyrics
         lyrics
     }
 
     /**
-     * Proactively fetches and caches lyrics to disk (e.g. when downloading a track offline).
+     * Proactively fetches and caches lyrics to disk so they load instantly next time.
      */
     suspend fun cacheLyricsForSong(song: Song): List<LyricsLine> = withContext(Dispatchers.IO) {
         val existing = readFromDiskCache(song.id)
@@ -180,13 +175,9 @@ class LyricsRepository @Inject constructor(
         }
     }
 
-    // Keep existing readFromMediaStore and readFromSiblingFile methods unchanged
-
     private suspend fun fetchFromYouTube(song: Song): List<LyricsLine>? {
         return try {
-            var videoId = if (song.isStream) {
-                youTubeMusicApiService.extractVideoId(song.uri.toString())
-            } else ""
+            var videoId = youTubeMusicApiService.extractVideoId(song.uri.toString())
 
             if (videoId.isBlank() || videoId == song.uri.toString()) {
                 val searchQuery = "${song.title} ${song.artist}".trim()
@@ -209,48 +200,4 @@ class LyricsRepository @Inject constructor(
             null
         }
     }
-
-    private fun readFromMediaStore(song: Song): List<LyricsLine>? = runCatching {
-        context.contentResolver.query(
-            song.uri,
-            arrayOf("lyrics"),
-            null,
-            null,
-            null
-        )?.use { cursor ->
-            if (cursor.moveToFirst()) {
-                val text = cursor.getString(0)
-                if (!text.isNullOrBlank()) {
-                    saveToDiskCache(song.id, text)
-                    LrcParser.parse(text)
-                } else null
-            } else {
-                null
-            }
-        }
-    }.getOrNull()
-
-    private fun readFromSiblingFile(song: Song): List<LyricsLine>? = runCatching {
-        val path = context.contentResolver.query(
-            song.uri,
-            arrayOf(MediaStore.Audio.Media.DATA),
-            null,
-            null,
-            null
-        )?.use { cursor ->
-            if (cursor.moveToFirst()) cursor.getString(0) else null
-        } ?: return null
-
-        val audioFile = File(path)
-        val baseName = audioFile.absolutePath.substringBeforeLast('.')
-        val lrcFile = listOf(File("$baseName.lrc"), File("$baseName.LRC"))
-            .firstOrNull { it.exists() && it.isFile } ?: return null
-
-        val raw = lrcFile.readText()
-        val parsed = LrcParser.parse(raw)
-        if (parsed.isNotEmpty()) {
-            saveToDiskCache(song.id, raw)
-            parsed
-        } else null
-    }.getOrNull()
 }

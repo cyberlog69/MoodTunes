@@ -226,7 +226,7 @@ fun MoodTunesHeroCard(
                     }
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        text = "Emotion-driven Music Player with Audiophile DSP, Live FFT Visuals & Lossless Streaming",
+                        text = "YouTube Music client with audiophile DSP, live FFT visuals and synced lyrics",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

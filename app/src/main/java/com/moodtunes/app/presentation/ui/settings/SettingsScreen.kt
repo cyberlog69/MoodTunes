@@ -53,10 +53,6 @@ fun SettingsScreen(
     var lastFmSessionKey by remember(settings.lastFmSessionKey) { mutableStateOf(settings.lastFmSessionKey) }
     var lastFmUser by remember(settings.lastFmUsername) { mutableStateOf(settings.lastFmUsername) }
 
-    var navidromeUrl by remember(settings.navidromeServerUrl) { mutableStateOf(settings.navidromeServerUrl) }
-    var navidromeUser by remember(settings.navidromeUsername) { mutableStateOf(settings.navidromeUsername) }
-    var navidromePass by remember(settings.navidromePassword) { mutableStateOf(settings.navidromePassword) }
-
     val snackbarHostState = remember { SnackbarHostState() }
 
     val exportLauncher = rememberLauncherForActivityResult(
@@ -407,6 +403,12 @@ fun SettingsScreen(
 
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
+                        Text(
+                            "Anonymous YouTube Music tops out around 160 kbps Opus. 256 kbps streams require YouTube Music Premium and a connected account.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
                         // Mobile Data Stream Quality
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -456,32 +458,11 @@ fun SettingsScreen(
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text("Loudness Normalization", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
-                                Text("Level volume peaks & enhance quiet tracks (EBU R128)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("Boost quieter tracks; already-loud songs may lose headroom", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             Switch(
                                 checked = uiState.isLoudnessNormalizationEnabled,
                                 onCheckedChange = viewModel::onToggleLoudnessNormalization,
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
-                                    checkedTrackColor = MaterialTheme.colorScheme.primary
-                                )
-                            )
-                        }
-
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("Auto Mood Equalizer", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
-                                Text("Dynamically adjusts acoustic curves to match active song mood", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            Switch(
-                                checked = uiState.isAutoMoodEqEnabled,
-                                onCheckedChange = viewModel::onToggleAutoMoodEq,
                                 colors = SwitchDefaults.colors(
                                     checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
                                     checkedTrackColor = MaterialTheme.colorScheme.primary
@@ -509,33 +490,11 @@ fun SettingsScreen(
                                 )
                             )
                         }
-
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("Isolate Mood Features", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
-                                Text("Strictly separate Mood Radio from standard songs so they never mix or cross-queue", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            Switch(
-                                checked = settings.isolateMoodFeatures,
-                                onCheckedChange = viewModel::onIsolateMoodFeaturesChanged,
-
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
-                                    checkedTrackColor = MaterialTheme.colorScheme.primary
-                                )
-                            )
-                        }
                     }
                 }
 
-                // ─── SECTION 4: Network & Downloads ──────────────────────────────
-                SettingsSectionHeader(title = "Network & Downloads", icon = Icons.Rounded.Wifi)
+                // ─── SECTION 4: Network ──────────────────────────────────────────
+                SettingsSectionHeader(title = "Network", icon = Icons.Rounded.Wifi)
 
                 Card(
                     shape = RoundedCornerShape(20.dp),
@@ -570,29 +529,8 @@ fun SettingsScreen(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("Download on Wi-Fi Only", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
-                                Text("Save offline tracks over Wi-Fi only", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            Switch(
-                                checked = settings.wifiOnlyDownloads,
-                                onCheckedChange = viewModel::onWifiOnlyDownloadsChanged,
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
-                                    checkedTrackColor = MaterialTheme.colorScheme.primary
-                                )
-                            )
-                        }
-
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
                                 Text("High Quality over Mobile Data", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
-                                Text("Allow Lossless FLAC streams on 4G/5G data", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("Use high-quality streams on 4G/5G (uses more data)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             Switch(
                                 checked = settings.mobileDataHighQuality,
@@ -762,130 +700,6 @@ fun SettingsScreen(
                             Icon(Icons.Rounded.Save, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(6.dp))
                             Text("Save Last.fm Settings", style = MaterialTheme.typography.labelMedium)
-                        }
-                    }
-                }
-
-                // ─── SECTION 6: 🏠 Self-Hosted Server (Navidrome / Subsonic) ────────
-                SettingsSectionHeader(title = "Self-Hosted Music Server", icon = Icons.Rounded.CloudQueue)
-
-                Card(
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("Enable Personal Server", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
-                                Text("Stream your legally owned FLAC/ALAC lossless library (Navidrome, Airsonic, Gonic, Jellyfin)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            Switch(
-                                checked = settings.isNavidromeEnabled,
-                                onCheckedChange = viewModel::onToggleNavidrome,
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
-                                    checkedTrackColor = MaterialTheme.colorScheme.primary
-                                )
-                            )
-                        }
-
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
-                        OutlinedTextField(
-                            value = navidromeUrl,
-                            onValueChange = { navidromeUrl = it },
-                            label = { Text("Server URL") },
-                            placeholder = { Text("https://music.yourdomain.com") },
-                            singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        OutlinedTextField(
-                            value = navidromeUser,
-                            onValueChange = { navidromeUser = it },
-                            label = { Text("Username") },
-                            placeholder = { Text("Server username") },
-                            singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        OutlinedTextField(
-                            value = navidromePass,
-                            onValueChange = { navidromePass = it },
-                            label = { Text("Password or App Token") },
-                            placeholder = { Text("Server password") },
-                            singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        if (uiState.navidromeTestStatus != null) {
-                            Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = if (uiState.navidromeTestStatus?.contains("✅") == true)
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                                else MaterialTheme.colorScheme.error.copy(alpha = 0.15f),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(
-                                    text = uiState.navidromeTestStatus ?: "",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = if (uiState.navidromeTestStatus?.contains("✅") == true)
-                                        MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.error,
-                                    modifier = Modifier.padding(10.dp)
-                                )
-                            }
-                        }
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            OutlinedButton(
-                                onClick = {
-                                    viewModel.testNavidromeConnection(
-                                        serverUrl = navidromeUrl,
-                                        username = navidromeUser,
-                                        password = navidromePass
-                                    )
-                                },
-                                enabled = !uiState.isTestingNavidrome && navidromeUrl.isNotBlank() && navidromeUser.isNotBlank(),
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                if (uiState.isTestingNavidrome) {
-                                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                                } else {
-                                    Icon(Icons.Rounded.WifiTethering, contentDescription = null, modifier = Modifier.size(16.dp))
-                                }
-                                Spacer(Modifier.width(6.dp))
-                                Text("Test Server", style = MaterialTheme.typography.labelMedium)
-                            }
-
-                            Button(
-                                onClick = {
-                                    viewModel.onSaveNavidrome(
-                                        serverUrl = navidromeUrl,
-                                        username = navidromeUser,
-                                        password = navidromePass,
-                                        enabled = true
-                                    )
-                                },
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Icon(Icons.Rounded.Save, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text("Save Server", style = MaterialTheme.typography.labelMedium)
-                            }
                         }
                     }
                 }
@@ -1067,7 +881,7 @@ fun SettingsScreen(
                                                 )
                                                 Spacer(Modifier.height(4.dp))
                                                 Text(
-                                                    text = "• Audiophile DSP & Equalizer: Curated audiophile curves (Flat, Bass Booster, Treble, Vocal, Acoustic, Rock, Electronic) + dynamic Mood-to-EQ matching\n• Loudness Normalization: Native hardware LoudnessEnhancer for EBU R128 dynamic peak leveling & gain boost\n• True Gapless Playback: Seamless track transitions without silence or delays\n• Batch Download Engine: Download entire queues and playlists with background progress tracking\n• Offline Synced Lyrics: Auto-caches lyrics to local disk on download + manual LRCLIB search and custom LRC editor",
+                                                    text = "• YouTube Music browse, search and library\n• High-quality Opus/AAC streaming with auto-radio\n• Audiophile DSP, equalizer and loudness tools\n• Synced lyrics with LRCLIB fallback\n• Material You theming and a full playback queue",
                                                     style = MaterialTheme.typography.bodySmall,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
@@ -1120,7 +934,7 @@ fun SettingsScreen(
                         }
 
                         Text(
-                            text = "MoodTunes is a modern, open-source Android music streaming and offline playback player. Powered by the YouTube Music InnerTube engine with unrestricted streaming, 24-bit audiophile DSP, real-time FFT visualizers, 3D spatial acoustics, and on-device ID3 tag editing.",
+                            text = "MoodTunes is a modern, open-source YouTube Music client. It browses the YouTube Music catalogue, streams full-length audio with an audiophile DSP chain, and keeps your favorites and playlists on-device.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -1134,12 +948,11 @@ fun SettingsScreen(
                                 color = MaterialTheme.colorScheme.primary
                             )
                             Text(
-                                text = "• Offline Song Downloads: Download streams to local MediaStore with offline artwork caching & dedicated Downloads library tab\n" +
-                                       "• YouTube Music Engine: 100% full-track streaming & auto-radio\n" +
-                                       "• Live FFT Audio Visualizers: Neon Bars, Pulse Aura, Cosmic Particles\n" +
+                                text = "• YouTube Music home, search, albums, artists and playlists\n" +
+                                       "• Full-track streaming with automatic radio queues\n" +
+                                       "• Live FFT audio visualizers: Neon Bars, Pulse Aura, Cosmic Particles\n" +
                                        "• 3D Spatial Virtualizer & 6 Reverb Environmental Presets\n" +
-                                       "• ID3 Tag Editor: Edit metadata & embed album art directly on-device\n" +
-                                       "• ListenBrainz Scrobbler & Navidrome / Subsonic Client\n" +
+                                       "• ListenBrainz and Last.fm scrobbling\n" +
                                        "• Material Design 3 Themed Icons & Dynamic Material You Palette",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant

@@ -2,16 +2,13 @@ package com.moodtunes.app.presentation.ui.search
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.moodtunes.app.data.local.preferences.MusicLanguage
 import com.moodtunes.app.data.local.preferences.UserPreferencesRepository
 import com.moodtunes.app.data.remote.OnlineStreamRepository
-import com.moodtunes.app.data.remote.api.SubsonicApiService
 import com.moodtunes.app.domain.model.AudioFormat
 import com.moodtunes.app.domain.model.Playlist
 import com.moodtunes.app.domain.model.Song
 import com.moodtunes.app.domain.model.YouTubeItem
 import com.moodtunes.app.domain.model.YouTubeSearchFilter
-import com.moodtunes.app.domain.repository.IMusicRepository
 import com.moodtunes.app.domain.repository.IPlaylistRepository
 import com.moodtunes.app.domain.usecase.AddSongToPlaylistUseCase
 import com.moodtunes.app.domain.usecase.CreatePlaylistUseCase
@@ -56,7 +53,6 @@ data class AlbumGroup(
 data class SearchUiState(
     val query: String = "",
     val selectedFilter: SearchFilter = SearchFilter.ALL,
-    val localSongs: List<Song> = emptyList(),
     val onlineSongs: List<Song> = emptyList(),
     val lyricResults: List<LyricSearchResult> = emptyList(),
     val matchedPlaylists: List<Playlist> = emptyList(),
@@ -66,37 +62,32 @@ data class SearchUiState(
     val youtubeItems: List<YouTubeItem> = emptyList(),
     val suggestions: List<String> = emptyList(),
     val recentSearches: List<String> = emptyList(),
-    val isSearchingLocal: Boolean = false,
     val isSearchingOnline: Boolean = false,
     val currentSong: Song? = null,
     val isPlaying: Boolean = false,
     val userPlaylists: List<Playlist> = emptyList()
 ) {
     val isEmpty: Boolean
-        get() = query.isNotBlank() && !isSearchingLocal && !isSearchingOnline &&
-                localSongs.isEmpty() && onlineSongs.isEmpty() && lyricResults.isEmpty() &&
+        get() = query.isNotBlank() && !isSearchingOnline &&
+                onlineSongs.isEmpty() && lyricResults.isEmpty() &&
                 matchedPlaylists.isEmpty() && artists.isEmpty() && albums.isEmpty() &&
                 youtubeTopResult == null && youtubeItems.isEmpty()
 }
 
 @HiltViewModel
 class SearchViewModel @Inject constructor(
-    private val musicRepository: IMusicRepository,
     private val playlistRepository: IPlaylistRepository,
     private val onlineStreamRepository: OnlineStreamRepository,
-    private val subsonicApiService: SubsonicApiService,
     private val userPreferencesRepository: UserPreferencesRepository,
     private val playbackManager: PlaybackManager,
     private val toggleFavoriteUseCase: ToggleFavoriteUseCase,
     private val addSongToPlaylistUseCase: AddSongToPlaylistUseCase,
     private val createPlaylistUseCase: CreatePlaylistUseCase,
-    private val downloadManager: com.moodtunes.app.data.local.download.SongDownloadManager,
     private val lrclibService: com.moodtunes.app.data.remote.api.LrclibService
 ) : ViewModel() {
 
     private val _query = MutableStateFlow("")
     private val _selectedFilter = MutableStateFlow(SearchFilter.ALL)
-    private val _localSongs = MutableStateFlow<List<Song>>(emptyList())
     private val _onlineSongs = MutableStateFlow<List<Song>>(emptyList())
     private val _lyricResults = MutableStateFlow<List<LyricSearchResult>>(emptyList())
     private val _matchedPlaylists = MutableStateFlow<List<Playlist>>(emptyList())
@@ -106,19 +97,17 @@ class SearchViewModel @Inject constructor(
     private val _youtubeItems = MutableStateFlow<List<YouTubeItem>>(emptyList())
     private val _suggestions = MutableStateFlow<List<String>>(emptyList())
     private val _recentSearches = MutableStateFlow(userPreferencesRepository.getRecentSearches())
-    private val _isSearchingLocal = MutableStateFlow(false)
     private val _isSearchingOnline = MutableStateFlow(false)
 
-    private var allLocalSongs: List<Song> = emptyList()
     private var allUserPlaylists: List<Playlist> = emptyList()
     private var searchJob: Job? = null
 
     val uiState: StateFlow<SearchUiState> = combine(
-        combine(_query, _selectedFilter, _localSongs, _onlineSongs, _lyricResults) { q, filter, local, online, lyrics ->
-            Tuple5(q, filter, local, online, lyrics)
+        combine(_query, _selectedFilter, _onlineSongs, _lyricResults) { q, filter, online, lyrics ->
+            Tuple4(q, filter, online, lyrics)
         },
-        combine(_matchedPlaylists, _artists, _albums, _recentSearches, _isSearchingLocal) { playlists, artists, albums, recent, searchingLocal ->
-            Tuple5(playlists, artists, albums, recent, searchingLocal)
+        combine(_matchedPlaylists, _artists, _albums, _recentSearches) { playlists, artists, albums, recent ->
+            Tuple4(playlists, artists, albums, recent)
         },
         combine(_isSearchingOnline, playbackManager.currentSong, playbackManager.isPlaying, playlistRepository.getPlaylists()) { searchingOnline, song, isPlaying, playlists ->
             Tuple4(searchingOnline, song, isPlaying, playlists)
@@ -126,12 +115,11 @@ class SearchViewModel @Inject constructor(
         combine(_youtubeTopResult, _youtubeItems, _suggestions) { top, items, suggestions ->
             Tuple3(top, items, suggestions)
         }
-    ) { (q, filter, local, online, lyrics), (playlists, artists, albums, recent, searchingLocal), (searchingOnline, currentSong, isPlaying, userPlaylists), (top, youtubeItems, suggestions) ->
+    ) { (q, filter, online, lyrics), (playlists, artists, albums, recent), (searchingOnline, currentSong, isPlaying, userPlaylists), (top, youtubeItems, suggestions) ->
         this.allUserPlaylists = userPlaylists
         SearchUiState(
             query = q,
             selectedFilter = filter,
-            localSongs = local,
             onlineSongs = online,
             lyricResults = lyrics,
             matchedPlaylists = playlists,
@@ -141,7 +129,6 @@ class SearchViewModel @Inject constructor(
             youtubeItems = youtubeItems,
             suggestions = suggestions,
             recentSearches = recent,
-            isSearchingLocal = searchingLocal,
             isSearchingOnline = searchingOnline,
             currentSong = currentSong,
             isPlaying = isPlaying,
@@ -150,13 +137,7 @@ class SearchViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SearchUiState())
 
     init {
-        loadInitialData()
-    }
-
-    private fun loadInitialData() {
-        viewModelScope.launch {
-            allLocalSongs = musicRepository.getAllSongs()
-        }
+        // Playlist matching is local; songs come from YouTube Music.
     }
 
     fun onQueryChanged(newQuery: String) {
@@ -164,7 +145,6 @@ class SearchViewModel @Inject constructor(
         searchJob?.cancel()
 
         if (newQuery.isBlank()) {
-            _localSongs.value = emptyList()
             _onlineSongs.value = emptyList()
             _lyricResults.value = emptyList()
             _matchedPlaylists.value = emptyList()
@@ -173,19 +153,16 @@ class SearchViewModel @Inject constructor(
             _youtubeTopResult.value = null
             _youtubeItems.value = emptyList()
             _suggestions.value = emptyList()
-            _isSearchingLocal.value = false
             _isSearchingOnline.value = false
             _recentSearches.value = userPreferencesRepository.getRecentSearches()
             return
         }
 
         searchJob = viewModelScope.launch {
-            _isSearchingLocal.value = true
             _isSearchingOnline.value = true
 
-            // Instant local search
-            performLocalSearch(newQuery)
-            _isSearchingLocal.value = false
+            // Instant local playlist matching
+            matchPlaylists(newQuery)
 
             // Debounced online search + typeahead suggestions
             delay(350)
@@ -197,44 +174,14 @@ class SearchViewModel @Inject constructor(
         }
     }
 
-    private fun performLocalSearch(query: String) {
+    private fun matchPlaylists(query: String) {
         val q = query.trim().lowercase()
-
-        // 1. Matching songs
-        val matchedSongs = allLocalSongs.filter {
-            it.title.lowercase().contains(q) ||
-            it.artist.lowercase().contains(q) ||
-            it.album.lowercase().contains(q) ||
-            (it.genre?.lowercase()?.contains(q) == true)
-        }
-        _localSongs.value = matchedSongs
-
-        // 2. Matching artists
-        val matchedArtists = allLocalSongs
-            .filter { it.artist.lowercase().contains(q) }
-            .groupBy { it.artist }
-            .map { (artist, songs) -> ArtistGroup(artist, songs) }
-        _artists.value = matchedArtists
-
-        // 3. Matching albums
-        val matchedAlbums = allLocalSongs
-            .filter { it.album.lowercase().contains(q) && it.album.isNotBlank() }
-            .groupBy { "${it.album}___${it.artist}" }
-            .map { (_, songs) ->
-                val first = songs.first()
-                AlbumGroup(first.album, first.artist, songs)
-            }
-        _albums.value = matchedAlbums
-
-        // 4. Matching playlists
-        val matchedPlaylists = allUserPlaylists.filter {
+        _matchedPlaylists.value = allUserPlaylists.filter {
             it.name.lowercase().contains(q)
         }
-        _matchedPlaylists.value = matchedPlaylists
     }
 
     private suspend fun performOnlineSearch(query: String) = coroutineScope {
-        val settings = userPreferencesRepository.settings.value
         val selectedFilter = _selectedFilter.value
         val youTubeFilter = selectedFilter.toYouTubeFilter()
 
@@ -248,20 +195,6 @@ class SearchViewModel @Inject constructor(
 
         val typedDeferred = async {
             runCatching { onlineStreamRepository.searchPage(query, youTubeFilter) }.getOrNull()
-        }
-
-        val serverDeferred = async {
-            if (settings.isNavidromeEnabled && settings.navidromeServerUrl.isNotBlank()) {
-                subsonicApiService.search(
-                    serverUrl = settings.navidromeServerUrl,
-                    username = settings.navidromeUsername,
-                    password = settings.navidromePassword,
-                    query = query,
-                    limit = 10
-                )
-            } else {
-                emptyList()
-            }
         }
 
         val lyricsDeferred = async {
@@ -301,12 +234,11 @@ class SearchViewModel @Inject constructor(
 
         val onlineSongs = onlineDeferred.await()
         val typedPage = typedDeferred.await()
-        val serverSongs = serverDeferred.await()
         val lyricMatches = lyricsDeferred.await()
 
         if (selectedFilter == SearchFilter.ALL || selectedFilter == SearchFilter.SONGS) {
             val allOnline = SearchRank.rankSongs(
-                (serverSongs + onlineSongs).distinctBy { it.id },
+                onlineSongs.distinctBy { it.id },
                 query
             )
             _onlineSongs.value = allOnline
@@ -322,7 +254,7 @@ class SearchViewModel @Inject constructor(
             it is YouTubeItem.Track || it.id == topResult?.id
         }
 
-        val allCombined = (allLocalSongs + onlineSongs + serverSongs).distinctBy { it.id }
+        val allCombined = onlineSongs.distinctBy { it.id }
         val q = query.trim().lowercase()
 
         val matchedArtists = allCombined
@@ -431,13 +363,7 @@ class SearchViewModel @Inject constructor(
 
     fun toggleFavorite(song: Song) {
         viewModelScope.launch {
-            toggleFavoriteUseCase(song.id)
-            allLocalSongs = allLocalSongs.map {
-                if (it.id == song.id) it.copy(isFavorite = !it.isFavorite) else it
-            }
-            _localSongs.value = _localSongs.value.map {
-                if (it.id == song.id) it.copy(isFavorite = !it.isFavorite) else it
-            }
+            toggleFavoriteUseCase(song)
             _onlineSongs.value = _onlineSongs.value.map {
                 if (it.id == song.id) it.copy(isFavorite = !it.isFavorite) else it
             }
@@ -459,18 +385,11 @@ class SearchViewModel @Inject constructor(
         }
     }
 
-    fun downloadSong(song: Song) = downloadManager.downloadSong(song)
-    fun isDownloaded(songId: Long): Boolean = downloadManager.isDownloaded(songId)
-
     private data class Tuple3<A, B, C>(
         val a: A, val b: B, val c: C
     )
 
     private data class Tuple4<A, B, C, D>(
         val a: A, val b: B, val c: C, val d: D
-    )
-
-    private data class Tuple5<A, B, C, D, E>(
-        val a: A, val b: B, val c: C, val d: D, val e: E
     )
 }

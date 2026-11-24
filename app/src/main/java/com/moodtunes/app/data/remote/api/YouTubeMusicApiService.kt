@@ -3,7 +3,6 @@ package com.moodtunes.app.data.remote.api
 import android.net.Uri
 import com.moodtunes.app.domain.model.AudioFormat
 import com.moodtunes.app.domain.model.LyricsLine
-import com.moodtunes.app.domain.model.MoodType
 import com.moodtunes.app.domain.model.Song
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -115,22 +114,6 @@ class YouTubeMusicApiService @Inject constructor() {
                 parseSearchResults(JSONObject(responseStr), limit)
             }
         }.getOrDefault(emptyList())
-    }
-
-    /**
-     * Fetches curated songs matching an emotional [mood].
-     */
-    suspend fun getSongsByMood(mood: MoodType, limit: Int = 20): List<Song> = withContext(Dispatchers.IO) {
-        val query = when (mood) {
-            MoodType.EUPHORIC -> "Top EDM Dance Festival Hits"
-            MoodType.HAPPY -> "Feel Good Happy Pop Hits"
-            MoodType.CALM -> "Relaxing Acoustic Coffeehouse Chill"
-            MoodType.ENERGETIC -> "High Energy Workout Gym Motivation"
-            MoodType.SAD -> "Emotional Sad Acoustic Songs"
-            MoodType.SLEEP -> "Deep Sleep Ambient Piano Rain"
-        }
-        val tracks = searchSongs(query, limit)
-        tracks.map { it.copy(moodTags = listOf(mood)) }
     }
 
     /**
@@ -445,7 +428,8 @@ class YouTubeMusicApiService @Inject constructor() {
             albumArtUri = artworkUri,
             genre = "YouTube Music",
             isStream = true,
-            audioFormat = AudioFormat.STREAM
+            audioFormat = AudioFormat.STREAM,
+            videoId = videoId
         )
     }
 
@@ -489,7 +473,8 @@ class YouTubeMusicApiService @Inject constructor() {
                         albumArtUri = thumb?.let { Uri.parse(it) },
                         genre = "Radio",
                         isStream = true,
-                        audioFormat = AudioFormat.STREAM
+                        audioFormat = AudioFormat.STREAM,
+                        videoId = videoId
                     )
                 )
             }

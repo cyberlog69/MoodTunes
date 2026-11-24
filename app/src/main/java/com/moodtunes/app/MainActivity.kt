@@ -33,7 +33,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.moodtunes.app.data.local.preferences.DarkModeOption
 import com.moodtunes.app.data.remote.UpdateCheckResult
-import com.moodtunes.app.domain.model.MoodType
 import com.moodtunes.app.platform.AppUpdateNotifier
 import com.moodtunes.app.platform.CrashHandler
 import com.moodtunes.app.presentation.navigation.MoodTunesNavGraph
@@ -47,7 +46,6 @@ class MainActivity : ComponentActivity() {
 
     @Inject lateinit var crashHandler: CrashHandler
 
-    private var deepLinkMood by mutableStateOf<MoodType?>(null)
     private var crashReport by mutableStateOf<String?>(null)
     private var pendingUpdateIntentResult by mutableStateOf<UpdateCheckResult?>(null)
 
@@ -60,7 +58,6 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         requestNotificationPermissionIfNeeded()
-        deepLinkMood = parseMood(intent)
         crashReport = crashHandler.latestCrashReport()
         checkUpdateIntent(intent)
 
@@ -96,7 +93,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    MoodTunesNavGraph(shortcutMood = deepLinkMood)
+                    MoodTunesNavGraph()
 
                     // In-app Update Dialog (triggered on launch or via notification)
                     if (showUpdateDialog && updateResult != null) {
@@ -127,7 +124,6 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        deepLinkMood = parseMood(intent)
         checkUpdateIntent(intent)
     }
 
@@ -153,11 +149,6 @@ class MainActivity : ComponentActivity() {
             )
         }
     }
-
-    private fun parseMood(intent: Intent?): MoodType? {
-        val name = intent?.data?.lastPathSegment ?: return null
-        return MoodType.entries.firstOrNull { it.name == name }
-    }
 }
 
 @Composable
@@ -167,7 +158,7 @@ private fun CrashRecoveryDialog(report: String, onDismiss: () -> Unit) {
         title = { Text("Recovered from a crash") },
         text = {
             Column {
-                Text("Your music library and settings are safe. The app stopped unexpectedly last time.")
+                Text("Your favorites, playlists and settings are safe. The app stopped unexpectedly last time.")
                 Spacer(Modifier.height(12.dp))
                 Text(
                     text = report.take(500),

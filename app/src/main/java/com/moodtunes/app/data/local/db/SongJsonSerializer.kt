@@ -2,9 +2,7 @@ package com.moodtunes.app.data.local.db
 
 import android.net.Uri
 import com.moodtunes.app.domain.model.AudioFormat
-import com.moodtunes.app.domain.model.MoodType
 import com.moodtunes.app.domain.model.Song
-import org.json.JSONArray
 import org.json.JSONObject
 
 /**
@@ -28,7 +26,7 @@ object SongJsonSerializer {
         put("playCount", song.playCount)
         put("lastPlayedAt", song.lastPlayedAt)
         put("audioFormat", song.audioFormat.name)
-        put("moodTags", JSONArray(song.moodTags.map { it.name }))
+        put("videoId", song.videoId ?: song.uri.getQueryParameter("v") ?: JSONObject.NULL)
     }.toString()
 
     fun deserialize(json: String): Song? = runCatching {
@@ -43,16 +41,11 @@ object SongJsonSerializer {
             albumArtUri = if (obj.isNull("albumArtUri")) null else Uri.parse(obj.optString("albumArtUri")),
             genre = if (obj.isNull("genre")) null else obj.optString("genre"),
             isFavorite = obj.optBoolean("isFavorite"),
-            moodTags = runCatching {
-                val arr = obj.optJSONArray("moodTags") ?: JSONArray()
-                (0 until arr.length()).mapNotNull { i ->
-                    runCatching { MoodType.valueOf(arr.optString(i)) }.getOrNull()
-                }
-            }.getOrDefault(emptyList()),
             audioFormat = runCatching { AudioFormat.valueOf(obj.optString("audioFormat")) }.getOrDefault(AudioFormat.MP3),
             isStream = obj.optBoolean("isStream"),
             playCount = obj.optInt("playCount"),
-            lastPlayedAt = obj.optLong("lastPlayedAt")
+            lastPlayedAt = obj.optLong("lastPlayedAt"),
+            videoId = if (obj.isNull("videoId")) null else obj.optString("videoId").takeIf { it.isNotBlank() }
         )
     }.getOrNull()
 }

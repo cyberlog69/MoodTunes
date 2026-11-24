@@ -6,7 +6,6 @@ import android.media.audiofx.LoudnessEnhancer
 import android.media.audiofx.PresetReverb
 import android.media.audiofx.Virtualizer
 import com.moodtunes.app.data.local.preferences.PlaybackPreferencesRepository
-import com.moodtunes.app.domain.model.MoodType
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -90,9 +89,6 @@ class AudioEffectsManager @Inject constructor(
 
     private val _loudnessGainMb = MutableStateFlow(playbackPreferencesRepository.loudnessGainMb)
     val loudnessGainMb: StateFlow<Int> = _loudnessGainMb.asStateFlow()
-
-    private val _isAutoMoodEqEnabled = MutableStateFlow(playbackPreferencesRepository.autoMoodEqEnabled)
-    val isAutoMoodEqEnabled: StateFlow<Boolean> = _isAutoMoodEqEnabled.asStateFlow()
 
     private val _selectedPresetName = MutableStateFlow(playbackPreferencesRepository.selectedPresetName)
     val selectedPresetName: StateFlow<String> = _selectedPresetName.asStateFlow()
@@ -236,31 +232,6 @@ class AudioEffectsManager @Inject constructor(
                 playbackPreferencesRepository.saveEqualizerLevels(levels)
             }
         }
-    }
-
-    /**
-     * Automatically adapts the equalizer curve to match the emotional mood profile.
-     */
-    fun applyMood(mood: MoodType) {
-        if (!_isAutoMoodEqEnabled.value) return
-        val presetName = when (mood) {
-            MoodType.ENERGETIC -> "Bass Booster"
-            MoodType.CALM, MoodType.SLEEP -> "Acoustic"
-            MoodType.HAPPY, MoodType.EUPHORIC -> "Rock"
-            MoodType.SAD -> "Vocal Booster"
-        }
-        applyPresetByName(presetName)
-    }
-
-    fun resetMoodEq() {
-        if (!_isAutoMoodEqEnabled.value) return
-        val savedPreset = playbackPreferencesRepository.selectedPresetName
-        applyPresetByName(savedPreset)
-    }
-
-    fun toggleAutoMoodEq(enabled: Boolean) {
-        playbackPreferencesRepository.autoMoodEqEnabled = enabled
-        _isAutoMoodEqEnabled.value = enabled
     }
 
     // ── Loudness Normalization (EBU R128 / ReplayGain) ────────────────────────

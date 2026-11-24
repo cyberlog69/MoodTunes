@@ -11,8 +11,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBackIosNew
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -33,8 +37,12 @@ import com.moodtunes.app.presentation.ui.components.MiniPlayer
 @Composable
 fun DiscoverScreen(
     viewModel: DiscoverViewModel = hiltViewModel(),
-    onNavigateBack: () -> Unit,
+    isRoot: Boolean = false,
+    onNavigateBack: (() -> Unit)? = null,
     onNavigateToPlayer: () -> Unit,
+    onNavigateToLibrary: () -> Unit = {},
+    onNavigateToSearch: () -> Unit = {},
+    onNavigateToSettings: () -> Unit = {},
     onOpenYouTubePage: (browseId: String, params: String?) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -47,23 +55,32 @@ fun DiscoverScreen(
                     .padding(horizontal = 8.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onNavigateBack) {
-                    Icon(
-                        Icons.Rounded.ArrowBackIosNew,
-                        contentDescription = "Back",
-                        tint = MaterialTheme.colorScheme.onBackground
-                    )
+                if (!isRoot && onNavigateBack != null) {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(
+                            Icons.Rounded.ArrowBackIosNew,
+                            contentDescription = "Back",
+                            tint = MaterialTheme.colorScheme.onBackground
+                        )
+                    }
                 }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Discover",
+                        text = "MoodTunes",
                         style = MaterialTheme.typography.headlineSmall,
                         color = MaterialTheme.colorScheme.onBackground
                     )
                     Text(
-                        text = "The YouTube Music catalogue, mood-first",
+                        text = "YouTube Music",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(onClick = onNavigateToSearch) {
+                    Icon(
+                        Icons.Rounded.Search,
+                        contentDescription = "Search",
+                        tint = MaterialTheme.colorScheme.onBackground
                     )
                 }
                 IconButton(onClick = viewModel::refresh) {
@@ -71,6 +88,13 @@ fun DiscoverScreen(
                         Icons.Rounded.Refresh,
                         contentDescription = "Refresh",
                         tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+                IconButton(onClick = onNavigateToSettings) {
+                    Icon(
+                        Icons.Rounded.Settings,
+                        contentDescription = "Settings",
+                        tint = MaterialTheme.colorScheme.onBackground
                     )
                 }
             }
@@ -106,7 +130,11 @@ fun DiscoverScreen(
                 }
 
                 else -> {
-                    val bottomPadding = if (uiState.currentSong != null) 96.dp else 24.dp
+                    val bottomPadding = when {
+                        isRoot -> 176.dp
+                        uiState.currentSong != null -> 96.dp
+                        else -> 24.dp
+                    }
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(top = 8.dp, bottom = bottomPadding)
@@ -140,21 +168,53 @@ fun DiscoverScreen(
             }
         }
 
-        uiState.currentSong?.let { song ->
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .navigationBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-            ) {
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+        ) {
+            uiState.currentSong?.let { song ->
                 MiniPlayer(
                     song = song,
                     isPlaying = uiState.isPlaying,
-                    mood = null,
                     onPlayPauseClick = viewModel::playPause,
-                    onExpandClick = onNavigateToPlayer
+                    onExpandClick = onNavigateToPlayer,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 6.dp)
                 )
+            }
+
+            if (isRoot) {
+                NavigationBar(
+                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+                    tonalElevation = 0.dp
+                ) {
+                    NavigationBarItem(
+                        selected = true,
+                        onClick = {},
+                        icon = { Icon(Icons.Rounded.Home, contentDescription = null) },
+                        label = { Text("Home") }
+                    )
+                    NavigationBarItem(
+                        selected = false,
+                        onClick = onNavigateToLibrary,
+                        icon = { Icon(Icons.Rounded.LibraryMusic, contentDescription = null) },
+                        label = { Text("Library") }
+                    )
+                    NavigationBarItem(
+                        selected = false,
+                        onClick = onNavigateToSearch,
+                        icon = { Icon(Icons.Rounded.Search, contentDescription = null) },
+                        label = { Text("Search") }
+                    )
+                    NavigationBarItem(
+                        selected = false,
+                        onClick = onNavigateToSettings,
+                        icon = { Icon(Icons.Rounded.Settings, contentDescription = null) },
+                        label = { Text("Settings") }
+                    )
+                }
             }
         }
     }

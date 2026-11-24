@@ -7,7 +7,6 @@ import androidx.lifecycle.viewModelScope
 import com.moodtunes.app.BuildConfig
 import com.moodtunes.app.data.local.backup.BackupManager
 import com.moodtunes.app.data.local.preferences.AppUserSettings
-import com.moodtunes.app.data.local.preferences.AudioSourceMode
 import com.moodtunes.app.data.local.preferences.DarkModeOption
 import com.moodtunes.app.data.local.preferences.MusicLanguage
 import com.moodtunes.app.data.local.preferences.StreamQuality
@@ -15,7 +14,6 @@ import com.moodtunes.app.data.local.preferences.UserPreferencesRepository
 import com.moodtunes.app.data.remote.AppUpdateManager
 import com.moodtunes.app.data.remote.UpdateCheckResult
 import com.moodtunes.app.data.remote.UpdateChecker
-import com.moodtunes.app.data.remote.api.SubsonicApiService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import com.moodtunes.app.service.AudioEffectsManager
 import com.moodtunes.app.service.PlaybackManager
@@ -31,10 +29,7 @@ data class SettingsUiState(
     val isDownloading: Boolean = false,
     val downloadProgress: Int = 0,
     val whatsNewVersion: String? = null,
-    val isTestingNavidrome: Boolean = false,
-    val navidromeTestStatus: String? = null,
     val isLoudnessNormalizationEnabled: Boolean = false,
-    val isAutoMoodEqEnabled: Boolean = false,
     val isGaplessPlaybackEnabled: Boolean = true,
     val message: String? = null
 )
@@ -45,7 +40,6 @@ class SettingsViewModel @Inject constructor(
     private val updateChecker: UpdateChecker,
     private val appUpdateManager: AppUpdateManager,
     private val backupManager: BackupManager,
-    private val subsonicApiService: SubsonicApiService,
     private val audioEffectsManager: AudioEffectsManager,
     private val playbackManager: PlaybackManager
 ) : ViewModel() {
@@ -56,13 +50,11 @@ class SettingsViewModel @Inject constructor(
         _uiState,
         preferencesRepository.settings,
         audioEffectsManager.isLoudnessNormalizationEnabled,
-        audioEffectsManager.isAutoMoodEqEnabled,
         playbackManager.isGaplessPlaybackEnabled
-    ) { baseState, settings, loudness, moodEq, gapless ->
+    ) { baseState, settings, loudness, gapless ->
         baseState.copy(
             userSettings = settings,
             isLoudnessNormalizationEnabled = loudness,
-            isAutoMoodEqEnabled = moodEq,
             isGaplessPlaybackEnabled = gapless
         )
     }.stateIn(
@@ -119,28 +111,12 @@ class SettingsViewModel @Inject constructor(
         preferencesRepository.updateWifiOnlyStreaming(enabled)
     }
 
-    fun onWifiOnlyDownloadsChanged(enabled: Boolean) {
-        preferencesRepository.updateWifiOnlyDownloads(enabled)
-    }
-
     fun onMobileDataHighQualityChanged(enabled: Boolean) {
         preferencesRepository.updateMobileDataHighQuality(enabled)
     }
 
-    fun onAudioSourceModeChanged(mode: AudioSourceMode) {
-        preferencesRepository.updateAudioSourceMode(mode)
-    }
-
     fun onToggleLoudnessNormalization(enabled: Boolean) {
         audioEffectsManager.toggleLoudnessNormalization(enabled)
-    }
-
-    fun onToggleAutoMoodEq(enabled: Boolean) {
-        audioEffectsManager.toggleAutoMoodEq(enabled)
-    }
-
-    fun onIsolateMoodFeaturesChanged(enabled: Boolean) {
-        preferencesRepository.updateIsolateMoodFeatures(enabled)
     }
 
     fun onToggleGapless(enabled: Boolean) {
@@ -211,42 +187,6 @@ class SettingsViewModel @Inject constructor(
 
     fun onToggleLastFmScrobbling(enabled: Boolean) {
         preferencesRepository.toggleLastFmScrobbling(enabled)
-    }
-
-    // ── Navidrome / Subsonic Controls ─────────────────────────────────────────
-    fun onSaveNavidrome(serverUrl: String, username: String, password: String, enabled: Boolean) {
-        subsonicApiService.validateServerUrl(serverUrl).onFailure { error ->
-            _uiState.update { it.copy(message = "${error.message}") }
-            return
-        }
-        preferencesRepository.updateNavidromeConfig(serverUrl, username, password, enabled)
-        _uiState.update { it.copy(message = "Music server configuration saved ✅") }
-    }
-
-    fun onToggleNavidrome(enabled: Boolean) {
-        preferencesRepository.updateNavidromeEnabled(enabled)
-    }
-
-    fun testNavidromeConnection(serverUrl: String, username: String, password: String) {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isTestingNavidrome = true, navidromeTestStatus = null) }
-            val result = subsonicApiService.ping(serverUrl, username, password)
-            _uiState.update {
-                it.copy(
-                    isTestingNavidrome = false,
-                    navidromeTestStatus = if (result.isSuccess) {
-                        "Connected to Subsonic Server successfully! ✅"
-                    } else {
-                        val errorMsg = result.exceptionOrNull()?.localizedMessage ?: "Connection failed"
-                        "Connection failed: $errorMsg ❌"
-                    }
-                )
-            }
-        }
-    }
-
-    fun clearNavidromeTestStatus() {
-        _uiState.update { it.copy(navidromeTestStatus = null) }
     }
 
     fun startInAppUpdate(context: Context) {

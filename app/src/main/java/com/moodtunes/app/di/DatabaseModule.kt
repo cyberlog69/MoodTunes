@@ -6,7 +6,6 @@ import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.moodtunes.app.data.local.db.MoodTunesDatabase
 import com.moodtunes.app.data.local.db.MoodTunesDbGuardian
-import com.moodtunes.app.data.local.db.dao.MoodHistoryDao
 import com.moodtunes.app.data.local.db.dao.PlaylistDao
 import com.moodtunes.app.data.local.db.dao.SongDao
 import dagger.Module
@@ -33,10 +32,10 @@ object DatabaseModule {
             MoodTunesDatabase.DATABASE_NAME
         )
             .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
-            .addMigrations(MoodTunesDatabase.MIGRATION_4_5)
+            .addMigrations(MoodTunesDatabase.MIGRATION_4_5, MoodTunesDatabase.MIGRATION_5_6)
             // No destructive fallback: unknown schema transitions must fail loudly
             // (and be covered by an explicit Migration) instead of silently wiping
-            // the user's library, favourites, playlists and mood history.
+            // the user's favourites and playlists.
             .addCallback(object : RoomDatabase.Callback() {
                 override fun onOpen(db: SupportSQLiteDatabase) {
                     super.onOpen(db)
@@ -60,9 +59,6 @@ object DatabaseModule {
 
     @Provides
     fun provideSongDao(db: MoodTunesDatabase): SongDao = db.songDao()
-
-    @Provides
-    fun provideMoodHistoryDao(db: MoodTunesDatabase): MoodHistoryDao = db.moodHistoryDao()
 
     @Provides
     fun providePlaylistDao(db: MoodTunesDatabase): PlaylistDao = db.playlistDao()

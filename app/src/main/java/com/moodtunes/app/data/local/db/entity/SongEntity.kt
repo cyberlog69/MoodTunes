@@ -4,9 +4,7 @@ import android.net.Uri
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import com.moodtunes.app.domain.model.AudioFormat
-import com.moodtunes.app.domain.model.MoodType
 import com.moodtunes.app.domain.model.Song
-import org.json.JSONArray
 
 @Entity(tableName = "songs")
 data class SongEntity(
@@ -19,11 +17,11 @@ data class SongEntity(
     val albumArtUriString: String?,
     val genre: String?,
     val isFavorite: Boolean = false,
-    val moodTagsJson: String = "[]",
     val audioFormatName: String = "MP3",
     val isStream: Boolean = false,
     val playCount: Int = 0,
-    val lastPlayedAt: Long = 0
+    val lastPlayedAt: Long = 0,
+    val videoId: String? = null
 )
 
 fun SongEntity.toDomain(): Song = Song(
@@ -36,16 +34,11 @@ fun SongEntity.toDomain(): Song = Song(
     albumArtUri = albumArtUriString?.let { Uri.parse(it) },
     genre = genre,
     isFavorite = isFavorite,
-    moodTags = runCatching {
-        val arr = JSONArray(moodTagsJson)
-        (0 until arr.length()).mapNotNull { i ->
-            runCatching { MoodType.valueOf(arr.getString(i)) }.getOrNull()
-        }
-    }.getOrDefault(emptyList()),
     audioFormat = runCatching { AudioFormat.valueOf(audioFormatName) }.getOrDefault(AudioFormat.MP3),
     isStream = isStream,
     playCount = playCount,
-    lastPlayedAt = lastPlayedAt
+    lastPlayedAt = lastPlayedAt,
+    videoId = videoId ?: Uri.parse(uriString).getQueryParameter("v")
 )
 
 fun Song.toEntity(): SongEntity = SongEntity(
@@ -58,9 +51,9 @@ fun Song.toEntity(): SongEntity = SongEntity(
     albumArtUriString = albumArtUri?.toString(),
     genre = genre,
     isFavorite = isFavorite,
-    moodTagsJson = JSONArray(moodTags.map { it.name }).toString(),
     audioFormatName = audioFormat.name,
     isStream = isStream,
     playCount = playCount,
-    lastPlayedAt = lastPlayedAt
+    lastPlayedAt = lastPlayedAt,
+    videoId = videoId ?: uri.getQueryParameter("v")
 )

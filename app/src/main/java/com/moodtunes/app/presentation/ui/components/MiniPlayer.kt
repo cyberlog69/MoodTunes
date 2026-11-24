@@ -21,7 +21,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import com.moodtunes.app.domain.model.MoodType
 import com.moodtunes.app.domain.model.Song
 import com.moodtunes.app.presentation.ui.theme.EuphoricGradientStart
 
@@ -32,14 +31,13 @@ import com.moodtunes.app.presentation.ui.theme.EuphoricGradientStart
 fun MiniPlayer(
     song: Song,
     isPlaying: Boolean,
-    mood: MoodType?,
     onPlayPauseClick: () -> Unit,
     onSkipPreviousClick: () -> Unit = {},
     onSkipNextClick: () -> Unit = {},
     onExpandClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val accentColor = mood?.gradientStart ?: EuphoricGradientStart
+    val accentColor = EuphoricGradientStart
     val animatedAccent by animateColorAsState(
         targetValue = accentColor,
         animationSpec = tween(500),

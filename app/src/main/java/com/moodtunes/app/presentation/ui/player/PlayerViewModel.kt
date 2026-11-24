@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import androidx.media3.common.Player
 import com.moodtunes.app.data.local.lyrics.LyricsRepository
 import com.moodtunes.app.domain.model.LyricsLine
-import com.moodtunes.app.domain.model.MoodType
 import com.moodtunes.app.domain.model.Song
 import com.moodtunes.app.domain.usecase.ToggleFavoriteUseCase
 import com.moodtunes.app.platform.AudioOutputInfo
@@ -31,7 +30,6 @@ data class PlayerUiState(
     val durationMs: Long = 0L,
     val isShuffleEnabled: Boolean = false,
     val repeatMode: RepeatMode = RepeatMode.OFF,
-    val selectedMood: MoodType? = null,
     val playbackSpeed: Float = 1f,
     val playbackPitch: Float = 1f,
     val pitchSemitones: Int = 0,
@@ -41,7 +39,6 @@ data class PlayerUiState(
     val currentTrackDjInfo: com.moodtunes.app.service.dj.DjTrackInfo? = null,
     val playerDeckStyle: com.moodtunes.app.data.local.preferences.PlayerDeckStyle = com.moodtunes.app.data.local.preferences.PlayerDeckStyle.VINYL,
     val isPerformanceMode: Boolean = false,
-    val isSmartShuffleEnabled: Boolean = false,
     val isCrossfadeEnabled: Boolean = false,
     val crossfadeDurationMs: Int = 1500,
     val sleepTimerRemainingMs: Long? = null,
@@ -67,11 +64,8 @@ data class PlayerUiState(
     val audioOutput: AudioOutputInfo? = null,
     val castMessage: String? = null,
     val playbackError: PlaybackError? = null,
-    val isDownloaded: Boolean = false,
-    val downloadProgress: Float? = null,
     val isLoudnessNormalizationEnabled: Boolean = false,
     val loudnessGainMb: Int = 300,
-    val isAutoMoodEqEnabled: Boolean = false,
     val selectedEqPreset: String = "Flat",
     val isGaplessPlaybackEnabled: Boolean = true,
     val isLyricsSearchDialogOpen: Boolean = false,
@@ -94,7 +88,6 @@ class PlayerViewModel @Inject constructor(
     private val lyricsRepository: LyricsRepository,
     private val castPlaybackManager: CastPlaybackManager,
     private val audioOutputMonitor: AudioOutputMonitor,
-    private val downloadManager: com.moodtunes.app.data.local.download.SongDownloadManager,
     private val userPreferencesRepository: com.moodtunes.app.data.local.preferences.UserPreferencesRepository
 ) : ViewModel() {
 
@@ -180,12 +173,6 @@ class PlayerViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            playbackManager.currentMood.collectLatest { mood ->
-                _uiState.update { it.copy(selectedMood = mood) }
-            }
-        }
-
-        viewModelScope.launch {
             playbackManager.isShuffleEnabled.collectLatest { shuffle ->
                 _uiState.update { it.copy(isShuffleEnabled = shuffle) }
             }
@@ -211,12 +198,6 @@ class PlayerViewModel @Inject constructor(
         viewModelScope.launch {
             playbackManager.playbackPitch.collectLatest { pitch ->
                 _uiState.update { it.copy(playbackPitch = pitch) }
-            }
-        }
-
-        viewModelScope.launch {
-            playbackManager.isSmartShuffleEnabled.collectLatest { ss ->
-                _uiState.update { it.copy(isSmartShuffleEnabled = ss) }
             }
         }
 
@@ -324,12 +305,6 @@ class PlayerViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            audioEffectsManager.isAutoMoodEqEnabled.collectLatest { auto ->
-                _uiState.update { it.copy(isAutoMoodEqEnabled = auto) }
-            }
-        }
-
-        viewModelScope.launch {
             audioEffectsManager.selectedPresetName.collectLatest { preset ->
                 _uiState.update { it.copy(selectedEqPreset = preset) }
             }
@@ -372,35 +347,6 @@ class PlayerViewModel @Inject constructor(
                 _uiState.update { it.copy(audioOutput = output) }
             }
         }
-
-        viewModelScope.launch {
-            combine(
-                playbackManager.currentSong,
-                downloadManager.downloadedSongIds,
-                downloadManager.downloadStates
-            ) { song, downloadedIds, states ->
-                if (song == null) {
-                    false to null
-                } else {
-                    val isDl = downloadedIds.contains(song.id)
-                    val state = states[song.id]
-                    val progress = if (state is com.moodtunes.app.data.local.download.DownloadState.Downloading) state.progress else null
-                    isDl to progress
-                }
-            }.collectLatest { (isDl, prog) ->
-                _uiState.update { it.copy(isDownloaded = isDl, downloadProgress = prog) }
-            }
-        }
-    }
-
-    fun downloadCurrentSong() {
-        val song = uiState.value.currentSong ?: return
-        downloadManager.downloadSong(song)
-    }
-
-    fun deleteCurrentSongDownload() {
-        val song = uiState.value.currentSong ?: return
-        downloadManager.deleteDownloadedSong(song)
     }
 
     fun playPause() = playbackManager.playPause()
@@ -412,17 +358,12 @@ class PlayerViewModel @Inject constructor(
     fun toggleShuffle() = playbackManager.toggleShuffle()
     fun toggleRepeat() = playbackManager.toggleRepeat()
     fun cycleRepeatMode() = playbackManager.toggleRepeat()
-    fun toggleSmartShuffle() = playbackManager.toggleSmartShuffle()
 
     fun toggleFavorite() {
-        val songId = uiState.value.currentSong?.id ?: return
-        toggleFavorite(songId)
-    }
-
-    fun toggleFavorite(songId: Long) {
+        val song = uiState.value.currentSong ?: return
         viewModelScope.launch {
-            val isFav = toggleFavoriteUseCase(songId)
-            playbackManager.updateFavorite(songId, isFav)
+            val isFav = toggleFavoriteUseCase(song)
+            playbackManager.updateFavorite(song.id, isFav)
         }
     }
 
@@ -466,6 +407,7 @@ class PlayerViewModel @Inject constructor(
     // ── DJ Mode & Harmonic Mix ───────────────────────────────────────────────
     fun toggleDjMode(enabled: Boolean) = playbackManager.toggleDjMode(enabled)
     fun setDjVibe(vibe: com.moodtunes.app.service.dj.DjVibe) = playbackManager.setDjVibe(vibe)
+
     fun applyDjHarmonicMix() = playbackManager.applyDjHarmonicMix()
 
     // ── Player Deck Layout Style ─────────────────────────────────────────────
@@ -504,17 +446,9 @@ class PlayerViewModel @Inject constructor(
     fun resetEqualizer() = playbackManager.resetEqualizer()
     fun applyEqualizerPreset(presetIndex: Int) = playbackManager.applyEqualizerPreset(presetIndex)
     fun applyEqualizerPresetByName(presetName: String) = playbackManager.applyEqualizerPresetByName(presetName)
-    fun toggleAutoMoodEq(enabled: Boolean) = playbackManager.toggleAutoMoodEq(enabled)
     fun toggleLoudnessNormalization(enabled: Boolean) = playbackManager.toggleLoudnessNormalization(enabled)
     fun setLoudnessGainMb(gainMb: Int) = playbackManager.setLoudnessGainMb(gainMb)
     fun setGaplessPlaybackEnabled(enabled: Boolean) = playbackManager.setGaplessPlaybackEnabled(enabled)
-
-    // ── Batch Downloads ───────────────────────────────────────────────────────
-    fun downloadRemainingQueue() {
-        val currentIdx = _uiState.value.currentSongIndex
-        val songs = _uiState.value.songs.drop(currentIdx.coerceAtLeast(0))
-        downloadManager.downloadSongs(songs, batchName = "Queue")
-    }
 
     // ── Manual Lyrics Matcher & Editor ───────────────────────────────────────
     fun openLyricsSearchDialog() {
@@ -619,10 +553,6 @@ class PlayerViewModel @Inject constructor(
         } else {
             _uiState.update { it.copy(castMessage = "No Chromecast device connected") }
         }
-    }
-
-    fun exitMoodMode() {
-        playbackManager.clearMood()
     }
 
     fun clearCastMessage() {

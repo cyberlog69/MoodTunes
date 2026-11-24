@@ -167,7 +167,6 @@ fun YouTubePageScreen(
                 MiniPlayer(
                     song = song,
                     isPlaying = isPlaying,
-                    mood = null,
                     onPlayPauseClick = viewModel::playPause,
                     onExpandClick = onNavigateToPlayer
                 )

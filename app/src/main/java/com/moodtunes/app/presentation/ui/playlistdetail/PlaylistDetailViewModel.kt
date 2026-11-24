@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.moodtunes.app.domain.model.Playlist
 import com.moodtunes.app.domain.model.Song
+import com.moodtunes.app.domain.repository.IMusicRepository
 import com.moodtunes.app.domain.usecase.*
 import com.moodtunes.app.service.PlaybackManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -28,18 +29,15 @@ data class PlaylistDetailUiState(
 class PlaylistDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val getPlaylistUseCase: GetPlaylistUseCase,
-    private val getAllSongsUseCase: GetAllSongsUseCase,
+    private val musicRepository: IMusicRepository,
     private val addSongToPlaylistUseCase: AddSongToPlaylistUseCase,
     private val removeSongFromPlaylistUseCase: RemoveSongFromPlaylistUseCase,
     private val moveSongInPlaylistUseCase: MoveSongInPlaylistUseCase,
     private val renamePlaylistUseCase: RenamePlaylistUseCase,
     private val deletePlaylistUseCase: DeletePlaylistUseCase,
     private val updatePlaylistCoverUseCase: UpdatePlaylistCoverUseCase,
-    private val playbackManager: PlaybackManager,
-    private val downloadManager: com.moodtunes.app.data.local.download.SongDownloadManager
+    private val playbackManager: PlaybackManager
 ) : ViewModel() {
-
-    val batchProgress: StateFlow<com.moodtunes.app.data.local.download.BatchDownloadProgress?> = downloadManager.batchProgress
 
     private val playlistId: Long = savedStateHandle.get<Long>("playlistId") ?: -1L
     private val _showPicker = MutableStateFlow(false)
@@ -91,19 +89,13 @@ class PlaylistDetailViewModel @Inject constructor(
     fun playAll() {
         val playlist = uiState.value.playlist ?: return
         if (playlist.songs.isEmpty()) return
-        playbackManager.playSongs(playlist.songs, 0, mood = null)
-    }
-
-    fun downloadAllSongs() {
-        val playlist = uiState.value.playlist ?: return
-        if (playlist.songs.isEmpty()) return
-        downloadManager.downloadSongs(playlist.songs, playlist.name)
+        playbackManager.playSongs(playlist.songs, 0)
     }
 
     fun playSong(index: Int) {
         val playlist = uiState.value.playlist ?: return
         if (index !in playlist.songs.indices) return
-        playbackManager.playSongs(playlist.songs, index, mood = null)
+        playbackManager.playSongs(playlist.songs, index)
     }
 
     fun removeSong(songId: Long) {
@@ -146,7 +138,8 @@ class PlaylistDetailViewModel @Inject constructor(
     // ── Add-songs picker ─────────────────────────────────────────────────────
     fun openPicker() {
         viewModelScope.launch {
-            val songs = getAllSongsUseCase()
+            val songs = runCatching { musicRepository.getFavoriteSongs().first() }
+                .getOrDefault(emptyList())
             _pickerSongs.value = songs
             _showPicker.value = true
         }

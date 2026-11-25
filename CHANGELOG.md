@@ -4,6 +4,25 @@ All notable changes to MoodTunes are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows
 [Semantic Versioning](https://semver.org/).
 
+## [3.0.2] - 2026-11-25
+
+### Fixed
+
+- **“Update available” no longer repeats after updating.** The update checker
+  cached the `isUpdateAvailable` flag from the previous app version and kept
+  serving it after the in-app update. Cache entries are now tied to the running
+  version, and availability is recomputed against the installed version instead
+  of trusting the stored boolean.
+- **The launch dialog appears once per release.** A dismissed prompt is not
+  shown again on every launch for the same version; the notification and the
+  manual Settings check are unaffected.
+- **Stale update notifications are cleared** when the app is already on the
+  latest version.
+- **Settings → Check for Updates always queries GitHub** instead of returning a
+  cached result.
+- **Version comparison handles numeric segments and build suffixes** (for
+  example `3.0.9` vs `3.0.10`, and `3.0.1-beta`).
+
 ## [3.0.1] - 2026-11-25
 
 Focused cleanup: scrobbling, karaoke and DJ mixing are gone, leaving a leaner

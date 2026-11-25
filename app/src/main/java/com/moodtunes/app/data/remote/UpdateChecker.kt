@@ -38,27 +38,41 @@ class UpdateChecker @Inject constructor(
         force: Boolean = false,
         currentVersion: String = BuildConfig.VERSION_NAME
     ): UpdateCheckResult = withContext(Dispatchers.IO) {
+        val normalizedCurrent = normalizeVersion(currentVersion)
         val lastCheckTime = prefs.getLong(KEY_LAST_CHECK_TIME, 0L)
         val now = System.currentTimeMillis()
 
-        if (!force && (now - lastCheckTime < CACHE_DURATION_MILLIS)) {
-            val cachedVersion = prefs.getString(KEY_CACHED_LATEST_VERSION, null)
-            if (cachedVersion != null) {
-                val isAvailable = prefs.getBoolean(KEY_CACHED_IS_AVAILABLE, false)
-                val releaseNotes = prefs.getString(KEY_CACHED_RELEASE_NOTES, "") ?: ""
-                val downloadUrl = prefs.getString(KEY_CACHED_DOWNLOAD_URL, "https://github.com/cyberlog69/MoodTunes/releases") ?: "https://github.com/cyberlog69/MoodTunes/releases"
-                val apkDownloadUrl = prefs.getString(KEY_CACHED_APK_URL, "") ?: ""
+        // A cache written by a different app version must never be trusted:
+        // otherwise the "update available" result from before an in-app update
+        // survives the upgrade and keeps prompting for the version already
+        // installed.
+        val cachedForVersion = prefs.getString(KEY_CACHED_FOR_VERSION, null)
+        val cacheUsable = !force &&
+            cachedForVersion == normalizedCurrent &&
+            (now - lastCheckTime < CACHE_DURATION_MILLIS)
+        val cachedVersion = prefs.getString(KEY_CACHED_LATEST_VERSION, null)
 
-                Timber.d("UpdateChecker: Using cached result for %s (isAvailable=%b)", cachedVersion, isAvailable)
-                return@withContext UpdateCheckResult(
-                    isUpdateAvailable = isAvailable,
-                    latestVersion = cachedVersion,
-                    currentVersion = "v$currentVersion",
-                    releaseNotes = releaseNotes,
-                    downloadUrl = downloadUrl,
-                    apkDownloadUrl = apkDownloadUrl
-                )
+        if (cacheUsable && cachedVersion != null) {
+            val cachedLatest = normalizeVersion(cachedVersion)
+            // Re-evaluate against the running version instead of trusting the
+            // stored boolean, so a stale "true" cannot outlive the update.
+            val isAvailable = isVersionNewer(normalizedCurrent, cachedLatest)
+            if (prefs.getBoolean(KEY_CACHED_IS_AVAILABLE, false) != isAvailable) {
+                prefs.edit().putBoolean(KEY_CACHED_IS_AVAILABLE, isAvailable).apply()
             }
+            val releaseNotes = prefs.getString(KEY_CACHED_RELEASE_NOTES, "") ?: ""
+            val downloadUrl = prefs.getString(KEY_CACHED_DOWNLOAD_URL, "https://github.com/cyberlog69/MoodTunes/releases") ?: "https://github.com/cyberlog69/MoodTunes/releases"
+            val apkDownloadUrl = prefs.getString(KEY_CACHED_APK_URL, "") ?: ""
+
+            Timber.d("UpdateChecker: Using cached result for %s (isAvailable=%b)", cachedLatest, isAvailable)
+            return@withContext UpdateCheckResult(
+                isUpdateAvailable = isAvailable,
+                latestVersion = "v$cachedLatest",
+                currentVersion = "v$normalizedCurrent",
+                releaseNotes = releaseNotes,
+                downloadUrl = downloadUrl,
+                apkDownloadUrl = apkDownloadUrl
+            )
         }
 
         try {
@@ -73,7 +87,7 @@ class UpdateChecker @Inject constructor(
                     val body = response.body?.string()
                     if (body != null) {
                         val json = JSONObject(body)
-                        val tagName = json.optString("tag_name", "v1.0.0").replace("v", "")
+                        val tagName = normalizeVersion(json.optString("tag_name", "v1.0.0"))
                         val bodyText = json.optString("body", "Bug fixes and performance improvements.")
                         val htmlUrl = json.optString("html_url", "https://github.com/cyberlog69/MoodTunes/releases")
 
@@ -98,19 +112,19 @@ class UpdateChecker @Inject constructor(
                             }
                         }
 
-                        val sanitizedVersion = tagName.filter { it.isDigit() || it == '.' }
-                            .ifEmpty { "1.0.0" }
+                        val sanitizedVersion = normalizeVersion(tagName)
 
                         if (directApkUrl.isEmpty()) {
                             directApkUrl = "https://github.com/cyberlog69/MoodTunes/releases/download/v$sanitizedVersion/MoodTunes-v$sanitizedVersion.apk"
                         }
 
-                        val isNewer = isVersionNewer(currentVersion, sanitizedVersion)
+                        val isNewer = isVersionNewer(normalizedCurrent, sanitizedVersion)
                         val latestVersionTag = "v$sanitizedVersion"
 
                         prefs.edit()
                             .putLong(KEY_LAST_CHECK_TIME, now)
                             .putBoolean(KEY_CACHED_IS_AVAILABLE, isNewer)
+                            .putString(KEY_CACHED_FOR_VERSION, normalizedCurrent)
                             .putString(KEY_CACHED_LATEST_VERSION, latestVersionTag)
                             .putString(KEY_CACHED_RELEASE_NOTES, bodyText)
                             .putString(KEY_CACHED_DOWNLOAD_URL, safeDownloadUrl)
@@ -120,7 +134,7 @@ class UpdateChecker @Inject constructor(
                         return@withContext UpdateCheckResult(
                             isUpdateAvailable = isNewer,
                             latestVersion = latestVersionTag,
-                            currentVersion = "v$currentVersion",
+                            currentVersion = "v$normalizedCurrent",
                             releaseNotes = bodyText,
                             downloadUrl = safeDownloadUrl,
                             apkDownloadUrl = directApkUrl
@@ -134,15 +148,28 @@ class UpdateChecker @Inject constructor(
 
         UpdateCheckResult(
             isUpdateAvailable = false,
-            latestVersion = "v$currentVersion",
-            currentVersion = "v$currentVersion",
+            latestVersion = "v$normalizedCurrent",
+            currentVersion = "v$normalizedCurrent",
             releaseNotes = "You are running the latest version of MoodTunes."
         )
     }
 
-    private fun isVersionNewer(current: String, latest: String): Boolean {
-        val currParts = current.replace("v", "").split(".").mapNotNull { it.toIntOrNull() }
-        val lateParts = latest.replace("v", "").split(".").mapNotNull { it.toIntOrNull() }
+    /**
+     * Returns true at most once per release for the launch-time dialog. The
+     * notification and the manual Settings check remain independent.
+     */
+    fun consumePrompt(result: UpdateCheckResult): Boolean {
+        if (!result.isUpdateAvailable) return false
+        val latest = normalizeVersion(result.latestVersion)
+        val lastPrompted = prefs.getString(KEY_LAST_PROMPTED_VERSION, null)
+        if (lastPrompted == latest) return false
+        prefs.edit().putString(KEY_LAST_PROMPTED_VERSION, latest).apply()
+        return true
+    }
+
+    internal fun isVersionNewer(current: String, latest: String): Boolean {
+        val currParts = normalizeVersion(current).split(".").mapNotNull { it.toIntOrNull() }
+        val lateParts = normalizeVersion(latest).split(".").mapNotNull { it.toIntOrNull() }
 
         for (i in 0 until maxOf(currParts.size, lateParts.size)) {
             val c = currParts.getOrNull(i) ?: 0
@@ -153,14 +180,24 @@ class UpdateChecker @Inject constructor(
         return false
     }
 
+    private fun normalizeVersion(raw: String): String =
+        raw.trim()
+            .removePrefix("v")
+            .substringBefore('-')
+            .substringBefore('+')
+            .filter { it.isDigit() || it == '.' }
+            .ifEmpty { "0.0.0" }
+
     companion object {
         private const val PREFS_NAME = "moodtunes_update_checker_cache"
         private const val KEY_LAST_CHECK_TIME = "last_check_time"
         private const val KEY_CACHED_IS_AVAILABLE = "cached_is_available"
+        private const val KEY_CACHED_FOR_VERSION = "cached_for_version"
         private const val KEY_CACHED_LATEST_VERSION = "cached_latest_version"
         private const val KEY_CACHED_RELEASE_NOTES = "cached_release_notes"
         private const val KEY_CACHED_DOWNLOAD_URL = "cached_download_url"
         private const val KEY_CACHED_APK_URL = "cached_apk_url"
+        private const val KEY_LAST_PROMPTED_VERSION = "last_prompted_version"
 
         private val CACHE_DURATION_MILLIS = TimeUnit.MINUTES.toMillis(5)
     }

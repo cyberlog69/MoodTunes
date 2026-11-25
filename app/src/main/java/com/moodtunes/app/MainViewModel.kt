@@ -56,10 +56,17 @@ class MainViewModel @Inject constructor(
                 val result = updateChecker.checkForUpdates(force = false)
                 if (result.isUpdateAvailable) {
                     Timber.i("MainViewModel: Update available: %s", result.latestVersion)
-                    _updateResult.value = result
-                    _showUpdateDialog.value = true
-                    // Post system notification if not already shown
                     appUpdateNotifier.notifyUpdate(result, force = false)
+                    // The launch dialog is shown once per release; the
+                    // notification and the manual Settings check remain.
+                    if (updateChecker.consumePrompt(result)) {
+                        _updateResult.value = result
+                        _showUpdateDialog.value = true
+                    }
+                } else {
+                    // Drop any notification left over from a version the user
+                    // has already installed.
+                    appUpdateNotifier.clearNotification()
                 }
             } catch (e: Exception) {
                 Timber.w(e, "MainViewModel: Startup update check encountered an error")

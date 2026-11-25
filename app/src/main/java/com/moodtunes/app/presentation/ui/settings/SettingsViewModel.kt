@@ -131,7 +131,7 @@ class SettingsViewModel @Inject constructor(
     fun checkForUpdates() {
         viewModelScope.launch {
             _uiState.update { it.copy(isCheckingUpdate = true) }
-            val result = updateChecker.checkForUpdates(currentVersion = BuildConfig.VERSION_NAME)
+            val result = updateChecker.checkForUpdates(force = true, currentVersion = BuildConfig.VERSION_NAME)
             _uiState.update {
                 it.copy(
                     isCheckingUpdate = false,

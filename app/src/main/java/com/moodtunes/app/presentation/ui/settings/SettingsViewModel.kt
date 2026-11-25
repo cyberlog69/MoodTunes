@@ -169,26 +169,6 @@ class SettingsViewModel @Inject constructor(
         _uiState.update { it.copy(message = null) }
     }
 
-    // ── ListenBrainz Controls ────────────────────────────────────────────────
-    fun onSaveListenBrainz(token: String, username: String, enabled: Boolean) {
-        preferencesRepository.updateListenBrainzConfig(token, username, enabled)
-        _uiState.update { it.copy(message = "ListenBrainz configuration saved ✅") }
-    }
-
-    fun onToggleListenBrainzScrobbling(enabled: Boolean) {
-        preferencesRepository.updateListenBrainzScrobbling(enabled)
-    }
-
-    // ── Last.fm Controls ──────────────────────────────────────────────────────
-    fun onSaveLastFm(sessionKey: String, username: String, enabled: Boolean) {
-        preferencesRepository.updateLastFm(sessionKey, username, enabled)
-        _uiState.update { it.copy(message = "Last.fm configuration saved ✅") }
-    }
-
-    fun onToggleLastFmScrobbling(enabled: Boolean) {
-        preferencesRepository.toggleLastFmScrobbling(enabled)
-    }
-
     fun startInAppUpdate(context: Context) {
         val updateResult = _uiState.value.updateResult ?: return
         viewModelScope.launch {

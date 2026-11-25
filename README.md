@@ -6,7 +6,7 @@
 [![Media3](https://img.shields.io/badge/Audio-androidx.media3%20ExoPlayer-FF6F00?style=flat-square)](https://developer.android.com/guide/topics/media/media3)
 [![Hilt](https://img.shields.io/badge/DI-Hilt-00897B?style=flat-square)](https://dagger.dev/hilt/)
 [![Room](https://img.shields.io/badge/Database-Room%202.7-4285F4?style=flat-square)](https://developer.android.com/training/data-storage/room)
-[![Release](https://img.shields.io/badge/Version-v3.0.0-blue?style=flat-square)](https://github.com/cyberlog69/MoodTunes/releases)
+[![Release](https://img.shields.io/badge/Version-v3.0.1-blue?style=flat-square)](https://github.com/cyberlog69/MoodTunes/releases)
 [![License](https://img.shields.io/badge/License-GPL--3.0-blue?style=flat-square)](LICENSE)
 
 ---
@@ -65,8 +65,6 @@ on-device.
 - **🔁 Smooth Crossfade & Gapless**: Configurable crossfade transitions between tracks and true gapless playback.
 
 ### 📚 Library & Tooling
-- **📡 ListenBrainz Scrobbler**: Automatic real-time scrobbling to your ListenBrainz account with personalized listening analytics.
-- **📻 Last.fm Scrobbler**: Optional scrobbling with encrypted session-key storage.
 - **📁 Full Playlist Management**: Create, rename, delete, add/remove songs, and reorder tracks within playlists, persisted in Room.
 - **🔍 YouTube Search**: Debounced online search by song, album, artist or playlist, with lyric matching.
 - **❤️ Favorites Management**: Save and toggle favorite YouTube tracks persisted locally via Room database.
@@ -80,7 +78,7 @@ on-device.
   - Unexported `MusicPlaybackService` preventing unauthorized 3rd-party app hijacking.
   - HTTPS-only network security config; cleartext HTTP is permitted only for `localhost` / `127.0.0.1` / `10.0.2.2` during local development.
   - Update downloads are restricted to GitHub HTTPS hosts and verified against the installed app's signing certificate and package name before the installer is launched.
-  - User secrets (scrobbler tokens, YouTube cookies) are encrypted at rest with AES-256-GCM keys held in the Android Keystore.
+  - User secrets (YouTube cookies) are encrypted at rest with AES-256-GCM keys held in the Android Keystore.
   - 512 MB LRU stream cache served from disk when connectivity drops.
   - Crash recovery guardian that detects unexpected exits and restores the database from an automatic backup.
   - Room schema is exported and versioned; there is no destructive fallback, so an unknown schema change fails loudly instead of wiping your data.
@@ -112,7 +110,6 @@ app/src/main/java/com/moodtunes/app/
 | **Database & Storage** | Room 2.7.1 (SQLite), DataStore Preferences |
 | **Networking & HTTP** | OkHttp 4.12.0 with connection pooling and DNS caching |
 | **Image Loading** | Coil 2.7.0 (Compose image loader) |
-| **Scrobbling** | ListenBrainz and Last.fm REST APIs |
 | **Target Platform** | Android 8.0 (API 26) to Android 16 (API 36) |
 
 ---
@@ -127,7 +124,7 @@ app/src/main/java/com/moodtunes/app/
 6. **YouTube Page**: Album, artist, playlist and category pages with Play/Shuffle, track lists and continuation paging.
 7. **YouTube Music Account**: In-app Google sign-in WebView; cookies are encrypted with the Android Keystore.
 8. **Playlist Detail Screen**: Custom playlist management with reordering and song removal.
-9. **Settings Screen**: Themes, dynamic colors, stream quality, YouTube Music account, DSP toggles, scrobblers, database backup/restore, in-app updates, and about info.
+9. **Settings Screen**: Themes, dynamic colors, stream quality, YouTube Music account, DSP toggles, database backup/restore, in-app updates, and about info.
 
 ---
 

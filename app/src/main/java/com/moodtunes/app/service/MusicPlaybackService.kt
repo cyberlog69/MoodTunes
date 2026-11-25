@@ -64,7 +64,6 @@ class MusicPlaybackService : MediaLibraryService() {
     @Inject lateinit var audioEffectsManager: AudioEffectsManager
     @Inject lateinit var playbackPreferencesRepository: PlaybackPreferencesRepository
     @Inject lateinit var okHttpDataSourceFactory: androidx.media3.datasource.okhttp.OkHttpDataSource.Factory
-    @Inject lateinit var karaokeAudioProcessor: com.moodtunes.app.service.dsp.KaraokeAudioProcessor
 
     private var mediaSession: MediaLibraryService.MediaLibrarySession? = null
     private val callbackScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -87,14 +86,12 @@ class MusicPlaybackService : MediaLibraryService() {
     override fun onCreate() {
         super.onCreate()
 
-        karaokeAudioProcessor.setVocalAttenuation(playbackPreferencesRepository.vocalAttenuation)
-
         val audioAttributes = AudioAttributes.Builder()
             .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
             .setUsage(C.USAGE_MEDIA)
             .build()
 
-        // Decoders for FLAC, ALAC, WAV, AAC, MP3 with custom 24/32-bit Float AudioSink and Karaoke DSP
+        // Decoders for FLAC, ALAC, WAV, AAC, MP3 with custom 24/32-bit Float AudioSink
         val renderersFactory = object : DefaultRenderersFactory(this) {
             override fun buildAudioSink(
                 context: android.content.Context,
@@ -104,7 +101,6 @@ class MusicPlaybackService : MediaLibraryService() {
                 return DefaultAudioSink.Builder(context)
                     .setEnableFloatOutput(enableFloatOutput)
                     .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
-                    .setAudioProcessors(arrayOf(karaokeAudioProcessor))
                     .build()
             }
         }.apply {

@@ -29,7 +29,7 @@ const val VISIONOS_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWeb
  * Intercepts audio playback requests on top of OkHttp:
  * - Transparently intercepts YouTube watch URLs (`music.youtube.com/watch`, `youtube.com/watch`, `youtu.be`)
  *   and resolves them synchronously into direct googlevideo audio streams using [StreamResolver],
- *   preventing ExoPlayer container parsing errors on queue, shuffle, and DJ mix transitions.
+ *   preventing ExoPlayer container parsing errors on queue and shuffle transitions.
  * - Sends POST with request counter (`rn`) and client-appropriate headers for googlevideo streams.
  * - Converts open-ended long reads into 1 MB chunks with immediate pre-fetching of the next chunk,
  *   completely bypassing YouTube/GoogleVideo streaming speed throttling (which limits open-ended reads to 1x playback speed).

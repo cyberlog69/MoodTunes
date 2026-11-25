@@ -16,8 +16,8 @@ android {
         applicationId = "com.moodtunes.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 23
-        versionName = "3.0.0"
+        versionCode = 24
+        versionName = "3.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

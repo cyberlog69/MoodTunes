@@ -32,11 +32,6 @@ data class PlayerUiState(
     val repeatMode: RepeatMode = RepeatMode.OFF,
     val playbackSpeed: Float = 1f,
     val playbackPitch: Float = 1f,
-    val pitchSemitones: Int = 0,
-    val vocalAttenuation: Float = 0f,
-    val isDjModeEnabled: Boolean = false,
-    val djVibe: com.moodtunes.app.service.dj.DjVibe = com.moodtunes.app.service.dj.DjVibe.STEADY,
-    val currentTrackDjInfo: com.moodtunes.app.service.dj.DjTrackInfo? = null,
     val playerDeckStyle: com.moodtunes.app.data.local.preferences.PlayerDeckStyle = com.moodtunes.app.data.local.preferences.PlayerDeckStyle.VINYL,
     val isPerformanceMode: Boolean = false,
     val isCrossfadeEnabled: Boolean = false,
@@ -107,10 +102,9 @@ class PlayerViewModel @Inject constructor(
 
         viewModelScope.launch {
             playbackManager.currentSong.collectLatest { song ->
-                val djInfo = song?.let { playbackManager.getDjTrackInfo(it) }
                 _uiState.update { current ->
                     val idx = current.songs.indexOfFirst { it.id == song?.id }.coerceAtLeast(0)
-                    current.copy(currentSong = song, currentSongIndex = idx, currentTrackDjInfo = djInfo)
+                    current.copy(currentSong = song, currentSongIndex = idx)
                 }
                 if (song == null) {
                     _uiState.update { it.copy(lyrics = emptyList(), isLyricsLoading = false, isLyricsTranslated = false, isTranslatingLyrics = false, lyricsOffsetMs = 0L) }
@@ -120,30 +114,6 @@ class PlayerViewModel @Inject constructor(
                     val loaded = lyricsRepository.getLyrics(song)
                     _uiState.update { it.copy(lyrics = loaded, isLyricsLoading = false) }
                 }
-            }
-        }
-
-        viewModelScope.launch {
-            playbackManager.vocalAttenuation.collectLatest { strength ->
-                _uiState.update { it.copy(vocalAttenuation = strength) }
-            }
-        }
-
-        viewModelScope.launch {
-            playbackManager.pitchSemitones.collectLatest { semi ->
-                _uiState.update { it.copy(pitchSemitones = semi) }
-            }
-        }
-
-        viewModelScope.launch {
-            playbackManager.isDjModeEnabled.collectLatest { dj ->
-                _uiState.update { it.copy(isDjModeEnabled = dj) }
-            }
-        }
-
-        viewModelScope.launch {
-            playbackManager.djVibe.collectLatest { vibe ->
-                _uiState.update { it.copy(djVibe = vibe) }
             }
         }
 
@@ -399,16 +369,6 @@ class PlayerViewModel @Inject constructor(
     fun setCrossfadeEnabled(enabled: Boolean) = playbackManager.setCrossfadeEnabled(enabled)
     fun setCrossfadeDurationMs(durationMs: Int) = playbackManager.setCrossfadeDurationMs(durationMs)
     fun setSkipSilenceEnabled(enabled: Boolean) = playbackManager.setSkipSilenceEnabled(enabled)
-
-    // ── Sing / Karaoke & Pitch ───────────────────────────────────────────────
-    fun setVocalAttenuation(strength: Float) = playbackManager.setVocalAttenuation(strength)
-    fun setPitchSemitones(semitones: Int) = playbackManager.setPitchSemitones(semitones)
-
-    // ── DJ Mode & Harmonic Mix ───────────────────────────────────────────────
-    fun toggleDjMode(enabled: Boolean) = playbackManager.toggleDjMode(enabled)
-    fun setDjVibe(vibe: com.moodtunes.app.service.dj.DjVibe) = playbackManager.setDjVibe(vibe)
-
-    fun applyDjHarmonicMix() = playbackManager.applyDjHarmonicMix()
 
     // ── Player Deck Layout Style ─────────────────────────────────────────────
     fun cyclePlayerDeckStyle() {

@@ -48,11 +48,6 @@ fun SettingsScreen(
     var isMobileQualityDropdownExpanded by remember { mutableStateOf(false) }
     var showLicenses by remember { mutableStateOf(false) }
 
-    var listenBrainzToken by remember(settings.listenBrainzToken) { mutableStateOf(settings.listenBrainzToken) }
-    var listenBrainzUser by remember(settings.listenBrainzUsername) { mutableStateOf(settings.listenBrainzUsername) }
-    var lastFmSessionKey by remember(settings.lastFmSessionKey) { mutableStateOf(settings.lastFmSessionKey) }
-    var lastFmUser by remember(settings.lastFmUsername) { mutableStateOf(settings.lastFmUsername) }
-
     val snackbarHostState = remember { SnackbarHostState() }
 
     val exportLauncher = rememberLauncherForActivityResult(
@@ -544,167 +539,7 @@ fun SettingsScreen(
                     }
                 }
 
-                // ─── SECTION 5: 🧠 ListenBrainz Scrobbler & Stats ──────────────────
-                SettingsSectionHeader(title = "ListenBrainz Scrobbler", icon = Icons.Rounded.GraphicEq)
-
-                Card(
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("Auto-Scrobble Music", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
-                                Text("Automatically log played tracks to your open-source ListenBrainz profile", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            Switch(
-                                checked = settings.isListenBrainzScrobblingEnabled,
-                                onCheckedChange = viewModel::onToggleListenBrainzScrobbling,
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
-                                    checkedTrackColor = MaterialTheme.colorScheme.primary
-                                )
-                            )
-                        }
-
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
-                        OutlinedTextField(
-                            value = listenBrainzToken,
-                            onValueChange = { listenBrainzToken = it },
-                            label = { Text("User Token") },
-                            placeholder = { Text("Paste your ListenBrainz User Token") },
-                            singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        OutlinedTextField(
-                            value = listenBrainzUser,
-                            onValueChange = { listenBrainzUser = it },
-                            label = { Text("Username") },
-                            placeholder = { Text("Your ListenBrainz handle") },
-                            singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            OutlinedButton(
-                                onClick = {
-                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://listenbrainz.org/settings/"))
-                                    context.startActivity(intent)
-                                },
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text("Get Token", style = MaterialTheme.typography.labelMedium)
-                            }
-
-                            Button(
-                                onClick = {
-                                    viewModel.onSaveListenBrainz(
-                                        token = listenBrainzToken,
-                                        username = listenBrainzUser,
-                                        enabled = settings.isListenBrainzScrobblingEnabled || listenBrainzToken.isNotBlank()
-                                    )
-                                },
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Icon(Icons.Rounded.Save, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text("Save Token", style = MaterialTheme.typography.labelMedium)
-                            }
-                        }
-                    }
-                }
-
-                // ─── SECTION 5b: 📻 Last.fm Scrobbler ──────────────────────────
-                SettingsSectionHeader(title = "Last.fm Scrobbler", icon = Icons.Rounded.Radio)
-
-                Card(
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Enable Last.fm Scrobbling",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                Text(
-                                    text = "Submit listening history and Now Playing status to your Last.fm profile",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            Switch(
-                                checked = settings.isLastFmScrobblingEnabled,
-                                onCheckedChange = { viewModel.onToggleLastFmScrobbling(it) },
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = MaterialTheme.colorScheme.primary,
-                                    checkedTrackColor = MaterialTheme.colorScheme.primaryContainer
-                                )
-                            )
-                        }
-
-                        OutlinedTextField(
-                            value = lastFmUser,
-                            onValueChange = { lastFmUser = it },
-                            label = { Text("Last.fm Username") },
-                            placeholder = { Text("e.g. musiclover99") },
-                            leadingIcon = { Icon(Icons.Rounded.Person, contentDescription = null) },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        OutlinedTextField(
-                            value = lastFmSessionKey,
-                            onValueChange = { lastFmSessionKey = it },
-                            label = { Text("Last.fm Session Key / API Key") },
-                            placeholder = { Text("Paste session key") },
-                            leadingIcon = { Icon(Icons.Rounded.Key, contentDescription = null) },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        Button(
-                            onClick = {
-                                viewModel.onSaveLastFm(
-                                    sessionKey = lastFmSessionKey.trim(),
-                                    username = lastFmUser.trim(),
-                                    enabled = settings.isLastFmScrobblingEnabled || lastFmSessionKey.isNotBlank()
-                                )
-                            },
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(Icons.Rounded.Save, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("Save Last.fm Settings", style = MaterialTheme.typography.labelMedium)
-                        }
-                    }
-                }
-
-                // ─── SECTION 7: Backup & Restore ────────────────────────────────
+                // ─── SECTION 5: Backup & Restore ────────────────────────────────
                 SettingsSectionHeader(title = "Backup & Restore", icon = Icons.Rounded.Backup)
 
                 Card(
@@ -952,7 +787,7 @@ fun SettingsScreen(
                                        "• Full-track streaming with automatic radio queues\n" +
                                        "• Live FFT audio visualizers: Neon Bars, Pulse Aura, Cosmic Particles\n" +
                                        "• 3D Spatial Virtualizer & 6 Reverb Environmental Presets\n" +
-                                       "• ListenBrainz and Last.fm scrobbling\n" +
+                                       "• Synced lyrics with LRCLIB fallback\n" +
                                        "• Material Design 3 Themed Icons & Dynamic Material You Palette",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant

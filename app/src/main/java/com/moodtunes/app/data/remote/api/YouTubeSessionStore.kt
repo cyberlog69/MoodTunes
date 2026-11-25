@@ -17,7 +17,7 @@ import javax.inject.Singleton
 /**
  * Persists the YouTube Music web session captured from the in-app sign-in
  * WebView. The cookie header is encrypted at rest with [SecretCipher], the
- * same Android Keystore-backed helper used for Last.fm and Subsonic secrets.
+ * same Android Keystore-backed helper used for other app secrets.
  *
  * Anonymous browsing keeps working when no session exists — every member here
  * simply returns null and InnerTube falls back to a scraped visitorData.

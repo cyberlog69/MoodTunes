@@ -477,7 +477,7 @@ fun PlayerScreen(
 
             Spacer(Modifier.height(16.dp))
 
-            // ─── Secondary Tools (Lyrics / Speed / EQ / Sleep / Crossfade / Smart) ─
+            // ─── Secondary Tools (Lyrics / Deck / Speed / EQ / Sleep / Crossfade) ─
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -491,18 +491,6 @@ fun PlayerScreen(
                     label = "Lyrics",
                     active = uiState.lyrics.isNotEmpty(),
                     onClick = { activeSheet = PlayerSheet.LYRICS }
-                )
-                PlayerToolButton(
-                    icon = Icons.Rounded.Mic,
-                    label = if (uiState.vocalAttenuation > 0f) "Sing (${(uiState.vocalAttenuation * 100).toInt()}%)" else "Sing",
-                    active = uiState.vocalAttenuation > 0f || uiState.pitchSemitones != 0,
-                    onClick = { activeSheet = PlayerSheet.KARAOKE_SING }
-                )
-                PlayerToolButton(
-                    icon = Icons.Rounded.Headphones,
-                    label = if (uiState.isDjModeEnabled) "DJ (${uiState.currentTrackDjInfo?.camelotKey ?: "ON"})" else "DJ Mode",
-                    active = uiState.isDjModeEnabled,
-                    onClick = { activeSheet = PlayerSheet.DJ_MODE }
                 )
                 PlayerToolButton(
                     icon = when (uiState.playerDeckStyle) {

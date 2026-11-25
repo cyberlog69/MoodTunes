@@ -8,7 +8,6 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -59,15 +58,7 @@ data class AppUserSettings(
     val mobileStreamQuality: StreamQuality = StreamQuality.HIGH,
     val wifiOnlyStreaming: Boolean = false,
     val mobileDataHighQuality: Boolean = true,
-    val preferredLanguages: Set<MusicLanguage> = setOf(MusicLanguage.ALL),
-    // 🧠 ListenBrainz
-    val listenBrainzToken: String = "",
-    val listenBrainzUsername: String = "",
-    val isListenBrainzScrobblingEnabled: Boolean = false,
-    // 📻 Last.fm
-    val lastFmSessionKey: String = "",
-    val lastFmUsername: String = "",
-    val isLastFmScrobblingEnabled: Boolean = false
+    val preferredLanguages: Set<MusicLanguage> = setOf(MusicLanguage.ALL)
 ) {
     val preferredLanguage: MusicLanguage
         get() = preferredLanguages.firstOrNull() ?: MusicLanguage.ALL
@@ -80,39 +71,8 @@ class UserPreferencesRepository @Inject constructor(
     private val prefs: SharedPreferences =
         context.getSharedPreferences("moodtunes_settings", Context.MODE_PRIVATE)
 
-    private val secretCipher = SecretCipher()
-
     private val _settings = MutableStateFlow(loadSettings())
     val settings: StateFlow<AppUserSettings> = _settings.asStateFlow()
-
-    /** Reads a secret, transparently migrating legacy plaintext values. */
-    private fun readSecret(key: String): String {
-        val stored = prefs.getString(key, "") ?: ""
-        if (stored.isEmpty()) return ""
-        if (secretCipher.isEncrypted(stored)) return secretCipher.decrypt(stored) ?: ""
-
-        secretCipher.encrypt(stored)?.let { encrypted ->
-            prefs.edit().putString(key, encrypted).apply()
-        }
-        return stored
-    }
-
-    /** Writes a secret encrypted at rest; never persists plaintext. */
-    private fun putSecret(
-        editor: SharedPreferences.Editor,
-        key: String,
-        value: String
-    ): SharedPreferences.Editor {
-        val trimmed = value.trim()
-        if (trimmed.isEmpty()) return editor.putString(key, "")
-
-        val encrypted = secretCipher.encrypt(trimmed)
-        if (encrypted == null) {
-            Timber.e("refusing to persist %s in plaintext", key)
-            return editor.remove(key)
-        }
-        return editor.putString(key, encrypted)
-    }
 
     private fun loadSettings(): AppUserSettings {
         val modeStr = prefs.getString("dark_mode", DarkModeOption.DARK.name) ?: DarkModeOption.DARK.name
@@ -139,13 +99,7 @@ class UserPreferencesRepository @Inject constructor(
             mobileStreamQuality = runCatching { StreamQuality.valueOf(mobileQualityStr) }.getOrDefault(StreamQuality.HIGH),
             wifiOnlyStreaming = prefs.getBoolean("wifi_only_streaming", false),
             mobileDataHighQuality = prefs.getBoolean("mobile_data_hq", true),
-            preferredLanguages = parsedLangs,
-            listenBrainzToken = readSecret("listenbrainz_token"),
-            listenBrainzUsername = prefs.getString("listenbrainz_username", "") ?: "",
-            isListenBrainzScrobblingEnabled = prefs.getBoolean("listenbrainz_scrobble_enabled", false),
-            lastFmSessionKey = readSecret("lastfm_session_key"),
-            lastFmUsername = prefs.getString("lastfm_username", "") ?: "",
-            isLastFmScrobblingEnabled = prefs.getBoolean("lastfm_scrobble_enabled", false)
+            preferredLanguages = parsedLangs
         )
     }
 
@@ -234,25 +188,6 @@ class UserPreferencesRepository @Inject constructor(
         togglePreferredLanguage(language)
     }
 
-    // ── ListenBrainz Preferences ─────────────────────────────────────────────
-    fun updateListenBrainzConfig(token: String, username: String, enabled: Boolean) {
-        prefs.edit()
-            .let { putSecret(it, "listenbrainz_token", token) }
-            .putString("listenbrainz_username", username.trim())
-            .putBoolean("listenbrainz_scrobble_enabled", enabled)
-            .apply()
-        _settings.value = _settings.value.copy(
-            listenBrainzToken = token.trim(),
-            listenBrainzUsername = username.trim(),
-            isListenBrainzScrobblingEnabled = enabled
-        )
-    }
-
-    fun updateListenBrainzScrobbling(enabled: Boolean) {
-        prefs.edit().putBoolean("listenbrainz_scrobble_enabled", enabled).apply()
-        _settings.value = _settings.value.copy(isListenBrainzScrobblingEnabled = enabled)
-    }
-
     fun checkShouldShowWhatsNew(): String? {
         val lastSeen = prefs.getString("last_seen_version", "") ?: ""
         val currentVersion = com.moodtunes.app.BuildConfig.VERSION_NAME
@@ -296,24 +231,5 @@ class UserPreferencesRepository @Inject constructor(
 
     fun clearRecentSearches() {
         prefs.edit().remove("recent_searches").apply()
-    }
-
-    // ── Last.fm Scrobbling ───────────────────────────────────────────────────
-    fun updateLastFm(sessionKey: String, username: String, enabled: Boolean) {
-        prefs.edit()
-            .let { putSecret(it, "lastfm_session_key", sessionKey) }
-            .putString("lastfm_username", username)
-            .putBoolean("lastfm_scrobble_enabled", enabled)
-            .apply()
-        _settings.value = _settings.value.copy(
-            lastFmSessionKey = sessionKey.trim(),
-            lastFmUsername = username,
-            isLastFmScrobblingEnabled = enabled
-        )
-    }
-
-    fun toggleLastFmScrobbling(enabled: Boolean) {
-        prefs.edit().putBoolean("lastfm_scrobble_enabled", enabled).apply()
-        _settings.value = _settings.value.copy(isLastFmScrobblingEnabled = enabled)
     }
 }

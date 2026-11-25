@@ -11,8 +11,8 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 /**
- * Small at-rest encryption helper for user secrets (API tokens, scrobbler
- * session keys, server passwords) stored in SharedPreferences.
+ * Small at-rest encryption helper for user secrets (such as YouTube session
+ * cookies) stored in SharedPreferences.
  *
  * Values are encrypted with AES-256/GCM using a non-exportable key held in the
  * Android Keystore. Legacy plaintext values are accepted by [decrypt] so they

@@ -14,7 +14,7 @@ data class WordTimestamp(
  * @param timeMs time (in milliseconds) from track start when the line is sung
  * @param text   the lyric text (may be empty for instrumental time markers)
  * @param endTimeMs optional line ending timestamp
- * @param words  individual word-level timestamps for karaoke-style word-by-word highlighting
+ * @param words  individual word-level timestamps for word-by-word highlighting
  * @param translation optional translated text in user's target language
  */
 data class LyricsLine(

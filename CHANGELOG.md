@@ -4,6 +4,28 @@ All notable changes to MoodTunes are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows
 [Semantic Versioning](https://semver.org/).
 
+## [3.0.1] - 2026-11-25
+
+Focused cleanup: scrobbling, karaoke and DJ mixing are gone, leaving a leaner
+YouTube Music client.
+
+### Removed
+
+- **ListenBrainz scrobbling** — service, settings section, credentials and
+  Now Playing/submit-listen hooks were removed.
+- **Last.fm scrobbling** — service, settings section, session-key storage and
+  scrobble hooks were removed.
+- **Sing / Karaoke Studio** — the vocal-attenuation DSP processor, the semitone
+  pitch shifter, the player sheet and its tool button were removed. The separate
+  Speed & Pitch tool remains.
+- **DJ Mode & harmonic mixing** — the DJ sequencer, vibe presets, harmonic
+  auto-mix, BPM/Camelot analysis and the player sheet were removed.
+
+### Fixed
+
+- **Playback pitch persists correctly.** Speed & Pitch now restores the saved
+  pitch factor instead of deriving it from the removed karaoke semitones.
+
 ## [3.0.0] - 2026-11-25
 
 MoodTunes is now a YouTube Music client. The mood-first design, local library,

@@ -14,10 +14,7 @@ import com.google.common.util.concurrent.MoreExecutors
 import com.moodtunes.app.data.local.db.dao.SongDao
 import com.moodtunes.app.data.local.db.entity.toEntity
 import com.moodtunes.app.data.local.preferences.PlaybackPreferencesRepository
-import com.moodtunes.app.data.local.preferences.UserPreferencesRepository
 import com.moodtunes.app.data.remote.OnlineStreamRepository
-import com.moodtunes.app.data.remote.api.LastFmService
-import com.moodtunes.app.data.remote.api.ListenBrainzService
 import com.moodtunes.app.domain.model.Song
 import com.moodtunes.app.platform.ConnectivityMonitor
 import com.moodtunes.app.di.ApplicationScope
@@ -36,18 +33,13 @@ class PlaybackManager @Inject constructor(
     private val onlineStreamRepository: OnlineStreamRepository,
     private val audioEffectsManager: AudioEffectsManager,
     private val playbackPreferencesRepository: PlaybackPreferencesRepository,
-    private val userPreferencesRepository: UserPreferencesRepository,
-    private val listenBrainzService: ListenBrainzService,
-    private val lastFmService: LastFmService,
     private val songDao: SongDao,
     private val connectivityMonitor: ConnectivityMonitor,
-    private val djSequencer: com.moodtunes.app.service.dj.DjSequencer,
     @ApplicationScope private val appScope: CoroutineScope
 ) {
     private val scope = appScope
 
     private var mediaController: MediaController? = null
-    private var currentSongScrobbled = false
 
     private val _currentSong = MutableStateFlow<Song?>(null)
     val currentSong: StateFlow<Song?> = _currentSong.asStateFlow()
@@ -73,28 +65,8 @@ class PlaybackManager @Inject constructor(
     private val _playbackSpeed = MutableStateFlow(playbackPreferencesRepository.playbackSpeed)
     val playbackSpeed: StateFlow<Float> = _playbackSpeed.asStateFlow()
 
-    private val _pitchSemitones = MutableStateFlow(playbackPreferencesRepository.pitchSemitones)
-    val pitchSemitones: StateFlow<Int> = _pitchSemitones.asStateFlow()
-
-    private val _playbackPitch = MutableStateFlow(
-        Math.pow(2.0, playbackPreferencesRepository.pitchSemitones / 12.0).toFloat()
-    )
+    private val _playbackPitch = MutableStateFlow(playbackPreferencesRepository.playbackPitch)
     val playbackPitch: StateFlow<Float> = _playbackPitch.asStateFlow()
-
-    val vocalAttenuation: StateFlow<Float> = audioEffectsManager.vocalAttenuation
-
-    fun setVocalAttenuation(strength: Float) {
-        audioEffectsManager.setVocalAttenuation(strength)
-    }
-
-    private val _isDjModeEnabled = MutableStateFlow(playbackPreferencesRepository.djModeEnabled)
-    val isDjModeEnabled: StateFlow<Boolean> = _isDjModeEnabled.asStateFlow()
-
-    private val _djVibe = MutableStateFlow(
-        runCatching { com.moodtunes.app.service.dj.DjVibe.valueOf(playbackPreferencesRepository.djVibe) }
-            .getOrDefault(com.moodtunes.app.service.dj.DjVibe.STEADY)
-    )
-    val djVibe: StateFlow<com.moodtunes.app.service.dj.DjVibe> = _djVibe.asStateFlow()
 
     private val _isCrossfadeEnabled = MutableStateFlow(playbackPreferencesRepository.crossfadeEnabled)
     val isCrossfadeEnabled: StateFlow<Boolean> = _isCrossfadeEnabled.asStateFlow()
@@ -152,11 +124,10 @@ class PlaybackManager @Inject constructor(
             try {
                 val controller = controllerFuture.get()
                 mediaController = controller
-                val pitchFactor = Math.pow(2.0, playbackPreferencesRepository.pitchSemitones / 12.0).toFloat()
                 controller.setPlaybackParameters(
                     PlaybackParameters(
                         playbackPreferencesRepository.playbackSpeed,
-                        pitchFactor
+                        playbackPreferencesRepository.playbackPitch
                     )
                 )
                 attachListener(controller)
@@ -326,9 +297,8 @@ class PlaybackManager @Inject constructor(
         playbackPreferencesRepository.playbackSpeed = clamped
         _playbackSpeed.value = clamped
         val controller = mediaController ?: return
-        val pitchFactor = Math.pow(2.0, _pitchSemitones.value / 12.0).toFloat()
         controller.setPlaybackParameters(
-            PlaybackParameters(clamped, pitchFactor)
+            PlaybackParameters(clamped, _playbackPitch.value)
         )
     }
 
@@ -422,74 +392,6 @@ class PlaybackManager @Inject constructor(
             }
             controller.volume = 1f
         }
-    }
-
-    // ── Pitch & Speed ────────────────────────────────────────────────────────
-    fun setPitchSemitones(semitones: Int) {
-        val clamped = semitones.coerceIn(-6, 6)
-        _pitchSemitones.value = clamped
-        playbackPreferencesRepository.pitchSemitones = clamped
-        val pitchFactor = Math.pow(2.0, clamped / 12.0).toFloat()
-        _playbackPitch.value = pitchFactor
-        mediaController?.playbackParameters = PlaybackParameters(_playbackSpeed.value, pitchFactor)
-    }
-
-    // ── DJ Mode & Harmonic Mixing ────────────────────────────────────────────
-    fun toggleDjMode(enabled: Boolean) {
-        _isDjModeEnabled.value = enabled
-        playbackPreferencesRepository.djModeEnabled = enabled
-        if (enabled) {
-            setCrossfadeEnabled(true)
-            setCrossfadeDurationMs(5000)
-            applyDjHarmonicMix()
-        }
-    }
-
-    fun setDjVibe(vibe: com.moodtunes.app.service.dj.DjVibe) {
-        _djVibe.value = vibe
-        playbackPreferencesRepository.djVibe = vibe.name
-        if (_isDjModeEnabled.value) {
-            applyDjHarmonicMix()
-        }
-    }
-
-    fun applyDjHarmonicMix() {
-        val controller = mediaController ?: return
-        val queue = _playlist.value
-        if (queue.size <= 2) return
-
-        val currentIndex = controller.currentMediaItemIndex
-        val currentSong = queue.getOrNull(currentIndex) ?: return
-        val upcoming = queue.filterIndexed { idx, _ -> idx != currentIndex }
-
-        val sequencedUpcoming = djSequencer.sequenceQueue(currentSong, upcoming, _djVibe.value)
-        val newPlaylist = mutableListOf(currentSong).apply { addAll(sequencedUpcoming) }
-
-        _playlist.value = newPlaylist
-
-        // Seamless queue update: do NOT interrupt the currently playing track!
-        val upcomingItems = sequencedUpcoming.map { createMediaItem(it) }
-        val currentQueueCount = controller.mediaItemCount
-        if (currentQueueCount > currentIndex + 1) {
-            controller.removeMediaItems(currentIndex + 1, currentQueueCount)
-        }
-        if (upcomingItems.isNotEmpty()) {
-            controller.addMediaItems(currentIndex + 1, upcomingItems)
-        }
-
-        // Asynchronously warm the next DJ track in cache
-        val nextTrack = sequencedUpcoming.firstOrNull()
-        if (nextTrack != null && nextTrack.isStream) {
-            scope.launch {
-                runCatching {
-                    onlineStreamRepository.resolveDirectStreamUrl(nextTrack.uri.toString())
-                }
-            }
-        }
-    }
-
-    fun getDjTrackInfo(song: Song): com.moodtunes.app.service.dj.DjTrackInfo {
-        return djSequencer.estimateTrack(song)
     }
 
     // ── Queue editor ─────────────────────────────────────────────────────────
@@ -732,26 +634,12 @@ class PlaybackManager @Inject constructor(
                     _pauseWhenSongEnds.value = false
                     controller.pause()
                 }
-                currentSongScrobbled = false
                 val index = controller.currentMediaItemIndex
                 val current = _playlist.value.getOrNull(index)
                 if (current != null) {
                     _currentSong.value = current
                     // Record the listen for Discovery/Personalization.
                     recordPlay(current, reason)
-
-                    // Broadcast "playing_now" to ListenBrainz & Last.fm if enabled
-                    val prefs = userPreferencesRepository.settings.value
-                    if (prefs.isListenBrainzScrobblingEnabled && prefs.listenBrainzToken.isNotBlank()) {
-                        scope.launch {
-                            listenBrainzService.submitPlayingNow(prefs.listenBrainzToken, current)
-                        }
-                    }
-                    if (prefs.isLastFmScrobblingEnabled && prefs.lastFmSessionKey.isNotBlank()) {
-                        scope.launch {
-                            lastFmService.updateNowPlaying(prefs.lastFmSessionKey, current)
-                        }
-                    }
 
                     // Pre-resolve next stream track in the queue for seamless playback transitions
                     val nextIndex = index + 1
@@ -970,31 +858,6 @@ class PlaybackManager @Inject constructor(
                 mediaController?.let { controller ->
                     _currentPositionMs.value = controller.currentPosition.coerceAtLeast(0L)
                     _durationMs.value = controller.duration.coerceAtLeast(0L)
-                }
-
-                // Check and trigger ListenBrainz & Last.fm scrobble if threshold (50% or 4 min) is met
-                val prefs = userPreferencesRepository.settings.value
-                val shouldScrobbleLB = prefs.isListenBrainzScrobblingEnabled && prefs.listenBrainzToken.isNotBlank()
-                val shouldScrobbleLastFm = prefs.isLastFmScrobblingEnabled && prefs.lastFmSessionKey.isNotBlank()
-                if (!currentSongScrobbled && (shouldScrobbleLB || shouldScrobbleLastFm)) {
-                    val duration = _durationMs.value
-                    val pos = _currentPositionMs.value
-                    val threshold = if (duration > 0) minOf(duration / 2, 240_000L) else 30_000L
-                    if (pos >= threshold && pos >= 10_000L) {
-                        currentSongScrobbled = true
-                        _currentSong.value?.let { songToScrobble ->
-                            if (shouldScrobbleLB) {
-                                scope.launch {
-                                    listenBrainzService.submitListen(prefs.listenBrainzToken, songToScrobble)
-                                }
-                            }
-                            if (shouldScrobbleLastFm) {
-                                scope.launch {
-                                    lastFmService.scrobbleTrack(prefs.lastFmSessionKey, songToScrobble)
-                                }
-                            }
-                        }
-                    }
                 }
 
                 delay(500)
